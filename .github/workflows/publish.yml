@@ -1,0 +1,37 @@
+name: Publish to PyPI
+
+# Publishes splunkctl to PyPI via Trusted Publishing (OIDC) — no API token
+# stored as a secret.
+#
+# ONE-TIME SETUP (PyPI side):
+#   https://pypi.org/manage/project/splunkctl/settings/publishing/ -> Add a
+#   trusted publisher with EXACTLY:
+#     Owner:            dannyota
+#     Repository name:  splunkctl
+#     Workflow name:    publish.yml
+#     Environment name: pypi
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/splunkctl/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Build sdist and wheel
+        run: |
+          python -m pip install --upgrade build
+          python -m build
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1

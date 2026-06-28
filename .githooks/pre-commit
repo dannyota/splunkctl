@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# Leak guard for this repo.
+#
+# Blocks a commit when the staged changes look like they carry secrets or
+# instance-specific data. Generic patterns live here; put instance-specific
+# terms (hostnames, real domains, etc.) in the git-ignored
+# .githooks/denylist.local.
+#
+# Enable once:  git config core.hooksPath .githooks
+# Override (rare, only when you are SURE it is a false positive):
+#               git commit --no-verify
+set -u
+
+# Added lines of the staged diff, excluding this hook's own tooling directory.
+added="$(git diff --cached --no-color --diff-filter=ACM -U0 -- . ':(exclude).githooks' \
+  | grep '^+' | grep -v '^+++')"
+[ -z "$added" ] && exit 0
+
+# Drop lines that are clearly placeholders so the shipped templates never trip.
+scan="$(printf '%s\n' "$added" \
+  | grep -viE 'your-[a-z0-9-]+|example\.(com|org)|your-tenant|placeholder|0{6,}|00000000-0000-0000-0000-000000000000')"
+
+hits=""
+check() { # <regex> <label> [grep-flags]
+  if printf '%s\n' "$scan" | grep -qE ${3:-} -- "$1"; then hits="${hits}   - $2"$'\n'; fi
+}
+
+# 1) Secrets / credentials.
+check '-----BEGIN ([A-Z ]+ )?PRIVATE KEY-----'               'private key block'
+check '(gh[opsu]_[A-Za-z0-9]{20,}|ya29\.[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35})' 'API token / access key'
+check '(bearer|token|password|secret)[[:space:]]*[:=][[:space:]]*.?[A-Za-z0-9]{16,}' 'credential value' '-i'
+
+# 2) Splunk-specific tokens and passwords.
+check 'splunk[_-]?(token|pass|password|secret)[[:space:]]*[:=][[:space:]]*.?[A-Za-z0-9]' 'Splunk credential' '-i'
+
+# 3) Webhook / collaboration URLs.
+check '(hooks\.slack\.com|webhook\.office\.com|discord(app)?\.com/api/webhooks)' 'webhook URL' '-i'
+
+# 4) Tenant denylist (git-ignored, local-only): one term per line.
+dl="$(git rev-parse --show-toplevel)/.githooks/denylist.local"
+if [ -f "$dl" ]; then
+  while IFS= read -r term || [ -n "$term" ]; do
+    case "$term" in '' | \#*) continue ;; esac
+    if printf '%s\n' "$scan" | grep -qiF -- "$term"; then
+      hits="${hits}   - denylisted term: ${term}"$'\n'
+    fi
+  done < "$dl"
+fi
+
+if [ -n "$hits" ]; then
+  {
+    echo "commit blocked by leak guard (.githooks/pre-commit):"
+    printf '%s' "$hits"
+    echo
+    echo "Remove the sensitive data."
+    echo "If this is a genuine false positive, re-run with: git commit --no-verify"
+  } >&2
+  exit 1
+fi
+
+# File-length budget (CLAUDE.md §2): Python <= 500, Markdown <= 450 lines.
+if [ -x scripts/check-lengths.sh ]; then
+  if ! out="$(bash scripts/check-lengths.sh 2>&1)"; then
+    {
+      echo "commit blocked by the file-length budget (scripts/check-lengths.sh):"
+      printf '%s\n' "$out" | grep -E 'TOO LONG|FAIL'
+      echo "Split the file by topic (history stays in git). Override: git commit --no-verify"
+    } >&2
+    exit 1
+  fi
+fi
+exit 0

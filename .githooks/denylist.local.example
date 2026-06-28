@@ -1,0 +1,11 @@
+# Tenant denylist for the leak guard (.githooks/pre-commit).
+#
+# Copy this file to .githooks/denylist.local (which is git-ignored) and add the
+# instance-specific strings that must NEVER appear in commits — one per line,
+# case-insensitive, matched as plain substrings. Lines starting with # are
+# comments.
+#
+# Examples of what to add (use YOUR real values in denylist.local, not here):
+#   your-splunk-host
+#   your-company
+#   internal.example.net

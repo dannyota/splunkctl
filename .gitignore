@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Tools
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+coverage.*
+htmlcov/
+
+# Secrets & config
+.env
+.env.*
+*.key
+*.pem
+*.p12
+credentials.json
+.splunkctl/
+
+# Playwright & MCP
+.playwright-profile/
+.playwright-mcp/
+.mcp.json
+
+# Hooks
+.githooks/denylist.local
+
+# Local-only working plan
+PLAN.md
+
+# OS
+.DS_Store
+Thumbs.db
