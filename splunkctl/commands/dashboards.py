@@ -1,40 +1,17 @@
-"""Dashboard CRUD — raw REST (SDK gap)."""
+"""Dashboard management via SDK."""
 
-import json
-import urllib.parse
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote
 
 import click
 
 from splunkctl import guard, output
 from splunkctl.client import get_client
 
-_READ_BASE = "/servicesNS/-/{app}/data/ui/views"
-_WRITE_BASE = "/servicesNS/nobody/{app}/data/ui/views"
-
-
-def _read_path(app: str, name: str | None = None) -> str:
-    base = _READ_BASE.format(app=quote(app, safe=""))
-    return f"{base}/{quote(name, safe='')}" if name else base
-
-
-def _write_path(app: str, name: str | None = None) -> str:
-    base = _WRITE_BASE.format(app=quote(app, safe=""))
-    return f"{base}/{quote(name, safe='')}" if name else base
-
-
-def _rest_get(service: Any, path: str) -> dict[str, Any]:
-    """GET JSON from Splunk REST API."""
-    resp = service.get(path, output_mode="json", count=0)
-    body: dict[str, Any] = json.loads(resp.body.read())
-    return body
-
 
 @click.group("dashboards")
 def dashboards_group() -> None:
-    """Dashboard management (raw REST)."""
+    """Dashboard management."""
 
 
 @dashboards_group.command("list")
@@ -43,16 +20,16 @@ def dashboards_group() -> None:
 def list_dashboards(ctx: click.Context, *, app: str) -> None:
     """List dashboards."""
     client = get_client(ctx)
-    body = _rest_get(client.service, _read_path(app))
+    items = client.service.dashboards.list(app=app, owner="-")
     rows: list[dict[str, Any]] = [
         {
-            "name": e["name"],
-            "app": e.get("acl", {}).get("app", ""),
-            "label": e.get("content", {}).get("label", ""),
-            "isDashboard": e.get("content", {}).get("isDashboard", False),
-            "isVisible": e.get("content", {}).get("isVisible", False),
+            "name": d.name,
+            "app": d.access.app,
+            "label": d.content.get("label", ""),
+            "isDashboard": d.content.get("isDashboard", False),
+            "isVisible": d.content.get("isVisible", False),
         }
-        for e in body.get("entry", [])
+        for d in items
     ]
     output.render(ctx, rows)
 
@@ -65,24 +42,26 @@ def get_dashboard(ctx: click.Context, name: str, *, app: str) -> None:
     """Get dashboard details including XML source."""
     client = get_client(ctx)
     try:
-        body = _rest_get(client.service, _read_path(app, name))
-    except Exception as exc:
-        output.error(f"Dashboard '{name}' not found: {exc}")
-        ctx.exit(1)
-        return
-    entries: list[dict[str, Any]] = body.get("entry", [])
-    if not entries:
+        matches = client.service.dashboards.list(
+            search=f"name={name}",
+            app=app,
+            owner="-",
+            count=1,
+        )
+        if not matches:
+            raise KeyError(name)
+        d = matches[0]
+    except (KeyError, Exception):
         output.error(f"Dashboard '{name}' not found.")
         ctx.exit(1)
         return
-    e = entries[0]
     row: dict[str, Any] = {
-        "name": e["name"],
-        "app": e.get("acl", {}).get("app", ""),
-        "label": e.get("content", {}).get("label", ""),
-        "isDashboard": e.get("content", {}).get("isDashboard", False),
-        "isVisible": e.get("content", {}).get("isVisible", False),
-        "eai:data": e.get("content", {}).get("eai:data", ""),
+        "name": d.name,
+        "app": d.access.app,
+        "label": d.content.get("label", ""),
+        "isDashboard": d.content.get("isDashboard", False),
+        "isVisible": d.content.get("isVisible", False),
+        "eai:data": d.export(),
     }
     output.render(ctx, row)
 
@@ -97,7 +76,6 @@ def get_dashboard(ctx: click.Context, name: str, *, app: str) -> None:
     help="XML file path.",
 )
 @click.option("--app", default="search", help="Splunk app context.")
-@click.option("--label", default=None, help="Dashboard label.")
 @click.pass_context
 def create_dashboard(
     ctx: click.Context,
@@ -105,21 +83,15 @@ def create_dashboard(
     filepath: str,
     *,
     app: str,
-    label: str | None,
 ) -> None:
     """Create a dashboard from XML file."""
     xml_content = Path(filepath).read_text(encoding="utf-8")
     details = f"  name: {name}\n  app: {app}\n  file: {filepath}"
-    if label:
-        details += f"\n  label: {label}"
     if not guard.check(ctx, f"Create dashboard '{name}'", details=details):
         return
     client = get_client(ctx)
-    params: dict[str, str] = {"name": name, "eai:data": xml_content}
-    if label:
-        params["label"] = label
     try:
-        client.service.post(_write_path(app), body=urllib.parse.urlencode(params))
+        client.service.dashboards.create(name, xml_content, app=app)
     except Exception as exc:
         output.error(f"Create failed: {exc}")
         ctx.exit(1)
@@ -152,11 +124,16 @@ def update_dashboard(
         return
     client = get_client(ctx)
     try:
-        client.service.post(
-            _write_path(app, name),
-            body=urllib.parse.urlencode({"eai:data": xml_content}),
+        matches = client.service.dashboards.list(
+            search=f"name={name}",
+            app=app,
+            owner="-",
+            count=1,
         )
-    except Exception as exc:
+        if not matches:
+            raise KeyError(name)
+        matches[0].update(**{"eai:data": xml_content})
+    except (KeyError, Exception) as exc:
         output.error(f"Update failed: {exc}")
         ctx.exit(1)
         return
@@ -173,8 +150,16 @@ def delete_dashboard(ctx: click.Context, name: str, *, app: str) -> None:
         return
     client = get_client(ctx)
     try:
-        client.service.delete(_write_path(app, name))
-    except Exception as exc:
+        matches = client.service.dashboards.list(
+            search=f"name={name}",
+            app=app,
+            owner="-",
+            count=1,
+        )
+        if not matches:
+            raise KeyError(name)
+        matches[0].delete()
+    except (KeyError, Exception) as exc:
         output.error(f"Delete failed: {exc}")
         ctx.exit(1)
         return
@@ -198,17 +183,19 @@ def export_dashboard(
     """Export dashboard XML to file or stdout."""
     client = get_client(ctx)
     try:
-        body = _rest_get(client.service, _read_path(app, name))
-    except Exception as exc:
-        output.error(f"Dashboard '{name}' not found: {exc}")
-        ctx.exit(1)
-        return
-    entries: list[dict[str, Any]] = body.get("entry", [])
-    if not entries:
+        matches = client.service.dashboards.list(
+            search=f"name={name}",
+            app=app,
+            owner="-",
+            count=1,
+        )
+        if not matches:
+            raise KeyError(name)
+        xml = matches[0].export()
+    except (KeyError, Exception):
         output.error(f"Dashboard '{name}' not found.")
         ctx.exit(1)
         return
-    xml: str = entries[0].get("content", {}).get("eai:data", "")
     if out_file:
         Path(out_file).write_text(xml, encoding="utf-8")
         output.info(f"Exported to {out_file}")

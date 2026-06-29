@@ -98,8 +98,7 @@ splunkctl alerts suppress 'Alert Name' --duration 7200 --yes
 splunkctl dashboards list
 splunkctl dashboards list --app search
 splunkctl dashboards get my_dashboard
-splunkctl dashboards create --name new_dash --file dash.xml \
-    --app search --label 'My Dashboard' --yes
+splunkctl dashboards create --name new_dash --file dash.xml --app search --yes
 splunkctl dashboards update my_dash --file updated.xml --app search --yes
 splunkctl dashboards delete my_dash --app search --yes
 splunkctl dashboards export my_dash --out dash.xml
@@ -146,6 +145,19 @@ splunkctl lookups update my_lookup.csv --file updated.csv --app search --yes
 splunkctl lookups download my_lookup.csv --app search
 splunkctl lookups download my_lookup.csv --app search --out local.csv
 splunkctl lookups delete my_lookup.csv --app search --yes
+```
+
+### HEC (HTTP Event Collector)
+
+```bash
+splunkctl hec list                      # list all HEC tokens
+splunkctl hec get my_token              # get token details
+splunkctl hec create --name my_token --index main --yes
+splunkctl hec create --name my_token --index main \
+    --indexes 'main,_internal' --sourcetype json --yes
+splunkctl hec delete my_token --yes
+splunkctl hec enable my_token --yes
+splunkctl hec disable my_token --yes
 ```
 
 ### Parsers (sourcetypes & extractions)

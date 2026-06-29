@@ -21,11 +21,18 @@ def _mock_index(
         "datatype": datatype,
         "totalEventCount": total,
         "currentDBSizeMB": size,
-        "maxDataSizeMB": 500,
+        "maxTotalDataSizeMB": 500000,
+        "maxDataSize": "auto_high_volume",
+        "homePath_expanded": f"/opt/splunk/var/lib/splunk/{name}/db",
+        "coldPath_expanded": f"/opt/splunk/var/lib/splunk/{name}/colddb",
         "frozenTimePeriodInSecs": 188697600,
-        "homePath": f"$SPLUNK_DB/{name}/db",
-        "coldPath": f"$SPLUNK_DB/{name}/colddb",
+        "maxHotBuckets": 10,
+        "maxWarmDBCount": 300,
+        "minTime": "2024-01-01T00:00:00+0000",
+        "maxTime": "2026-06-29T00:00:00+0000",
+        "repFactor": "0",
         "disabled": False,
+        "isInternal": False,
     }
     return idx
 
@@ -50,7 +57,8 @@ def test_get_index(mock_gc: MagicMock) -> None:
     result = runner.invoke(cli, ["--json", "indexes", "get", "main"])
     assert result.exit_code == 0
     assert "main" in result.output
-    assert "homePath" in result.output
+    assert "homePath_expanded" in result.output
+    assert "maxHotBuckets" in result.output
 
 
 @patch(_PATCH)

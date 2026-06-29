@@ -10,28 +10,31 @@ from splunkctl.main import cli
 
 SAMPLE_XML = "<dashboard><label>Test</label></dashboard>"
 
-ENTRY: dict = {
-    "name": "test_dash",
-    "acl": {"app": "search"},
-    "content": {
-        "label": "Test Dashboard",
+
+def _mock_dashboard(
+    name: str = "test_dash",
+    app: str = "search",
+    label: str = "Test Dashboard",
+    xml: str = SAMPLE_XML,
+) -> MagicMock:
+    d = MagicMock()
+    d.name = name
+    d.access = MagicMock()
+    d.access.app = app
+    d.content = {
+        "label": label,
         "isDashboard": True,
         "isVisible": True,
-        "eai:data": SAMPLE_XML,
-    },
-}
-
-
-def _mock_resp(entries: list[dict]) -> MagicMock:
-    resp = MagicMock()
-    resp.body.read.return_value = json.dumps({"entry": entries}).encode()
-    return resp
+        "eai:data": xml,
+    }
+    d.export.return_value = xml
+    return d
 
 
 @patch("splunkctl.commands.dashboards.get_client")
 def test_list_dashboards(mock_gc: MagicMock) -> None:
     mock_svc = MagicMock()
-    mock_svc.get.return_value = _mock_resp([ENTRY])
+    mock_svc.dashboards.list.return_value = [_mock_dashboard()]
     mock_gc.return_value.service = mock_svc
 
     result = CliRunner().invoke(cli, ["--json", "dashboards", "list"])
@@ -44,19 +47,18 @@ def test_list_dashboards(mock_gc: MagicMock) -> None:
 @patch("splunkctl.commands.dashboards.get_client")
 def test_list_dashboards_with_app(mock_gc: MagicMock) -> None:
     mock_svc = MagicMock()
-    mock_svc.get.return_value = _mock_resp([ENTRY])
+    mock_svc.dashboards.list.return_value = [_mock_dashboard()]
     mock_gc.return_value.service = mock_svc
 
     result = CliRunner().invoke(cli, ["--json", "dashboards", "list", "--app", "myapp"])
     assert result.exit_code == 0
-    path = mock_svc.get.call_args[0][0]
-    assert path == "/servicesNS/-/myapp/data/ui/views"
+    mock_svc.dashboards.list.assert_called_once_with(app="myapp", owner="-")
 
 
 @patch("splunkctl.commands.dashboards.get_client")
 def test_get_dashboard(mock_gc: MagicMock) -> None:
     mock_svc = MagicMock()
-    mock_svc.get.return_value = _mock_resp([ENTRY])
+    mock_svc.dashboards.list.return_value = [_mock_dashboard()]
     mock_gc.return_value.service = mock_svc
 
     result = CliRunner().invoke(cli, ["--json", "dashboards", "get", "test_dash"])
@@ -69,7 +71,7 @@ def test_get_dashboard(mock_gc: MagicMock) -> None:
 @patch("splunkctl.commands.dashboards.get_client")
 def test_get_dashboard_not_found(mock_gc: MagicMock) -> None:
     mock_svc = MagicMock()
-    mock_svc.get.return_value = _mock_resp([])
+    mock_svc.dashboards.list.return_value = []
     mock_gc.return_value.service = mock_svc
 
     result = CliRunner().invoke(cli, ["dashboards", "get", "missing"])
@@ -88,7 +90,7 @@ def test_create_dry_run(mock_gc: MagicMock, tmp_path: Path) -> None:
     )
     assert result.exit_code == 0
     assert "[DRY RUN]" in result.stderr
-    mock_gc.return_value.service.post.assert_not_called()
+    mock_gc.return_value.service.dashboards.create.assert_not_called()
 
 
 @patch("splunkctl.commands.dashboards.get_client")
@@ -111,35 +113,11 @@ def test_create_confirmed(mock_gc: MagicMock, tmp_path: Path) -> None:
         ],
     )
     assert result.exit_code == 0
-    mock_svc.post.assert_called_once()
-    call_path = mock_svc.post.call_args[0][0]
-    assert call_path == "/servicesNS/nobody/search/data/ui/views"
-
-
-@patch("splunkctl.commands.dashboards.get_client")
-def test_create_with_label(mock_gc: MagicMock, tmp_path: Path) -> None:
-    xml_file = tmp_path / "dash.xml"
-    xml_file.write_text(SAMPLE_XML)
-    mock_svc = MagicMock()
-    mock_gc.return_value.service = mock_svc
-
-    result = CliRunner().invoke(
-        cli,
-        [
-            "--yes",
-            "dashboards",
-            "create",
-            "--name",
-            "new",
-            "--file",
-            str(xml_file),
-            "--label",
-            "My Dashboard",
-        ],
-    )
-    assert result.exit_code == 0
-    body = mock_svc.post.call_args[1]["body"]
-    assert "label=" in body
+    mock_svc.dashboards.create.assert_called_once()
+    args, kwargs = mock_svc.dashboards.create.call_args
+    assert args[0] == "new"
+    assert args[1] == SAMPLE_XML
+    assert kwargs["app"] == "search"
 
 
 @patch("splunkctl.commands.dashboards.get_client")
@@ -160,23 +138,16 @@ def test_update_confirmed(mock_gc: MagicMock, tmp_path: Path) -> None:
     xml_file = tmp_path / "dash.xml"
     xml_file.write_text(SAMPLE_XML)
     mock_svc = MagicMock()
+    dash = _mock_dashboard()
+    mock_svc.dashboards.list.return_value = [dash]
     mock_gc.return_value.service = mock_svc
 
     result = CliRunner().invoke(
         cli,
-        [
-            "--yes",
-            "dashboards",
-            "update",
-            "test_dash",
-            "--file",
-            str(xml_file),
-        ],
+        ["--yes", "dashboards", "update", "test_dash", "--file", str(xml_file)],
     )
     assert result.exit_code == 0
-    mock_svc.post.assert_called_once()
-    call_path = mock_svc.post.call_args[0][0]
-    assert "/test_dash" in call_path
+    dash.update.assert_called_once()
 
 
 @patch("splunkctl.commands.dashboards.get_client")
@@ -189,19 +160,19 @@ def test_delete_dry_run(mock_gc: MagicMock) -> None:
 @patch("splunkctl.commands.dashboards.get_client")
 def test_delete_confirmed(mock_gc: MagicMock) -> None:
     mock_svc = MagicMock()
+    dash = _mock_dashboard()
+    mock_svc.dashboards.list.return_value = [dash]
     mock_gc.return_value.service = mock_svc
 
     result = CliRunner().invoke(cli, ["--yes", "dashboards", "delete", "test_dash"])
     assert result.exit_code == 0
-    mock_svc.delete.assert_called_once()
-    call_path = mock_svc.delete.call_args[0][0]
-    assert "/test_dash" in call_path
+    dash.delete.assert_called_once()
 
 
 @patch("splunkctl.commands.dashboards.get_client")
 def test_export_stdout(mock_gc: MagicMock) -> None:
     mock_svc = MagicMock()
-    mock_svc.get.return_value = _mock_resp([ENTRY])
+    mock_svc.dashboards.list.return_value = [_mock_dashboard()]
     mock_gc.return_value.service = mock_svc
 
     result = CliRunner().invoke(cli, ["dashboards", "export", "test_dash"])
@@ -212,19 +183,13 @@ def test_export_stdout(mock_gc: MagicMock) -> None:
 @patch("splunkctl.commands.dashboards.get_client")
 def test_export_to_file(mock_gc: MagicMock, tmp_path: Path) -> None:
     mock_svc = MagicMock()
-    mock_svc.get.return_value = _mock_resp([ENTRY])
+    mock_svc.dashboards.list.return_value = [_mock_dashboard()]
     mock_gc.return_value.service = mock_svc
 
     out_file = tmp_path / "exported.xml"
     result = CliRunner().invoke(
         cli,
-        [
-            "dashboards",
-            "export",
-            "test_dash",
-            "--out",
-            str(out_file),
-        ],
+        ["dashboards", "export", "test_dash", "--out", str(out_file)],
     )
     assert result.exit_code == 0
     assert out_file.read_text() == SAMPLE_XML
@@ -233,7 +198,7 @@ def test_export_to_file(mock_gc: MagicMock, tmp_path: Path) -> None:
 @patch("splunkctl.commands.dashboards.get_client")
 def test_export_not_found(mock_gc: MagicMock) -> None:
     mock_svc = MagicMock()
-    mock_svc.get.return_value = _mock_resp([])
+    mock_svc.dashboards.list.return_value = []
     mock_gc.return_value.service = mock_svc
 
     result = CliRunner().invoke(cli, ["dashboards", "export", "missing"])

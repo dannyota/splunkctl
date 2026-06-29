@@ -26,6 +26,11 @@ def _mock_user(
         "roles": roles or ["user"],
         "defaultApp": default_app,
         "type": user_type,
+        "tz": "",
+        "lang": "en-US",
+        "last_successful_login": "1719619200",
+        "locked-out": "false",
+        "capabilities": ["search", "list_inputs"],
     }
     return user
 
@@ -79,6 +84,8 @@ def test_get_user(mock_gc: MagicMock) -> None:
     assert result.exit_code == 0
     assert "Admin User" in result.output
     assert "admin, power" in result.output
+    assert "last_successful_login" in result.output
+    assert "capabilities" in result.output
 
 
 @patch(_PATCH)

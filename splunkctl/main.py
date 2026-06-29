@@ -11,6 +11,7 @@ from splunkctl.commands.apps import apps_group
 from splunkctl.commands.commands_meta import commands_meta
 from splunkctl.commands.config_cmd import config_group
 from splunkctl.commands.dashboards import dashboards_group
+from splunkctl.commands.hec import hec_group
 from splunkctl.commands.indexes import indexes_group
 from splunkctl.commands.info import info
 from splunkctl.commands.inputs import inputs_group
@@ -138,6 +139,7 @@ cli.add_command(apps_group)
 cli.add_command(commands_meta)
 cli.add_command(config_group)
 cli.add_command(dashboards_group)
+cli.add_command(hec_group)
 cli.add_command(indexes_group)
 cli.add_command(info)
 cli.add_command(inputs_group)

@@ -8,22 +8,37 @@ from splunkctl import guard, output
 from splunkctl.client import get_client
 
 _LIST_FIELDS = (
-    "name",
     "datatype",
     "totalEventCount",
     "currentDBSizeMB",
-    "maxDataSizeMB",
+    "maxTotalDataSizeMB",
     "frozenTimePeriodInSecs",
     "disabled",
 )
 
+_DETAIL_FIELDS = (
+    "datatype",
+    "totalEventCount",
+    "currentDBSizeMB",
+    "maxTotalDataSizeMB",
+    "maxDataSize",
+    "homePath_expanded",
+    "coldPath_expanded",
+    "frozenTimePeriodInSecs",
+    "maxHotBuckets",
+    "maxWarmDBCount",
+    "minTime",
+    "maxTime",
+    "repFactor",
+    "disabled",
+    "isInternal",
+)
+
 
 def _index_row(idx: Any, fields: tuple[str, ...] = _LIST_FIELDS) -> dict[str, Any]:
-    content: dict[str, Any] = dict(idx.content)
+    c: dict[str, Any] = idx.content
     row: dict[str, Any] = {"name": idx.name}
-    for f in fields:
-        if f != "name":
-            row[f] = content.get(f, "")
+    row.update({f: c.get(f, "") for f in fields})
     return row
 
 
@@ -53,8 +68,7 @@ def get_index(ctx: click.Context, name: str) -> None:
         output.error(f"Index '{name}' not found.")
         ctx.exit(1)
         return
-    row: dict[str, Any] = {"name": idx.name, **dict(idx.content)}
-    output.render(ctx, row)
+    output.render(ctx, _index_row(idx, _DETAIL_FIELDS))
 
 
 @indexes_group.command("create")

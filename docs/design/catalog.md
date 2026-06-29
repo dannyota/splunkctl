@@ -32,10 +32,11 @@ These are shared modules used by all command groups.
 | `search` | ✅ built | `splunklib.client.Jobs` | run, export, oneshot, jobs, job, cancel |
 | `rules` | ✅ built | `splunklib.client.SavedSearches` | list, get, create, update, delete, enable, disable, history |
 | `alerts` | ✅ built | `splunklib.client.FiredAlerts` | list, get, actions, suppress |
-| `dashboards` | ✅ built | Raw REST | list, get, create, update, delete, export |
+| `dashboards` | ✅ built | `splunklib.client.Dashboards` | list, get, create, update, delete, export |
 | `indexes` | ✅ built | `splunklib.client.Indexes` | list, get, create, update, delete, clean, reload |
 | `inputs` | ✅ built | `splunklib.client.Inputs` | list, get, create, update, delete, enable, disable |
-| `lookups` | ✅ built | Raw REST | list, get, upload, update, download, delete |
+| `lookups` | ✅ built | `splunklib.client.LookupTableFiles` | list, get, upload, update, download, delete |
+| `hec` | ✅ built | `splunklib.client.HECTokens` | list, get, create, delete, enable, disable |
 | `parsers` | ✅ built | `splunklib.client.Confs` | sourcetypes, get, extractions, create, update, delete |
 | `apps` | ✅ built | `splunklib.client.Apps` | list, get, install, uninstall, update, reload |
 | `users` | ✅ built | `splunklib.client.Users` | list, get, roles, create, update, delete |
@@ -56,7 +57,7 @@ Gaps to fill in `dannyota/splunk-sdk-python`:
 
 | Gap | Status | Target |
 |---|---|---|
-| Dashboards | - planned | `DashboardView`/`DashboardViews` |
-| Lookup tables | - planned | `LookupTableFile`/`LookupTableFiles` |
-| HEC tokens | - planned | `HECToken` wrapping `/services/data/inputs/http/` |
+| Dashboards | ✅ built | `Dashboard`/`Dashboards` on `splunkctl` branch |
+| Lookup tables | ✅ built | `LookupTableFile`/`LookupTableFiles` on `splunkctl` branch |
+| HEC tokens | ✅ built | `HECToken`/`HECTokens` on `splunkctl` branch |
 | Alert actions | - planned | Extend `SavedSearch` |

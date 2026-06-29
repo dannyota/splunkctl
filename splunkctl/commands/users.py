@@ -9,20 +9,54 @@ from splunkctl.client import get_client
 
 _MAX_CAPS = 5
 
+_DETAIL_FIELDS = (
+    "realname",
+    "email",
+    "roles",
+    "defaultApp",
+    "type",
+    "tz",
+    "lang",
+    "last_successful_login",
+    "locked-out",
+    "capabilities",
+)
+
+
+def _format_list(value: Any) -> str:
+    if isinstance(value, list):
+        return ", ".join(str(v) for v in value)
+    return str(value) if value else ""
+
 
 def _user_row(user: Any) -> dict[str, Any]:
     c: dict[str, Any] = user.content
-    roles = c.get("roles", [])
-    if isinstance(roles, str):
-        roles = [roles]
     return {
         "name": user.name,
         "realname": c.get("realname", ""),
         "email": c.get("email", ""),
-        "roles": ", ".join(roles),
+        "roles": _format_list(c.get("roles", [])),
         "defaultApp": c.get("defaultApp", ""),
         "type": c.get("type", ""),
     }
+
+
+def _user_detail(user: Any) -> dict[str, Any]:
+    c: dict[str, Any] = user.content
+    row: dict[str, Any] = {"name": user.name}
+    for f in _DETAIL_FIELDS:
+        val = c.get(f, "")
+        if f == "capabilities":
+            caps = val if isinstance(val, list) else [val] if val else []
+            truncated = ", ".join(caps[:_MAX_CAPS])
+            if len(caps) > _MAX_CAPS:
+                truncated += f" (+{len(caps) - _MAX_CAPS} more)"
+            row[f] = truncated
+        elif isinstance(val, list):
+            row[f] = _format_list(val)
+        else:
+            row[f] = val
+    return row
 
 
 def _role_row(role: Any) -> dict[str, Any]:
@@ -74,7 +108,7 @@ def get_user(ctx: click.Context, name: str) -> None:
         output.error(f"User '{name}' not found.")
         ctx.exit(1)
         return
-    output.render(ctx, _user_row(user))
+    output.render(ctx, _user_detail(user))
 
 
 @users_group.command("roles")

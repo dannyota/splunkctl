@@ -1,62 +1,12 @@
-"""Lookup table commands — raw REST (SDK gap)."""
+"""Lookup table commands via SDK."""
 
-import json
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote
 
 import click
 
 from splunkctl import guard, output
 from splunkctl.client import get_client
-
-_READ_BASE = "/servicesNS/-/{app}/data/lookup-table-files"
-_WRITE_BASE = "/servicesNS/nobody/{app}/data/lookup-table-files"
-
-
-def _read_path(app: str, name: str | None = None) -> str:
-    base = _READ_BASE.format(app=quote(app, safe=""))
-    return f"{base}/{quote(name, safe='')}" if name else base
-
-
-def _write_path(app: str, name: str | None = None) -> str:
-    base = _WRITE_BASE.format(app=quote(app, safe=""))
-    return f"{base}/{quote(name, safe='')}" if name else base
-
-
-def _parse_entries(body: bytes) -> list[dict[str, Any]]:
-    """Extract flat rows from Splunk REST JSON response."""
-    data: dict[str, Any] = json.loads(body)
-    return [
-        {
-            "name": entry.get("name", ""),
-            "app": entry.get("acl", {}).get("app", ""),
-            "owner": entry.get("acl", {}).get("owner", ""),
-            "disabled": entry.get("content", {}).get("disabled", ""),
-            "eai:type": entry.get("content", {}).get("eai:type", ""),
-            "updated": entry.get("updated", ""),
-        }
-        for entry in data.get("entry", [])
-    ]
-
-
-def _parse_entry(body: bytes) -> dict[str, Any]:
-    """Extract a single entry from Splunk REST JSON response."""
-    data: dict[str, Any] = json.loads(body)
-    entries: list[dict[str, Any]] = data.get("entry", [])
-    if not entries:
-        return {}
-    entry = entries[0]
-    content: dict[str, Any] = entry.get("content", {})
-    return {
-        "name": entry.get("name", ""),
-        "app": entry.get("acl", {}).get("app", ""),
-        "owner": entry.get("acl", {}).get("owner", ""),
-        "disabled": content.get("disabled", ""),
-        "eai:type": content.get("eai:type", ""),
-        "eai:data": content.get("eai:data", ""),
-        "updated": entry.get("updated", ""),
-    }
 
 
 @click.group("lookups")
@@ -70,10 +20,17 @@ def lookups_group() -> None:
 def list_lookups(ctx: click.Context, *, app: str) -> None:
     """List lookup table files."""
     client = get_client(ctx)
-    svc = client.service
-    resp = svc.get(_read_path(app), output_mode="json")
-    body: bytes = resp.body.read()
-    rows = _parse_entries(body)
+    items = client.service.lookup_table_files.list(app=app, owner="-")
+    rows: list[dict[str, Any]] = [
+        {
+            "name": lk.name,
+            "app": lk.access.app,
+            "owner": lk.access.owner,
+            "disabled": lk.content.get("disabled", ""),
+            "eai:type": lk.content.get("eai:type", ""),
+        }
+        for lk in items
+    ]
     if not rows:
         output.info("No lookup tables found.")
         return
@@ -87,19 +44,28 @@ def list_lookups(ctx: click.Context, *, app: str) -> None:
 def get_lookup(ctx: click.Context, name: str, *, app: str) -> None:
     """Get metadata for a lookup file."""
     client = get_client(ctx)
-    svc = client.service
     try:
-        resp = svc.get(_read_path(app, name), output_mode="json")
-    except Exception as exc:
+        matches = client.service.lookup_table_files.list(
+            search=f"name={name}",
+            app=app,
+            owner="-",
+            count=1,
+        )
+        if not matches:
+            raise KeyError(name)
+        lk = matches[0]
+    except (KeyError, Exception) as exc:
         output.error(f"Lookup '{name}' not found: {exc}")
         ctx.exit(1)
         return
-    body: bytes = resp.body.read()
-    row = _parse_entry(body)
-    if not row:
-        output.error(f"Lookup '{name}' not found.")
-        ctx.exit(1)
-        return
+    row: dict[str, Any] = {
+        "name": lk.name,
+        "app": lk.access.app,
+        "owner": lk.access.owner,
+        "disabled": lk.content.get("disabled", ""),
+        "eai:type": lk.content.get("eai:type", ""),
+        "eai:data": lk.content.get("eai:data", ""),
+    }
     output.render(ctx, row)
 
 
@@ -122,14 +88,8 @@ def upload_lookup(ctx: click.Context, name: str, file_path: str, *, app: str) ->
         return
 
     client = get_client(ctx)
-    svc = client.service
-    csv_data = path.read_text(encoding="utf-8")
     try:
-        svc.post(
-            _write_path(app),
-            name=name,
-            **{"eai:data": csv_data},
-        )
+        client.upload_lookup(name, path, app=app)
     except Exception as exc:
         output.error(f"Upload failed: {exc}")
         ctx.exit(1)
@@ -147,9 +107,12 @@ def download_lookup(
 ) -> None:
     """Download a lookup table as CSV."""
     client = get_client(ctx)
-    svc = client.service
     try:
-        stream = svc.jobs.oneshot(f"| inputlookup {name}", output_mode="csv", app=app)
+        stream = client.service.jobs.oneshot(
+            f"| inputlookup {name}",
+            output_mode="csv",
+            app=app,
+        )
         csv_content = stream.read().decode("utf-8")
     except Exception as exc:
         output.error(f"Download failed: {exc}")
@@ -182,13 +145,8 @@ def update_lookup(ctx: click.Context, name: str, file_path: str, *, app: str) ->
         return
 
     client = get_client(ctx)
-    svc = client.service
-    csv_data = path.read_text(encoding="utf-8")
     try:
-        svc.post(
-            _write_path(app, name),
-            **{"eai:data": csv_data},
-        )
+        client.upload_lookup(name, path, app=app, update=True)
     except Exception as exc:
         output.error(f"Update failed: {exc}")
         ctx.exit(1)
@@ -207,10 +165,17 @@ def delete_lookup(ctx: click.Context, name: str, *, app: str) -> None:
         return
 
     client = get_client(ctx)
-    svc = client.service
     try:
-        svc.delete(_write_path(app, name))
-    except Exception as exc:
+        matches = client.service.lookup_table_files.list(
+            search=f"name={name}",
+            app=app,
+            owner="-",
+            count=1,
+        )
+        if not matches:
+            raise KeyError(name)
+        matches[0].delete()
+    except (KeyError, Exception) as exc:
         output.error(f"Delete failed: {exc}")
         ctx.exit(1)
         return

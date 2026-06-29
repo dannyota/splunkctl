@@ -1,73 +1,42 @@
 """Tests for lookups commands."""
 
 import json
-from io import BytesIO
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 
 from click.testing import CliRunner
 
 from splunkctl.main import cli
 
-_ENTRIES_JSON = json.dumps(
-    {
-        "entry": [
-            {
-                "name": "test_lookup.csv",
-                "updated": "2025-01-01T00:00:00+00:00",
-                "acl": {"app": "search", "owner": "admin"},
-                "content": {
-                    "disabled": False,
-                    "eai:type": "csv",
-                },
-            },
-            {
-                "name": "other.csv",
-                "updated": "2025-01-02T00:00:00+00:00",
-                "acl": {"app": "SA-Utils", "owner": "nobody"},
-                "content": {
-                    "disabled": False,
-                    "eai:type": "csv",
-                },
-            },
-        ]
+
+def _mock_lookup(
+    name: str = "test_lookup.csv",
+    app: str = "search",
+    owner: str = "admin",
+) -> MagicMock:
+    lk = MagicMock()
+    lk.name = name
+    lk.access = MagicMock()
+    lk.access.app = app
+    lk.access.owner = owner
+    lk.content = {
+        "disabled": False,
+        "eai:type": "csv",
+        "eai:data": "host,ip\nweb01,10.0.0.1\n",
     }
-).encode()
-
-_SINGLE_ENTRY_JSON = json.dumps(
-    {
-        "entry": [
-            {
-                "name": "test_lookup.csv",
-                "updated": "2025-01-01T00:00:00+00:00",
-                "acl": {"app": "search", "owner": "admin"},
-                "content": {
-                    "disabled": False,
-                    "eai:type": "csv",
-                    "eai:data": "host,ip\nweb01,10.0.0.1\n",
-                },
-            }
-        ]
-    }
-).encode()
-
-_EMPTY_JSON = json.dumps({"entry": []}).encode()
-
-
-def _mock_response(body: bytes) -> MagicMock:
-    resp = MagicMock()
-    resp.body = BytesIO(body)
-    return resp
+    return lk
 
 
 @patch("splunkctl.commands.lookups.get_client")
 def test_list_lookups(mock_gc: MagicMock) -> None:
     mock_svc = MagicMock()
-    mock_svc.service.get.return_value = _mock_response(_ENTRIES_JSON)
-    mock_gc.return_value = mock_svc
+    mock_svc.lookup_table_files.list.return_value = [
+        _mock_lookup(),
+        _mock_lookup(name="other.csv", app="SA-Utils", owner="nobody"),
+    ]
+    mock_gc.return_value.service = mock_svc
 
-    runner = CliRunner()
-    result = runner.invoke(cli, ["--json", "lookups", "list"])
+    result = CliRunner().invoke(cli, ["--json", "lookups", "list"])
     assert result.exit_code == 0
     parsed = json.loads(result.output)
     assert len(parsed) == 2
@@ -78,25 +47,21 @@ def test_list_lookups(mock_gc: MagicMock) -> None:
 @patch("splunkctl.commands.lookups.get_client")
 def test_list_lookups_with_app(mock_gc: MagicMock) -> None:
     mock_svc = MagicMock()
-    mock_svc.service.get.return_value = _mock_response(_ENTRIES_JSON)
-    mock_gc.return_value = mock_svc
+    mock_svc.lookup_table_files.list.return_value = [_mock_lookup()]
+    mock_gc.return_value.service = mock_svc
 
-    runner = CliRunner()
-    result = runner.invoke(cli, ["--json", "lookups", "list", "--app", "search"])
+    result = CliRunner().invoke(cli, ["--json", "lookups", "list", "--app", "search"])
     assert result.exit_code == 0
-    mock_svc.service.get.assert_called_once()
-    call_args = mock_svc.service.get.call_args
-    assert "/search/" in call_args[0][0]
+    mock_svc.lookup_table_files.list.assert_called_once_with(app="search", owner="-")
 
 
 @patch("splunkctl.commands.lookups.get_client")
 def test_list_lookups_empty(mock_gc: MagicMock) -> None:
     mock_svc = MagicMock()
-    mock_svc.service.get.return_value = _mock_response(_EMPTY_JSON)
-    mock_gc.return_value = mock_svc
+    mock_svc.lookup_table_files.list.return_value = []
+    mock_gc.return_value.service = mock_svc
 
-    runner = CliRunner()
-    result = runner.invoke(cli, ["--json", "lookups", "list"])
+    result = CliRunner().invoke(cli, ["--json", "lookups", "list"])
     assert result.exit_code == 0
     assert "No lookup tables found" in result.stderr
 
@@ -104,11 +69,10 @@ def test_list_lookups_empty(mock_gc: MagicMock) -> None:
 @patch("splunkctl.commands.lookups.get_client")
 def test_get_lookup(mock_gc: MagicMock) -> None:
     mock_svc = MagicMock()
-    mock_svc.service.get.return_value = _mock_response(_SINGLE_ENTRY_JSON)
-    mock_gc.return_value = mock_svc
+    mock_svc.lookup_table_files.list.return_value = [_mock_lookup()]
+    mock_gc.return_value.service = mock_svc
 
-    runner = CliRunner()
-    result = runner.invoke(cli, ["--json", "lookups", "get", "test_lookup.csv"])
+    result = CliRunner().invoke(cli, ["--json", "lookups", "get", "test_lookup.csv"])
     assert result.exit_code == 0
     parsed = json.loads(result.output)
     assert parsed[0]["name"] == "test_lookup.csv"
@@ -118,11 +82,10 @@ def test_get_lookup(mock_gc: MagicMock) -> None:
 @patch("splunkctl.commands.lookups.get_client")
 def test_get_lookup_not_found(mock_gc: MagicMock) -> None:
     mock_svc = MagicMock()
-    mock_svc.service.get.side_effect = Exception("HTTP 404")
-    mock_gc.return_value = mock_svc
+    mock_svc.lookup_table_files.list.return_value = []
+    mock_gc.return_value.service = mock_svc
 
-    runner = CliRunner()
-    result = runner.invoke(cli, ["--json", "lookups", "get", "nope.csv"])
+    result = CliRunner().invoke(cli, ["--json", "lookups", "get", "nope.csv"])
     assert "not found" in result.stderr
 
 
@@ -130,8 +93,7 @@ def test_upload_dry_run(tmp_path: Path) -> None:
     csv_file = tmp_path / "data.csv"
     csv_file.write_text("host,ip\nweb01,10.0.0.1\n")
 
-    runner = CliRunner()
-    result = runner.invoke(
+    result = CliRunner().invoke(
         cli, ["lookups", "upload", "my.csv", "--file", str(csv_file)]
     )
     assert result.exit_code == 0
@@ -144,24 +106,22 @@ def test_upload_with_yes(mock_gc: MagicMock, tmp_path: Path) -> None:
     csv_file = tmp_path / "data.csv"
     csv_file.write_text("host,ip\nweb01,10.0.0.1\n")
 
-    mock_svc = MagicMock()
-    mock_gc.return_value = mock_svc
+    mock_client = MagicMock()
+    mock_gc.return_value = mock_client
 
-    runner = CliRunner()
-    result = runner.invoke(
+    result = CliRunner().invoke(
         cli, ["--yes", "lookups", "upload", "my.csv", "--file", str(csv_file)]
     )
     assert result.exit_code == 0
     assert "Uploaded" in result.stderr
-    mock_svc.service.post.assert_called_once()
+    mock_client.upload_lookup.assert_called_once_with("my.csv", ANY, app="search")
 
 
 def test_update_dry_run(tmp_path: Path) -> None:
     csv_file = tmp_path / "data.csv"
     csv_file.write_text("host,ip\nweb01,10.0.0.1\n")
 
-    runner = CliRunner()
-    result = runner.invoke(
+    result = CliRunner().invoke(
         cli, ["lookups", "update", "my.csv", "--file", str(csv_file)]
     )
     assert result.exit_code == 0
@@ -173,21 +133,21 @@ def test_update_with_yes(mock_gc: MagicMock, tmp_path: Path) -> None:
     csv_file = tmp_path / "data.csv"
     csv_file.write_text("host,ip\nweb01,10.0.0.1\n")
 
-    mock_svc = MagicMock()
-    mock_gc.return_value = mock_svc
+    mock_client = MagicMock()
+    mock_gc.return_value = mock_client
 
-    runner = CliRunner()
-    result = runner.invoke(
+    result = CliRunner().invoke(
         cli, ["--yes", "lookups", "update", "my.csv", "--file", str(csv_file)]
     )
     assert result.exit_code == 0
     assert "Updated" in result.stderr
-    mock_svc.service.post.assert_called_once()
+    mock_client.upload_lookup.assert_called_once_with(
+        "my.csv", ANY, app="search", update=True
+    )
 
 
 def test_delete_dry_run() -> None:
-    runner = CliRunner()
-    result = runner.invoke(cli, ["lookups", "delete", "my.csv"])
+    result = CliRunner().invoke(cli, ["lookups", "delete", "my.csv"])
     assert result.exit_code == 0
     assert "[DRY RUN]" in result.stderr
 
@@ -195,24 +155,24 @@ def test_delete_dry_run() -> None:
 @patch("splunkctl.commands.lookups.get_client")
 def test_delete_with_yes(mock_gc: MagicMock) -> None:
     mock_svc = MagicMock()
-    mock_gc.return_value = mock_svc
+    lk = _mock_lookup()
+    mock_svc.lookup_table_files.list.return_value = [lk]
+    mock_gc.return_value.service = mock_svc
 
-    runner = CliRunner()
-    result = runner.invoke(cli, ["--yes", "lookups", "delete", "my.csv"])
+    result = CliRunner().invoke(cli, ["--yes", "lookups", "delete", "my.csv"])
     assert result.exit_code == 0
     assert "Deleted" in result.stderr
-    mock_svc.service.delete.assert_called_once()
+    lk.delete.assert_called_once()
 
 
 @patch("splunkctl.commands.lookups.get_client")
 def test_download_to_stdout(mock_gc: MagicMock) -> None:
     mock_svc = MagicMock()
     csv_bytes = b"host,ip\nweb01,10.0.0.1\n"
-    mock_svc.service.jobs.oneshot.return_value.read.return_value = csv_bytes
-    mock_gc.return_value = mock_svc
+    mock_svc.jobs.oneshot.return_value.read.return_value = csv_bytes
+    mock_gc.return_value.service = mock_svc
 
-    runner = CliRunner()
-    result = runner.invoke(cli, ["lookups", "download", "test_lookup.csv"])
+    result = CliRunner().invoke(cli, ["lookups", "download", "test_lookup.csv"])
     assert result.exit_code == 0
     assert "host,ip" in result.output
     assert "web01" in result.output
@@ -222,12 +182,11 @@ def test_download_to_stdout(mock_gc: MagicMock) -> None:
 def test_download_to_file(mock_gc: MagicMock, tmp_path: Path) -> None:
     mock_svc = MagicMock()
     csv_bytes = b"host,ip\nweb01,10.0.0.1\n"
-    mock_svc.service.jobs.oneshot.return_value.read.return_value = csv_bytes
-    mock_gc.return_value = mock_svc
+    mock_svc.jobs.oneshot.return_value.read.return_value = csv_bytes
+    mock_gc.return_value.service = mock_svc
 
     out_file = tmp_path / "out.csv"
-    runner = CliRunner()
-    result = runner.invoke(
+    result = CliRunner().invoke(
         cli,
         ["lookups", "download", "test_lookup.csv", "--out", str(out_file)],
     )
