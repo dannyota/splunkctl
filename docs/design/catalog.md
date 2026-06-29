@@ -18,37 +18,37 @@ These are shared modules used by all command groups.
 | Module | Status | Notes |
 |---|---|---|
 | `main.py` | ✅ built | Click entry point, global flags |
-| `config.py` | - planned | Config file management |
-| `client.py` | - planned | SDK wrapper, lazy auth |
-| `output.py` | - planned | Dual output (table/JSON) |
-| `guard.py` | - planned | Mutation guard (dry-run/--yes) |
+| `config.py` | ✅ built | Config file management, env overlay, redact |
+| `client.py` | ✅ built | SDK wrapper, lazy auth |
+| `output.py` | ✅ built | Dual output (table/JSON/CSV/JSONL) |
+| `guard.py` | ✅ built | Mutation guard (dry-run/--yes) |
 
 ## Command groups
 
 | Group | Status | SDK | Notes |
 |---|---|---|---|
-| `config` | - planned | N/A | Interactive setup, show, test |
-| `search` | - planned | `splunklib.client.Jobs` | run, export, oneshot, jobs |
-| `rules` | - planned | `splunklib.client.SavedSearches` | Detection rule CRUD |
-| `alerts` | - planned | `splunklib.client.FiredAlerts` | Fired alerts, actions |
-| `dashboards` | - planned | Raw REST | SDK gap — `/services/data/ui/views/` |
-| `indexes` | - planned | `splunklib.client.Indexes` | Index management |
-| `inputs` | - planned | `splunklib.client.Inputs` | Data input management |
-| `lookups` | - planned | Raw REST | SDK gap — `/services/data/lookup-table-files/` |
-| `parsers` | - planned | `splunklib.client.Confs` | props.conf / transforms.conf |
-| `apps` | - planned | `splunklib.client.Apps` | App management |
-| `users` | - planned | `splunklib.client.Users` | Users and roles |
-| `commands` | - planned | N/A | Self-discovery (`--json`) |
-| `skill` | - planned | N/A | Print/install SKILL.md |
-| `info` | - planned | `splunklib.client.info` | Server info, license |
+| `config` | ✅ built | N/A | init, show, test |
+| `info` | ✅ built | `splunklib.client.info` | Server info |
+| `search` | ✅ built | `splunklib.client.Jobs` | run, export, oneshot, jobs, job, cancel |
+| `rules` | ✅ built | `splunklib.client.SavedSearches` | list, get, create, update, delete, enable, disable, history |
+| `alerts` | ✅ built | `splunklib.client.FiredAlerts` | list, get, actions, suppress |
+| `dashboards` | ✅ built | Raw REST | list, get, create, update, delete, export |
+| `indexes` | ✅ built | `splunklib.client.Indexes` | list, get, create, update, delete, clean, reload |
+| `inputs` | ✅ built | `splunklib.client.Inputs` | list, get, create, update, delete, enable, disable |
+| `lookups` | ✅ built | Raw REST | list, get, upload, update, download, delete |
+| `parsers` | ✅ built | `splunklib.client.Confs` | sourcetypes, get, extractions, create, update, delete |
+| `apps` | ✅ built | `splunklib.client.Apps` | list, get, install, uninstall, update, reload |
+| `users` | ✅ built | `splunklib.client.Users` | list, get, roles, create, update, delete |
+| `commands` | ✅ built | N/A | Self-discovery (`--json`) |
+| `skill` | ✅ built | N/A | Print/install SKILL.md |
 
 ## Agent integration
 
 | Feature | Status | Notes |
 |---|---|---|
-| `SKILL.md` | 🔨 scaffolded | Placeholder — full guide pending |
-| `commands --json` | - planned | Machine-readable command tree |
-| `skill install` | - planned | Write to `~/.claude/skills/` |
+| `SKILL.md` | ✅ built | Full agent operating guide |
+| `commands --json` | ✅ built | Machine-readable command tree |
+| `skill install` | ✅ built | Write to `~/.claude/skills/` |
 
 ## SDK fork status
 

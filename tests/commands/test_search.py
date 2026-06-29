@@ -1,0 +1,242 @@
+from unittest.mock import MagicMock, patch
+
+from click.testing import CliRunner
+
+from splunkctl.commands.search import _normalize_spl
+from splunkctl.main import cli
+
+
+def test_normalize_spl_prepends_search() -> None:
+    assert _normalize_spl("index=main") == "search index=main"
+
+
+def test_normalize_spl_pipe_unchanged() -> None:
+    assert _normalize_spl("| stats count") == "| stats count"
+
+
+def test_normalize_spl_search_prefix_unchanged() -> None:
+    assert _normalize_spl("search index=main") == "search index=main"
+
+
+def test_normalize_spl_strips_whitespace() -> None:
+    assert _normalize_spl("  index=main  ") == "search index=main"
+
+
+@patch("splunkctl.commands.search.JSONResultsReader")
+@patch("splunkctl.commands.search.get_client")
+def test_run_search(mock_gc: MagicMock, mock_reader: MagicMock) -> None:
+    mock_job = MagicMock()
+    mock_job.is_done.return_value = True
+    mock_job.results.return_value = "stream"
+
+    mock_svc = MagicMock()
+    mock_svc.jobs.create.return_value = mock_job
+    mock_gc.return_value.service = mock_svc
+
+    mock_reader.return_value = [{"host": "srv1", "source": "syslog"}]
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--json", "search", "run", "index=main"])
+    assert result.exit_code == 0
+    assert "srv1" in result.output
+    mock_svc.jobs.create.assert_called_once()
+    assert mock_svc.jobs.create.call_args.args[0] == "search index=main"
+
+
+@patch("splunkctl.commands.search.JSONResultsReader")
+@patch("splunkctl.commands.search.get_client")
+def test_run_search_with_time_range(mock_gc: MagicMock, mock_reader: MagicMock) -> None:
+    mock_job = MagicMock()
+    mock_job.is_done.return_value = True
+    mock_job.results.return_value = "stream"
+
+    mock_svc = MagicMock()
+    mock_svc.jobs.create.return_value = mock_job
+    mock_gc.return_value.service = mock_svc
+
+    mock_reader.return_value = [{"count": "42"}]
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "--json",
+            "search",
+            "run",
+            "--earliest",
+            "-24h",
+            "--latest",
+            "now",
+            "index=main",
+        ],
+    )
+    assert result.exit_code == 0
+    kw = mock_svc.jobs.create.call_args.kwargs
+    assert kw["earliest_time"] == "-24h"
+    assert kw["latest_time"] == "now"
+
+
+@patch("splunkctl.commands.search.JSONResultsReader")
+@patch("splunkctl.commands.search.get_client")
+def test_run_search_pipe_query(mock_gc: MagicMock, mock_reader: MagicMock) -> None:
+    mock_job = MagicMock()
+    mock_job.is_done.return_value = True
+    mock_job.results.return_value = "stream"
+
+    mock_svc = MagicMock()
+    mock_svc.jobs.create.return_value = mock_job
+    mock_gc.return_value.service = mock_svc
+
+    mock_reader.return_value = [{"count": "10"}]
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--json", "search", "run", "| stats count"])
+    assert result.exit_code == 0
+    assert mock_svc.jobs.create.call_args.args[0] == "| stats count"
+
+
+@patch("splunkctl.commands.search.JSONResultsReader")
+@patch("splunkctl.commands.search.get_client")
+def test_export_search(mock_gc: MagicMock, mock_reader: MagicMock) -> None:
+    mock_svc = MagicMock()
+    mock_svc.jobs.export.return_value = "stream"
+    mock_gc.return_value.service = mock_svc
+
+    mock_reader.return_value = [{"host": "srv2"}]
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--json", "search", "export", "index=main"])
+    assert result.exit_code == 0
+    assert "srv2" in result.output
+    mock_svc.jobs.export.assert_called_once()
+
+
+@patch("splunkctl.commands.search.JSONResultsReader")
+@patch("splunkctl.commands.search.get_client")
+def test_oneshot_search(mock_gc: MagicMock, mock_reader: MagicMock) -> None:
+    mock_svc = MagicMock()
+    mock_svc.jobs.oneshot.return_value = "stream"
+    mock_gc.return_value.service = mock_svc
+
+    mock_reader.return_value = [{"host": "srv3"}]
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--json", "search", "oneshot", "index=main"])
+    assert result.exit_code == 0
+    assert "srv3" in result.output
+    mock_svc.jobs.oneshot.assert_called_once()
+    kw = mock_svc.jobs.oneshot.call_args.kwargs
+    assert kw["count"] == 100
+
+
+@patch("splunkctl.commands.search.get_client")
+def test_list_jobs(mock_gc: MagicMock) -> None:
+    mock_job = MagicMock()
+    mock_job.sid = "1234567890.1"
+    mock_job.content = {
+        "dispatchState": "DONE",
+        "earliestTime": "-24h",
+        "latestTime": "now",
+        "eventCount": "100",
+        "runDuration": "1.5",
+    }
+
+    mock_svc = MagicMock()
+    mock_svc.jobs.__iter__ = MagicMock(return_value=iter([mock_job]))
+    mock_gc.return_value.service = mock_svc
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--json", "search", "jobs"])
+    assert result.exit_code == 0
+    assert "1234567890.1" in result.output
+    assert "DONE" in result.output
+
+
+@patch("splunkctl.commands.search.JSONResultsReader")
+@patch("splunkctl.commands.search.get_client")
+def test_get_job_done(mock_gc: MagicMock, mock_reader: MagicMock) -> None:
+    mock_job = MagicMock()
+    mock_job.sid = "1234567890.2"
+    mock_job.content = {
+        "dispatchState": "DONE",
+        "earliestTime": "-24h",
+        "latestTime": "now",
+        "eventCount": "50",
+        "resultCount": "50",
+        "runDuration": "2.0",
+    }
+    mock_job.is_done.return_value = True
+    mock_job.results.return_value = "stream"
+
+    mock_svc = MagicMock()
+    mock_svc.jobs.__getitem__ = MagicMock(return_value=mock_job)
+    mock_gc.return_value.service = mock_svc
+
+    mock_reader.return_value = [{"host": "srv4", "_raw": "event data"}]
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--json", "search", "job", "1234567890.2"])
+    assert result.exit_code == 0
+    assert "srv4" in result.output
+
+
+@patch("splunkctl.commands.search.get_client")
+def test_get_job_running(mock_gc: MagicMock) -> None:
+    mock_job = MagicMock()
+    mock_job.sid = "1234567890.3"
+    mock_job.content = {
+        "dispatchState": "RUNNING",
+        "earliestTime": "-24h",
+        "latestTime": "now",
+        "eventCount": "0",
+        "resultCount": "0",
+        "runDuration": "0.5",
+    }
+    mock_job.is_done.return_value = False
+
+    mock_svc = MagicMock()
+    mock_svc.jobs.__getitem__ = MagicMock(return_value=mock_job)
+    mock_gc.return_value.service = mock_svc
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--json", "search", "job", "1234567890.3"])
+    assert result.exit_code == 0
+    assert "RUNNING" in result.output
+
+
+@patch("splunkctl.commands.search.get_client")
+def test_get_job_not_found(mock_gc: MagicMock) -> None:
+    mock_svc = MagicMock()
+    mock_svc.jobs.__getitem__ = MagicMock(side_effect=KeyError("nosuchsid"))
+    mock_gc.return_value.service = mock_svc
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["search", "job", "nosuchsid"])
+    assert result.exit_code != 0
+
+
+@patch("splunkctl.commands.search.get_client")
+def test_cancel_dry_run(mock_gc: MagicMock) -> None:
+    mock_job = MagicMock()
+    mock_svc = MagicMock()
+    mock_svc.jobs.__getitem__ = MagicMock(return_value=mock_job)
+    mock_gc.return_value.service = mock_svc
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["search", "cancel", "test_sid"])
+    assert result.exit_code == 0
+    assert "DRY RUN" in result.output
+    mock_job.cancel.assert_not_called()
+
+
+@patch("splunkctl.commands.search.get_client")
+def test_cancel_with_yes(mock_gc: MagicMock) -> None:
+    mock_job = MagicMock()
+    mock_svc = MagicMock()
+    mock_svc.jobs.__getitem__ = MagicMock(return_value=mock_job)
+    mock_gc.return_value.service = mock_svc
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--yes", "search", "cancel", "test_sid"])
+    assert result.exit_code == 0
+    mock_job.cancel.assert_called_once()
