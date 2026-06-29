@@ -1,49 +1,112 @@
-# splunkctl docs
+# splunkctl
 
 CLI tool for Splunk Enterprise SIEM operations — query, inspect, and manage a
-Splunk instance from the terminal. Built on the
-[splunk-sdk-python](https://github.com/dannyota/splunk-sdk-python) fork with
-[Click](https://click.palletsprojects.com/).
+remote Splunk instance from your laptop. Built on the
+[splunk-sdk-python](https://github.com/dannyota/splunk-sdk-python/tree/splunkctl)
+fork with [Click](https://click.palletsprojects.com/).
 
 > All write operations are **dry-run by default** — nothing changes until you
 > pass `--yes`.
 
-New here? **[Install](guides/install.md) → [Configure](guides/configure.md) →
-[Search](guides/search.md).** Building it?
-**[Architecture](design/architecture.md).** Status of every command group?
-**[Catalog](design/catalog.md).**
-
 ## Quick start
 
 ```bash
-pip install splunkctl
+pip install git+https://github.com/dannyota/splunkctl
 splunkctl config init                    # interactive setup
-splunkctl config test                    # verify connectivity
+splunkctl doctor                         # check connection, auth, permissions
 splunkctl search run 'index=main | head 10'
 ```
 
-## Command groups
+## Commands
 
-| Group | What it does |
+| Group | Description |
 |---|---|
+| `doctor` | Connection, auth, health, and permissions check |
 | `config` | Setup, show config, test connectivity |
-| `search` | Run SPL queries, manage search jobs |
-| `rules` | Detection rules (saved searches) CRUD |
-| `alerts` | Fired alerts, alert actions |
-| `dashboards` | Dashboard CRUD |
+| `info` | Server info (version, OS, license) |
+| `search` | Run, export, oneshot, upload, job management |
+| `rules` | Detection rules — CRUD, import/export (YAML) |
+| `alerts` | Fired alerts, alert actions, suppression |
+| `dashboards` | Dashboard CRUD (XML) |
 | `indexes` | Index management |
-| `inputs` | Data input management |
-| `lookups` | Lookup table management |
+| `inputs` | Data inputs (monitor, tcp, udp, script, http) |
+| `lookups` | Lookup table CRUD (CSV, mmdb) |
+| `hec` | HEC token management |
 | `parsers` | Source types and field extractions |
-| `apps` | Installed app management |
+| `apps` | App install (.spl/.tar.gz), uninstall, update |
 | `users` | User and role management |
-| `commands` | Self-discovery for agents (`--json`) |
-| `skill` | Print/install the agent operating guide |
-| `info` | Server info and license |
+| `commands` | Machine-readable command tree (JSON) |
+| `skill` | Embedded agent operating guide |
 
-## Find your way
+## Key features
 
-| Folder | For | Start here |
+### Detection-as-code
+
+Export rules to YAML, version control them, deploy across instances:
+
+```bash
+splunkctl rules export --path detections.yml
+splunkctl rules import --path detections.yml        # dry-run preview
+splunkctl --yes rules import --path detections.yml  # apply
+```
+
+### Remote file operations
+
+Upload files from your laptop without SSH access to the server:
+
+```bash
+splunkctl --yes search upload --path threats.csv --index threat_intel
+splunkctl --yes lookups upload threats.csv --file threats.csv --app search
+splunkctl --yes apps install --path TA_windows.spl
+```
+
+### Diagnostics
+
+```bash
+splunkctl doctor             # check everything
+splunkctl doctor --json      # machine-readable output
+```
+
+## Global flags
+
+```
+--json              Force JSON output
+--format FMT        Output format: table, json, csv, jsonl
+--fields f1,f2      Project specific fields
+--out FILE          Write output to file
+--yes / -y          Apply mutations (skip dry-run preview)
+--timeout N         Request timeout in seconds (default 30)
+--config FILE       Config file path
+--debug             HTTP request/response logging
+```
+
+## Output formats
+
+```bash
+splunkctl rules list                      # table (TTY) or JSON (pipe)
+splunkctl rules list --json               # force JSON
+splunkctl rules list --format csv         # CSV
+splunkctl rules list --fields name,cron   # project fields
+splunkctl rules list --out rules.json     # write to file
+```
+
+## SDK fork
+
+splunkctl depends on a [fork of splunk-sdk-python](https://github.com/dannyota/splunk-sdk-python/tree/splunkctl)
+that adds entity classes missing from the upstream SDK:
+
+| Entity | Service property | Purpose |
 |---|---|---|
-| **[guides/](guides/)** | using splunkctl | [Install](guides/install.md) → [Configure](guides/configure.md) → [Search](guides/search.md) |
-| **[design/](design/)** | building splunkctl | [Architecture](design/architecture.md) · [Catalog](design/catalog.md) |
+| `Dashboard` | `service.dashboards` | Dashboard CRUD |
+| `LookupTableFile` | `service.lookup_table_files` | Lookup table metadata + download |
+| `HECToken` | `service.hec_tokens` | HEC token management |
+
+## Agent integration
+
+splunkctl ships with an embedded operating guide for AI agents:
+
+```bash
+splunkctl skill                           # print the guide
+splunkctl skill install                   # install to ~/.claude/skills/
+splunkctl commands                        # JSON command tree for discovery
+```

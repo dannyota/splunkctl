@@ -4,44 +4,27 @@ How splunkctl is built — the layers, the data flow, and the design decisions.
 
 ## Layers
 
-```
-┌─────────────────────────────────────────────┐
-│  CLI layer (Click)                          │
-│  splunkctl/main.py + commands/*.py          │
-│  Global flags, command groups, subcommands  │
-├─────────────────────────────────────────────┤
-│  Service layer                              │
-│  config.py · client.py · output.py · guard  │
-│  Auth, formatting, mutation guard           │
-├─────────────────────────────────────────────┤
-│  SDK layer                                  │
-│  splunklib (forked splunk-sdk-python)       │
-│  REST API bindings, typed collections       │
-├─────────────────────────────────────────────┤
-│  Splunk Enterprise REST API (:8089)         │
-│  /services/search/jobs, /services/data/...  │
-└─────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  CLI["<b>CLI layer</b> · Click<br/>main.py + commands/*.py<br/>Global flags, command groups, subcommands"]
+  SVC["<b>Service layer</b><br/>config.py · client.py · output.py · guard.py<br/>Auth, formatting, mutation guard, Web UI workarounds"]
+  SDK["<b>SDK layer</b> · splunklib<br/>forked splunk-sdk-python<br/>REST bindings + Dashboard, LookupTableFile, HECToken"]
+  API["<b>Splunk Enterprise</b><br/>REST API :8089 · Web UI :8000"]
+  CLI --> SVC --> SDK --> API
 ```
 
 ## Data flow
 
-```
-User / Agent
-  │
-  ▼
-splunkctl CLI (Click)
-  │ parse flags, resolve format
-  ▼
-config.py ──► ~/.splunkctl/config.yaml (lazy load)
-  │
-  ▼
-client.py ──► splunklib.client.connect() (lazy, on first API call)
-  │
-  ▼
-guard.py ──► [DRY RUN] preview  ──or──  --yes → apply
-  │
-  ▼
-output.py ──► table (TTY) / JSON (pipe) / csv / jsonl → stdout
+```mermaid
+flowchart TD
+  A["User / Agent"] --> B["splunkctl CLI (Click)\nparse flags, resolve format"]
+  B --> C["config.py\n~/.splunkctl/config.yaml"]
+  C --> D["client.py\nsplunklib.client.connect()"]
+  D --> E{"guard.py"}
+  E -- "--yes" --> F["Apply mutation"]
+  E -- "dry-run" --> G["[DRY RUN] preview"]
+  F --> H["output.py\ntable / JSON / CSV / JSONL → stdout"]
+  G --> H
 ```
 
 ## Auth resolution
@@ -56,18 +39,45 @@ Priority (highest first):
 Auth is **lazy** — credentials resolve on first API call. Help, version,
 config, and offline commands never trigger auth.
 
-## SDK gap strategy
+## Remote-first design
 
-The forked SDK at `dannyota/splunk-sdk-python` covers ~80% of the API surface.
-Gaps are filled by adding proper collection/entity classes that wrap the
-underlying REST endpoints, following the SDK's existing patterns.
+The CLI runs on the engineer's laptop and operates a remote Splunk
+instance. It never assumes filesystem access to the Splunk server. All
+operations go through:
 
-For surfaces not worth a full SDK class (tags, field aliases), the generic
-`confs` API (`client.confs["props"]`) serves as an escape hatch for any
-`.conf` file manipulation.
+- **REST API** (port 8089) — the primary interface for all operations
+- **Web UI** (port 8000) — used only where the REST API has gaps
 
-Raw REST is used only where the SDK has no support and the surface is
-important enough to warrant first-class CLI commands (dashboards, lookups).
+## Web UI workarounds
+
+The Splunk REST API cannot handle certain file uploads. For these, the
+CLI uses the Web UI form handlers (the same endpoints the browser uses):
+
+| Operation | Why REST fails | Web UI endpoint |
+|---|---|---|
+| Lookup upload | `eai:data` requires server-side path | `POST /manager/{app}/data/lookup-table-files/_new` |
+| App install | REST expects server-side file path | `POST /manager/appinstall/_upload` |
+
+The `_WebSession` class in `client.py` handles login, CSRF tokens, and
+multipart form-data encoding for these uploads.
+
+Data upload (`search upload`) uses `POST /services/receivers/simple`
+which works over REST — no Web UI needed.
+
+## SDK fork
+
+The [forked SDK](https://github.com/dannyota/splunk-sdk-python/tree/splunkctl)
+adds entity classes missing from upstream:
+
+| Entity | Collection | Service property |
+|---|---|---|
+| `Dashboard` | `Dashboards` | `service.dashboards` |
+| `LookupTableFile` | `LookupTableFiles` | `service.lookup_table_files` |
+| `HECToken` | `HECTokens` | `service.hec_tokens` |
+
+Each follows the SDK's existing `Entity`/`Collection` patterns. For
+surfaces not worth a full SDK class, the generic `confs` API
+(`client.confs["props"]`) works as an escape hatch.
 
 ## Design principles
 
@@ -76,6 +86,7 @@ important enough to warrant first-class CLI commands (dashboards, lookups).
 3. **Lazy everything.** Auth, SDK connection, config loading — all deferred
    until needed.
 4. **One file per command group.** Each `commands/*.py` is self-contained.
-5. **SDK-first.** Use the SDK for everything it supports; raw REST only for
-   documented gaps.
-6. **Agent-friendly.** Machine-readable output, self-discovery, embedded skill.
+5. **SDK-first.** Use the SDK for everything it supports; Web UI workaround
+   only for documented gaps.
+6. **Remote-first.** Never use local filesystem for server operations.
+7. **Agent-friendly.** Machine-readable output, self-discovery, embedded skill.

@@ -1,16 +1,17 @@
 # Dashboards
 
-> Stub — will be filled when the `dashboards` command group is implemented.
-
 ## Commands
 
 ```bash
 splunkctl dashboards list                 # list dashboards
-splunkctl dashboards get <name>           # get definition (XML/JSON)
-splunkctl dashboards create -f dash.xml   # create from file (--dry-run)
-splunkctl dashboards update <name> -f dash.xml  # update (--dry-run)
-splunkctl dashboards delete <name>        # delete (--dry-run)
-splunkctl dashboards export <name> -o file  # export to file
+splunkctl dashboards list --app search    # filter by app
+splunkctl dashboards get <name>           # get definition (XML)
+splunkctl dashboards create --name new_dash --file dash.xml \
+    --app search --yes
+splunkctl dashboards update <name> --file updated.xml \
+    --app search --yes
+splunkctl dashboards delete <name> --app search --yes
+splunkctl dashboards export <name> --out dash.xml
 ```
 
-Uses raw REST (`/services/data/ui/views/`) — SDK gap.
+Uses the `Dashboard`/`Dashboards` entity classes from the SDK fork.

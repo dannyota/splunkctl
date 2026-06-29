@@ -51,6 +51,13 @@ Token auth: set `SPLUNK_TOKEN` for service-account access without a password.
 
 ## Commands
 
+### Doctor
+
+```bash
+splunkctl doctor                         # check connection, auth, health, permissions
+splunkctl doctor --json                  # machine-readable output
+```
+
 ### Search
 
 ```bash
@@ -62,6 +69,7 @@ splunkctl search oneshot '| makeresults count=5 | eval x=random()'
 splunkctl search jobs                    # list recent jobs
 splunkctl search job <sid>               # get job status/results
 splunkctl search cancel <sid> --yes      # cancel a running job
+splunkctl search upload --path threats.csv --index threat_intel --yes
 ```
 
 SPL is auto-normalized: bare keywords get `search` prepended; pipe-leading
@@ -81,6 +89,10 @@ splunkctl rules delete 'My Rule' --yes
 splunkctl rules enable 'My Rule' --yes
 splunkctl rules disable 'My Rule' --yes
 splunkctl rules history 'My Rule'
+splunkctl rules export --path detections.yml
+splunkctl rules export --path detections.yml --name 'My Rule'
+splunkctl rules import --path detections.yml --yes
+splunkctl rules import --path detections.yml --no-update --yes
 ```
 
 ### Alerts
@@ -178,15 +190,16 @@ splunkctl parsers delete mysource --yes
 ```bash
 splunkctl apps list
 splunkctl apps get SplunkForwarder
-splunkctl apps install --name my_app --path /path/to/app.tar.gz --yes
+splunkctl apps install --path ./my_app.spl --yes
+splunkctl apps install --path ./my_app.tar.gz --force --yes
 splunkctl apps uninstall my_app --yes
 splunkctl apps update my_app --enabled --visible --yes
 splunkctl apps update my_app --disabled --hidden --yes
 splunkctl apps reload --yes
 ```
 
-Note: `apps install --path` refers to the package path on the Splunk server
-filesystem.
+`apps install --path` uploads a local .spl/.tar.gz to the remote Splunk
+instance via the Web UI (no server filesystem access needed).
 
 ### Users
 
@@ -259,6 +272,29 @@ splunkctl rules history 'Failed Logins'
 splunkctl dashboards export my_dashboard --out dashboards/my_dashboard.xml
 ```
 
+### Detection-as-code
+
+```bash
+# Export all rules to YAML, version control them
+splunkctl rules export --path detections.yml
+# Export specific rules
+splunkctl rules export --path detections.yml --name 'Brute Force' --name 'C2 Beacon'
+# Import into another instance (dry-run first)
+splunkctl rules import --path detections.yml
+splunkctl rules import --path detections.yml --yes
+# Import without updating existing rules
+splunkctl rules import --path detections.yml --no-update --yes
+```
+
+### Upload data from laptop
+
+```bash
+# Ingest threat intel, logs, or sample data remotely
+splunkctl search upload --path threats.csv --index threat_intel \
+    --sourcetype csv --yes
+splunkctl search upload --path firewall.log --yes
+```
+
 ### Bulk lookup update
 
 ```bash
@@ -308,6 +344,7 @@ splunkctl search oneshot '| metadata type=sources index=main' --limit 100
 
 ## Error handling
 
+- **Diagnostics**: run `splunkctl doctor` to check everything at once
 - **Connection errors**: run `splunkctl config test` to verify auth
 - **Timeout**: increase with `--timeout 120`
 - **SSL errors**: SSL verification is off by default. Use `--verify` during
