@@ -23,7 +23,7 @@ classifiers = [
     "Topic :: System :: Systems Administration",
 ]
 dependencies = [
-    "splunk-sdk @ git+https://github.com/dannyota/splunk-sdk-python@splunkctl",
+    "splunk-sdk>=2.0",
     "click>=8.0",
     "pyyaml>=6.0",
     "tabulate>=0.9",

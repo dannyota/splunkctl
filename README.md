@@ -9,11 +9,14 @@ fork with [Click](https://click.palletsprojects.com/).
 ## Install
 
 ```bash
-pip install git+https://github.com/dannyota/splunkctl
+pip install splunkctl
+pip install git+https://github.com/dannyota/splunk-sdk-python@splunkctl
 ```
 
-Requires Python 3.13+. The forked SDK (`splunkctl` branch) is installed
-automatically as a dependency.
+Requires Python 3.13+. The second line installs the
+[forked SDK](https://github.com/dannyota/splunk-sdk-python/tree/splunkctl)
+which adds dashboard, lookup, and HEC token support. Without it, core
+commands (search, rules, alerts, indexes, inputs, apps, users) still work.
 
 ### Development
 
