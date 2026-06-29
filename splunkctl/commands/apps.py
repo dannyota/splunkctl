@@ -1,5 +1,6 @@
 """App management commands — list, get, install, uninstall, update, reload."""
 
+from pathlib import Path
 from typing import Any
 
 import click
@@ -66,36 +67,36 @@ def get_app(ctx: click.Context, name: str) -> None:
 
 
 @apps_group.command("install")
-@click.option("--name", required=True, help="App name.")
 @click.option(
     "--path",
     "file_path",
     required=True,
-    type=click.Path(exists=True),
+    type=click.Path(exists=True, dir_okay=False),
     help="Path to .tar.gz or .spl package.",
 )
+@click.option("--force", is_flag=True, help="Overwrite if app already exists.")
 @click.pass_context
-def install_app(ctx: click.Context, name: str, file_path: str) -> None:
-    """Install an app from a .tar.gz or .spl file."""
-    details = f"Install app '{name}' from '{file_path}'"
+def install_app(ctx: click.Context, file_path: str, *, force: bool) -> None:
+    """Install an app from a local .tar.gz or .spl file.
+
+    Uploads via Splunk Web UI — works from a remote client without
+    SSH access to the server.
+    """
+    p = Path(file_path)
+    details = f"Install app from '{p.name}'"
+    if force:
+        details += " (force overwrite)"
     if not guard.check(ctx, details):
         return
 
     client = get_client(ctx)
-    svc = client.service
     try:
-        svc.post(
-            "/services/apps/local",
-            name=name,
-            update=True,
-            filename=True,
-            **{"appfile": file_path},
-        )
+        client.install_app(p, force=force)
     except Exception as exc:
         output.error(f"Install failed: {exc}")
         ctx.exit(1)
         return
-    output.info(f"Installed app '{name}'.")
+    output.info(f"Installed app from '{p.name}'.")
 
 
 @apps_group.command("uninstall")

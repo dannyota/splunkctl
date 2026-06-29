@@ -40,6 +40,7 @@ These are shared modules used by all command groups.
 | `parsers` | ✅ built | `splunklib.client.Confs` | sourcetypes, get, extractions, create, update, delete |
 | `apps` | ✅ built | `splunklib.client.Apps` | list, get, install, uninstall, update, reload |
 | `users` | ✅ built | `splunklib.client.Users` | list, get, roles, create, update, delete |
+| `doctor` | ✅ built | N/A | Connection, auth, health, permissions check |
 | `commands` | ✅ built | N/A | Self-discovery (`--json`) |
 | `skill` | ✅ built | N/A | Print/install SKILL.md |
 

@@ -106,6 +106,15 @@ class SplunkClient:
 
         return self._service
 
+    def _ensure_web_session(self) -> _WebSession:
+        if self._web_session is None:
+            cfg = cfg_mod.load(self._config_path)
+            cfg.update(self._overrides)
+            self._web_session = _WebSession(
+                self.service, verify=bool(cfg.get("verify", False))
+            )
+        return self._web_session
+
     def upload_lookup(
         self,
         name: str,
@@ -114,19 +123,19 @@ class SplunkClient:
         app: str = "search",
         update: bool = False,
     ) -> None:
-        """Upload a lookup CSV via the Splunk Web UI form handler.
+        """Upload a lookup CSV via the Splunk Web UI form handler."""
+        self._ensure_web_session().upload_lookup(
+            name, file_path, app=app, update=update
+        )
 
-        The REST API requires ``eai:data`` to be a server-side path in
-        the staging area — it cannot accept file content directly. This
-        method uses the same multipart upload flow as the browser.
-        """
-        if self._web_session is None:
-            cfg = cfg_mod.load(self._config_path)
-            cfg.update(self._overrides)
-            self._web_session = _WebSession(
-                self.service, verify=bool(cfg.get("verify", False))
-            )
-        self._web_session.upload_lookup(name, file_path, app=app, update=update)
+    def install_app(
+        self,
+        file_path: Path,
+        *,
+        force: bool = False,
+    ) -> None:
+        """Install a .spl/.tar.gz app package via the Splunk Web UI."""
+        self._ensure_web_session().install_app(file_path, force=force)
 
 
 class _WebSession:
@@ -193,6 +202,50 @@ class _WebSession:
             raise RuntimeError("Could not obtain CSRF token from Splunk Web")
         self._logged_in = True
 
+    def _multipart_post(
+        self,
+        url: str,
+        fields: list[tuple[str, str]],
+        file_field: str,
+        file_name: str,
+        file_data: bytes,
+        content_type: str = "application/octet-stream",
+    ) -> bytes:
+        """Build and send a multipart/form-data POST."""
+        if not self._logged_in:
+            self._login()
+
+        boundary = uuid.uuid4().hex
+        body = b""
+        for field_name, value in fields:
+            body += f"--{boundary}\r\n".encode()
+            body += (
+                f'Content-Disposition: form-data; name="{field_name}"\r\n'
+                f"\r\n"
+                f"{value}\r\n"
+            ).encode()
+
+        body += f"--{boundary}\r\n".encode()
+        body += (
+            f'Content-Disposition: form-data; name="{file_field}";'
+            f' filename="{file_name}"\r\n'
+            f"Content-Type: {content_type}\r\n"
+            f"\r\n"
+        ).encode()
+        body += file_data
+        body += f"\r\n--{boundary}--\r\n".encode()
+
+        req = urllib.request.Request(  # noqa: S310
+            url,
+            data=body,
+            headers={
+                "Content-Type": f"multipart/form-data; boundary={boundary}",
+            },
+            method="POST",
+        )
+        resp = self._opener.open(req)  # noqa: S310
+        return bytes(resp.read())
+
     def upload_lookup(
         self,
         name: str,
@@ -202,12 +255,6 @@ class _WebSession:
         update: bool = False,
     ) -> None:
         """Upload a lookup file via multipart form POST."""
-        if not self._logged_in:
-            self._login()
-
-        file_data = file_path.read_bytes()
-        boundary = uuid.uuid4().hex
-
         if update:
             url = (
                 f"{self._base_url}/en-US/manager/{app}"
@@ -218,45 +265,63 @@ class _WebSession:
             url = f"{self._base_url}/en-US/manager/{app}/data/lookup-table-files/_new"
             action = "new"
 
-        parts: list[tuple[str, str]] = [
+        fields: list[tuple[str, str]] = [
             ("__action", action),
             ("__redirect", ""),
             ("__ns", app),
             ("splunk_form_key", self._csrf_token or ""),
         ]
         if not update:
-            parts.append(("name", name))
+            fields.append(("name", name))
 
-        body = b""
-        for field_name, value in parts:
-            body += f"--{boundary}\r\n".encode()
-            body += (
-                f'Content-Disposition: form-data; name="{field_name}"\r\n'
-                f"\r\n"
-                f"{value}\r\n"
-            ).encode()
-
-        body += f"--{boundary}\r\n".encode()
-        body += (
-            f'Content-Disposition: form-data; name="spl-ctrl_lookupfile";'
-            f' filename="{name}"\r\n'
-            f"Content-Type: text/csv\r\n"
-            f"\r\n"
-        ).encode()
-        body += file_data
-        body += f"\r\n--{boundary}--\r\n".encode()
-
-        req = urllib.request.Request(  # noqa: S310
+        resp_body = self._multipart_post(
             url,
-            data=body,
-            headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
-            method="POST",
+            fields,
+            file_field="spl-ctrl_lookupfile",
+            file_name=name,
+            file_data=file_path.read_bytes(),
+            content_type="text/csv",
         )
-        resp = self._opener.open(req)  # noqa: S310
-        result = json.loads(resp.read().decode("utf-8"))
+        result = json.loads(resp_body.decode("utf-8"))
         if result.get("status") != "OK":
             msg = result.get("msg", "unknown error")
             raise RuntimeError(f"Lookup upload failed: {msg}")
+
+    def install_app(
+        self,
+        file_path: Path,
+        *,
+        force: bool = False,
+    ) -> None:
+        """Install a .spl/.tar.gz app via the Web UI upload handler."""
+        if not self._logged_in:
+            self._login()
+
+        upload_url = f"{self._base_url}/en-US/manager/appinstall/_upload"
+        resp = self._opener.open(upload_url)  # noqa: S310
+        page = resp.read().decode("utf-8")
+
+        m = re.search(
+            r'name="state"\s+[^>]*value="([^"]*)"',
+            page,
+        )
+        state = m.group(1) if m else ""
+
+        fields: list[tuple[str, str]] = [
+            ("state", state),
+            ("splunk_form_key", self._csrf_token or ""),
+        ]
+        if force:
+            fields.append(("force", "1"))
+
+        self._multipart_post(
+            upload_url,
+            fields,
+            file_field="appfile",
+            file_name=file_path.name,
+            file_data=file_path.read_bytes(),
+            content_type="application/gzip",
+        )
 
 
 def get_client(ctx: click.Context) -> SplunkClient:

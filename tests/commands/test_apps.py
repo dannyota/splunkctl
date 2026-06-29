@@ -92,28 +92,38 @@ def test_install_dry_run(mock_gc: MagicMock, tmp_path: MagicMock) -> None:
     pkg = tmp_path / "app.spl"
     pkg.write_text("fake")
     runner = CliRunner()
-    result = runner.invoke(
-        cli, ["apps", "install", "--name", "myapp", "--path", str(pkg)]
-    )
+    result = runner.invoke(cli, ["apps", "install", "--path", str(pkg)])
     assert result.exit_code == 0
     assert "[DRY RUN]" in result.output
-    mock_gc.assert_not_called()
+    mock_gc.return_value.install_app.assert_not_called()
 
 
 @patch("splunkctl.commands.apps.get_client")
 def test_install_confirmed(mock_gc: MagicMock, tmp_path: MagicMock) -> None:
     pkg = tmp_path / "app.spl"
     pkg.write_text("fake")
-    mock_svc = MagicMock()
-    mock_gc.return_value.service = mock_svc
     runner = CliRunner()
     result = runner.invoke(
         cli,
-        ["--yes", "apps", "install", "--name", "myapp", "--path", str(pkg)],
+        ["--yes", "apps", "install", "--path", str(pkg)],
     )
     assert result.exit_code == 0
     assert "Installed" in result.output
-    mock_svc.post.assert_called_once()
+    mock_gc.return_value.install_app.assert_called_once()
+
+
+@patch("splunkctl.commands.apps.get_client")
+def test_install_force(mock_gc: MagicMock, tmp_path: MagicMock) -> None:
+    pkg = tmp_path / "myapp.tar.gz"
+    pkg.write_bytes(b"fake-tar")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["--yes", "apps", "install", "--path", str(pkg), "--force"],
+    )
+    assert result.exit_code == 0
+    assert "Installed" in result.output
+    assert "force overwrite" not in result.output
 
 
 @patch("splunkctl.commands.apps.get_client")
