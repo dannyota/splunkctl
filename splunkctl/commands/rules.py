@@ -6,6 +6,7 @@ import click
 
 from splunkctl import guard, output
 from splunkctl.client import get_client
+from splunkctl.commands.rules_io import export_rules, import_rules
 
 
 def _summarize(ss: Any) -> dict[str, Any]:
@@ -51,6 +52,10 @@ def _detail(ss: Any) -> dict[str, Any]:
 @click.group("rules")
 def rules_group() -> None:
     """Manage detection rules (saved searches)."""
+
+
+rules_group.add_command(export_rules)
+rules_group.add_command(import_rules)
 
 
 @rules_group.command("list")
