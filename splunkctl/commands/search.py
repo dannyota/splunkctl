@@ -1,6 +1,7 @@
-"""Search commands — run, export, oneshot, jobs, job, cancel."""
+"""Search commands — run, export, oneshot, upload, jobs, job, cancel."""
 
 import time
+from pathlib import Path
 from typing import Any
 
 import click
@@ -268,3 +269,63 @@ def cancel_job(ctx: click.Context, sid: str) -> None:
 
     job.cancel()
     output.info(f"Job '{sid}' cancelled.")
+
+
+_CHUNK_SIZE = 1024 * 1024  # 1 MB
+
+
+@search_group.command("upload")
+@click.option(
+    "--path",
+    "file_path",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False),
+    help="Local file to upload (CSV, log, JSON, etc.).",
+)
+@click.option("--index", default="main", help="Target index.")
+@click.option("--sourcetype", default=None, help="Source type (auto if omitted).")
+@click.option("--source", default=None, help="Source label (defaults to filename).")
+@click.option("--host", "src_host", default=None, help="Host metadata.")
+@click.pass_context
+def upload_data(
+    ctx: click.Context,
+    file_path: str,
+    index: str,
+    sourcetype: str | None,
+    source: str | None,
+    src_host: str | None,
+) -> None:
+    """Upload a local file into Splunk for indexing.
+
+    Reads the file from your laptop and sends it to the remote Splunk
+    instance via the receivers/simple REST endpoint.
+    """
+    p = Path(file_path)
+    size_mb = p.stat().st_size / (1024 * 1024)
+    source = source or p.name
+
+    parts = [f"file={p.name}", f"index={index}"]
+    if sourcetype:
+        parts.append(f"sourcetype={sourcetype}")
+    parts.append(f"size={size_mb:.1f} MB")
+    details = f"Upload data: {', '.join(parts)}"
+    if not guard.check(ctx, details):
+        return
+
+    client = get_client(ctx)
+    svc = client.service
+
+    kwargs: dict[str, str] = {"index": index, "source": source}
+    if sourcetype:
+        kwargs["sourcetype"] = sourcetype
+    if src_host:
+        kwargs["host"] = src_host
+
+    data = p.read_bytes()
+    try:
+        svc.post("/services/receivers/simple", body=data, **kwargs)
+    except Exception as exc:
+        output.error(f"Upload failed: {exc}")
+        ctx.exit(1)
+        return
+    output.info(f"Uploaded '{p.name}' ({size_mb:.1f} MB) to index={index}.")

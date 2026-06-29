@@ -240,3 +240,65 @@ def test_cancel_with_yes(mock_gc: MagicMock) -> None:
     result = runner.invoke(cli, ["--yes", "search", "cancel", "test_sid"])
     assert result.exit_code == 0
     mock_job.cancel.assert_called_once()
+
+
+@patch("splunkctl.commands.search.get_client")
+def test_upload_dry_run(mock_gc: MagicMock, tmp_path: MagicMock) -> None:
+    f = tmp_path / "threats.csv"
+    f.write_text("ip,score\n1.2.3.4,100\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["search", "upload", "--path", str(f), "--index", "main"],
+    )
+    assert result.exit_code == 0
+    assert "[DRY RUN]" in result.output
+    mock_gc.return_value.service.post.assert_not_called()
+
+
+@patch("splunkctl.commands.search.get_client")
+def test_upload_confirmed(mock_gc: MagicMock, tmp_path: MagicMock) -> None:
+    f = tmp_path / "access.log"
+    f.write_text("GET /index.html 200\n")
+    mock_svc = MagicMock()
+    mock_gc.return_value.service = mock_svc
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "--yes",
+            "search",
+            "upload",
+            "--path",
+            str(f),
+            "--index",
+            "main",
+            "--sourcetype",
+            "access_combined",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Uploaded" in result.output
+    mock_svc.post.assert_called_once()
+    call_kwargs = mock_svc.post.call_args
+    assert call_kwargs[1]["index"] == "main"
+    assert call_kwargs[1]["sourcetype"] == "access_combined"
+
+
+@patch("splunkctl.commands.search.get_client")
+def test_upload_default_source(
+    mock_gc: MagicMock,
+    tmp_path: MagicMock,
+) -> None:
+    f = tmp_path / "firewall.log"
+    f.write_text("deny 10.0.0.1\n")
+    mock_svc = MagicMock()
+    mock_gc.return_value.service = mock_svc
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["--yes", "search", "upload", "--path", str(f)],
+    )
+    assert result.exit_code == 0
+    call_kw = mock_svc.post.call_args
+    assert call_kw[1]["source"] == "firewall.log"
