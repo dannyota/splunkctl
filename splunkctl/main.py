@@ -21,6 +21,7 @@ from splunkctl.commands.hec import hec_group
 from splunkctl.commands.indexes import indexes_group
 from splunkctl.commands.info import info
 from splunkctl.commands.inputs import inputs_group
+from splunkctl.commands.knowledge import eventtypes_group, macros_group, tags_group
 from splunkctl.commands.kvstore import kvstore_group
 from splunkctl.commands.lookups import lookups_group
 from splunkctl.commands.parsers import parsers_group
@@ -183,15 +184,18 @@ cli.add_command(config_group)
 cli.add_command(dashboards_group)
 cli.add_command(doctor_cmd)
 cli.add_command(es_group)
+cli.add_command(eventtypes_group)
 cli.add_command(hec_group)
 cli.add_command(indexes_group)
 cli.add_command(info)
 cli.add_command(inputs_group)
 cli.add_command(kvstore_group)
 cli.add_command(lookups_group)
+cli.add_command(macros_group)
 cli.add_command(parsers_group)
 cli.add_command(rules_group)
 cli.add_command(search_group)
 cli.add_command(server_group)
 cli.add_command(skill_group)
+cli.add_command(tags_group)
 cli.add_command(users_group)

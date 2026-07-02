@@ -442,8 +442,11 @@ splunkctl parsers import --path parsers.yml --yes    # import from YAML
 every other conf file (`macros`, `eventtypes`, `tags`, `limits`,
 `authorize`, `server`, `web`, ...) the same way — there is no
 blocklist, so double-check the preview before `--yes` on a sensitive
-file. Friendly verbs for macros/eventtypes/tags land in a later phase;
-until then this is the general-purpose way to manage them.
+file. `macros`/`eventtypes`/`tags` below wrap `macros.conf`/
+`eventtypes.conf`/`tags.conf` with a friendlier shape (arg-form macro
+resolution, tags' enabled-only summary); `conf` is still the tool for
+anything they don't cover, including creating/editing an eventtype or
+tag assignment.
 
 ```bash
 splunkctl conf files                        # list conf files
@@ -461,6 +464,39 @@ brand-new key) before applying; `conf unset` previews the same shape
 for the values being cleared. The REST API has no true per-key delete,
 so `unset` sets keys to the empty string — it does not remove the
 stanza itself.
+
+### Macros, eventtypes, tags (friendly wrappers over `conf`)
+
+Only `macros set` mutates; `eventtypes` and `tags` are read-only — use
+`conf set`/`conf unset` on `eventtypes`/`tags` for anything beyond
+reading.
+
+```bash
+splunkctl macros list --app Splunk_Security_Essentials  # macros with definitions
+splunkctl macros get Sort_MITRE_Rows          # resolves to Sort_MITRE_Rows(1)
+splunkctl macros set my_macro --definition 'index=main' --yes
+splunkctl macros set my_macro --definition 'eval x=$a$+$b$' \
+    --args a,b --yes                          # writes stanza my_macro(2)
+
+splunkctl eventtypes list                     # name, search, app, disabled
+splunkctl eventtypes get cim:authentication   # full stanza
+
+splunkctl tags list                           # field=value -> enabled tag names (;-joined)
+splunkctl tags get "eventtype=cim%3Aauthentication"  # full enabled/disabled breakdown
+```
+
+A macro with arguments is stored under stanza `name(argcount)`, e.g.
+`Sort_MITRE_Rows(1)` — `macros get` accepts the name with or without
+that suffix and resolves a bare name to its arg-form stanza when one
+exists. `macros set` does not do that resolution: it always writes
+`name(len(--args))` when `--args` is given, else the bare `name` — to
+update an existing arg-form macro, pass `--args` with the same count.
+
+A `tags.conf` stanza is named `<field>=<value>` (e.g.
+`eventtype=cim:authentication`, shown percent-encoded by Splunk as
+`eventtype=cim%3Aauthentication`); each key inside it is a tag name
+with value `enabled`/`disabled`. `tags list` shows only the enabled
+tag names per stanza; `tags get` shows every tag's actual state.
 
 ### Apps
 

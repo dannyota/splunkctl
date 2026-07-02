@@ -8,16 +8,28 @@ dependency — so callers stay free to shape guard previews and error
 messages for their own command surface.
 """
 
+from types import SimpleNamespace
 from typing import Any
 
 
-def get_stanza(client: Any, conf_name: str, stanza: str) -> Any:
+def get_stanza(
+    client: Any, conf_name: str, stanza: str, *, app: str | None = None
+) -> Any:
     """Fetch one conf stanza entity.
+
+    ``app``, when given, qualifies the lookup with a wildcard-owner
+    namespace tuple (the same ``owner="-"`` convention every ``--app``
+    list option in this CLI already uses) so a stanza name that exists
+    in more than one app resolves instead of raising
+    ``AmbiguousReferenceException``.
 
     Raises:
         KeyError: The conf file or the stanza does not exist.
     """
-    return client.service.confs[conf_name][stanza]
+    conf = client.service.confs[conf_name]
+    if app is None:
+        return conf[stanza]
+    return conf[stanza, SimpleNamespace(owner="-", app=app)]
 
 
 def diff_lines(current: dict[str, Any], kv: dict[str, str]) -> list[str]:

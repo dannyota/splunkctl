@@ -41,6 +41,9 @@ All list surfaces accept uniform `--limit`/`--offset`/`--filter` options
 | `parsers` | ✅ built | sourcetypes, get (--key), set, unset, create, update, delete, reload |
 | `parsers import/export` | ✅ built | YAML round-trip for props/transforms stanzas |
 | `conf` | ✅ built | files (--app), list (--app), get (--key), set (diff preview), unset, reload — generic stanza editor for any conf file (macros/eventtypes/tags/authorize/...), no blocklist; shares its stanza get/set/unset/reload core with `parsers` via `conf_ops.py` |
+| `macros` | ✅ built | list (--app, F2 paging/filter, arg-form stanza `name(n)`), get (--app, resolves bare name to its arg-form), set (--definition, --args, diff preview) — thin `conf_ops` wrapper over `macros.conf`; only mutation in this group |
+| `eventtypes` | ✅ built | list (--app, F2 paging/filter), get (--app) — read-only `conf_ops` wrapper over `eventtypes.conf` |
+| `tags` | ✅ built | list (--app, F2 paging/filter, enabled-tags-only summary), get (--app, full enabled/disabled breakdown) — read-only `conf_ops` wrapper over `tags.conf`'s `field=value` stanza shape |
 | `apps` | ✅ built | list, get, install, uninstall, update, reload |
 | `users` | ✅ built | list, get, create, update (--password), delete |
 | `users roles` | ✅ built | list, get, create, update, delete |

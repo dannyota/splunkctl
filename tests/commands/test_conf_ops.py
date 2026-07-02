@@ -38,6 +38,40 @@ def test_get_stanza_missing_raises_keyerror() -> None:
         get_stanza(client, "macros", "nope")
 
 
+def test_get_stanza_with_app_scopes_the_lookup() -> None:
+    """``app`` qualifies the lookup with a wildcard-owner namespace tuple.
+
+    Disambiguates a stanza name that exists in more than one app —
+    without it, ``Collection.__getitem__`` raises ``AmbiguousReferenceException``
+    instead of resolving.
+    """
+    stanza = MagicMock()
+    conf = MagicMock()
+    conf.__getitem__.return_value = stanza
+    client = MagicMock()
+    client.service.confs.__getitem__.return_value = conf
+
+    result = get_stanza(client, "macros", "my_macro", app="my_app")
+    assert result is stanza
+    (key,), _kwargs = conf.__getitem__.call_args
+    name, ns = key
+    assert name == "my_macro"
+    assert ns.app == "my_app"
+    assert ns.owner == "-"
+
+
+def test_get_stanza_without_app_uses_plain_lookup() -> None:
+    """No ``app`` keeps the original single-arg lookup (no namespace tuple)."""
+    stanza = MagicMock()
+    conf = MagicMock()
+    conf.__getitem__.return_value = stanza
+    client = MagicMock()
+    client.service.confs.__getitem__.return_value = conf
+
+    get_stanza(client, "macros", "my_macro")
+    conf.__getitem__.assert_called_once_with("my_macro")
+
+
 # --- diff_lines ---
 
 
