@@ -97,9 +97,11 @@ def kvstore_status(ctx: click.Context) -> None:
         return
 
     c: dict[str, Any] = entries[0].get("content", {})
-    current: dict[str, Any] = c.get("current", {})
+    current: dict[str, Any] = c.get("current") or {}
+    status_raw = current.get("status")
+    status = "unknown" if not status_raw else str(status_raw).lower()
     row: dict[str, Any] = {
-        "status": str(current.get("status", "")).lower(),
+        "status": status,
         "port": current.get("port", ""),
         "version": current.get("version", ""),
         "storage_engine": current.get("storageEngine", ""),

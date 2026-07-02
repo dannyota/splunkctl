@@ -129,3 +129,16 @@ def test_kvstore_status_failed(mock_gc: MagicMock) -> None:
     assert result.exit_code == 0
     data = json.loads(result.output)
     assert data[0]["status"] == "failed"
+
+
+@patch(_PATCH)
+def test_kvstore_status_missing_current(mock_gc: MagicMock) -> None:
+    svc = mock_gc.return_value.service
+    resp = MagicMock()
+    resp.body.read.return_value = json.dumps({"entry": [{"content": {}}]}).encode()
+    svc.get.return_value = resp
+
+    result = CliRunner().invoke(cli, ["--json", "server", "kvstore"])
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data[0]["status"] == "unknown"
