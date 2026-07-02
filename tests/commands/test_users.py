@@ -116,7 +116,13 @@ def test_roles_truncated_capabilities(mock_gc: MagicMock) -> None:
         _mock_role("big_role", capabilities=caps),
     ]
     runner = CliRunner()
+    # machine-readable output carries the full list
     result = runner.invoke(cli, ["--json", "users", "roles"])
+    assert result.exit_code == 0
+    assert "more)" not in result.output
+    assert "cap_9" in result.output
+    # table output truncates for readability
+    result = runner.invoke(cli, ["--format", "table", "users", "roles"])
     assert result.exit_code == 0
     assert "+5 more" in result.output
 
@@ -273,3 +279,32 @@ def test_delete_user_not_found(mock_gc: MagicMock) -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["--yes", "users", "delete", "nope"])
     assert result.exit_code != 0
+
+
+@patch(_PATCH)
+def test_get_user_json_full_capabilities(mock_gc: MagicMock) -> None:
+    caps = [f"cap_{i}" for i in range(8)]
+    user = MagicMock()
+    user.name = "analyst"
+    user.content = {"roles": ["user"], "capabilities": caps}
+    mock_gc.return_value.service.users.__getitem__.return_value = user
+
+    result = CliRunner().invoke(cli, ["--json", "users", "get", "analyst"])
+    assert result.exit_code == 0
+    for cap in caps:
+        assert cap in result.output
+    assert "more)" not in result.output
+
+
+@patch(_PATCH)
+def test_get_user_table_truncates(mock_gc: MagicMock) -> None:
+    caps = [f"cap_{i}" for i in range(8)]
+    user = MagicMock()
+    user.name = "analyst"
+    user.content = {"roles": ["user"], "capabilities": caps}
+    mock_gc.return_value.service.users.__getitem__.return_value = user
+
+    result = CliRunner().invoke(cli, ["--format", "table", "users", "get", "analyst"])
+    assert result.exit_code == 0
+    assert "(+3 more)" in result.output
+    assert "cap_7" not in result.output

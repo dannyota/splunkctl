@@ -41,17 +41,20 @@ def _user_row(user: Any) -> dict[str, Any]:
     }
 
 
-def _user_detail(user: Any) -> dict[str, Any]:
+def _caps_str(val: Any, *, truncate: bool) -> str:
+    caps = val if isinstance(val, list) else [val] if val else []
+    if truncate and len(caps) > _MAX_CAPS:
+        return ", ".join(caps[:_MAX_CAPS]) + f" (+{len(caps) - _MAX_CAPS} more)"
+    return ", ".join(caps)
+
+
+def _user_detail(user: Any, *, truncate: bool) -> dict[str, Any]:
     c: dict[str, Any] = user.content
     row: dict[str, Any] = {"name": user.name}
     for f in _DETAIL_FIELDS:
         val = c.get(f, "")
         if f == "capabilities":
-            caps = val if isinstance(val, list) else [val] if val else []
-            truncated = ", ".join(caps[:_MAX_CAPS])
-            if len(caps) > _MAX_CAPS:
-                truncated += f" (+{len(caps) - _MAX_CAPS} more)"
-            row[f] = truncated
+            row[f] = _caps_str(val, truncate=truncate)
         elif isinstance(val, list):
             row[f] = _format_list(val)
         else:
@@ -59,21 +62,15 @@ def _user_detail(user: Any) -> dict[str, Any]:
     return row
 
 
-def _role_row(role: Any) -> dict[str, Any]:
+def _role_row(role: Any, *, truncate: bool) -> dict[str, Any]:
     c: dict[str, Any] = role.content
     imported = c.get("imported_roles", [])
     if isinstance(imported, str):
         imported = [imported]
-    caps = c.get("capabilities", [])
-    if isinstance(caps, str):
-        caps = [caps]
-    truncated = ", ".join(caps[:_MAX_CAPS])
-    if len(caps) > _MAX_CAPS:
-        truncated += f" (+{len(caps) - _MAX_CAPS} more)"
     return {
         "name": role.name,
         "imported_roles": ", ".join(imported),
-        "capabilities": truncated,
+        "capabilities": _caps_str(c.get("capabilities", []), truncate=truncate),
         "defaultApp": c.get("defaultApp", ""),
     }
 
@@ -105,7 +102,7 @@ def get_user(ctx: click.Context, name: str) -> None:
         output.error(f"User '{name}' not found.")
         ctx.exit(1)
         return
-    output.render(ctx, _user_detail(user))
+    output.render(ctx, _user_detail(user, truncate=output.is_table(ctx)))
 
 
 @users_group.command("roles")
@@ -114,7 +111,8 @@ def list_roles(ctx: click.Context) -> None:
     """List all roles."""
     client = get_client(ctx)
     roles = client.service.roles.list()
-    rows = [_role_row(r) for r in roles]
+    truncate = output.is_table(ctx)
+    rows = [_role_row(r, truncate=truncate) for r in roles]
     output.render(ctx, rows, empty="No roles found.")
 
 
