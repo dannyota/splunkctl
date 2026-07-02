@@ -215,6 +215,7 @@ def create(
         kwargs["description"] = description
     if actions is not None:
         kwargs["actions"] = actions
+        common.warn_missing_action_fields(actions, kwargs)
     if disabled:
         kwargs["disabled"] = "1"
     if app is not None:
@@ -280,12 +281,22 @@ def update(
         ctx.exit(1)
         return
 
+    # Only fetch the existing rule up front when a required-field check
+    # against server-side state is needed — keeps other dry-runs offline.
+    client: Any = None
+    ss: Any = None
+    if actions is not None:
+        client = get_client(ctx)
+        ss = _resolve_rule(ctx, client, name, app)
+        common.warn_missing_action_fields(actions, kwargs, ss.content)
+
     detail = "\n".join(f"  {k}: {v}" for k, v in kwargs.items())
     if not guard.check(ctx, f"Update saved search '{name}'", details=detail):
         return
 
-    client = get_client(ctx)
-    ss = _resolve_rule(ctx, client, name, app)
+    if ss is None:
+        client = get_client(ctx)
+        ss = _resolve_rule(ctx, client, name, app)
     ss.update(**kwargs).refresh()
     output.info(f"Updated saved search '{name}'.")
 

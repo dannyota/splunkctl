@@ -5,6 +5,8 @@ from typing import Any
 
 import click
 
+from splunkctl import output
+
 _ALERT_TYPES = (
     "custom",
     "number of events",
@@ -159,3 +161,36 @@ def alert_kwargs(
     if schedule_window is not None:
         kwargs["schedule_window"] = schedule_window
     return kwargs
+
+
+# Known alert actions and the companion field Splunk rejects --yes without.
+# One-line adds only — this is advisory, not exhaustive.
+_REQUIRED_ACTION_FIELDS: dict[str, str] = {
+    "email": "action.email.to",
+    "webhook": "action.webhook.param.url",
+}
+
+
+def warn_missing_action_fields(
+    actions: str,
+    kwargs: dict[str, Any],
+    existing: dict[str, Any] | None = None,
+) -> None:
+    """Warn on stderr for enabled actions missing a known-required field.
+
+    Advisory only — the server remains the authority. Checks ``kwargs``
+    (explicit flags plus ``--set`` pairs) for the companion field; for
+    updates, ``existing`` (the saved search's current server-side content)
+    also satisfies the check. Actions outside ``_REQUIRED_ACTION_FIELDS``
+    are silently skipped.
+    """
+    for act in (a.strip() for a in actions.split(",") if a.strip()):
+        field = _REQUIRED_ACTION_FIELDS.get(act)
+        if field is None or kwargs.get(field):
+            continue
+        if existing is not None and existing.get(field):
+            continue
+        output.warning(
+            f"action '{act}' requires {field} — the server will reject "
+            "--yes without it."
+        )

@@ -103,6 +103,11 @@ def info(msg: str) -> None:
     click.echo(msg, err=True)
 
 
+def warning(msg: str) -> None:
+    """Print an advisory warning to stderr. Does not affect exit code."""
+    click.echo(f"Warning: {msg}", err=True)
+
+
 def _csv(rows: Rows) -> str:
     if not rows:
         return ""
