@@ -343,10 +343,11 @@ def import_rules(
     Dry-run previews create/update/unchanged per rule with field-level
     diffs on stderr. Pass ``--json``/``--format json`` to also get a
     full, untruncated JSON diff array on stdout: one object per rule,
-    ``{"name", "action", "changes": [{"field", "old", "new"}]}`` — ``old``
-    is null for ``create``, ``changes`` is empty for ``unchanged``.
-    Exits non-zero when any rule is skipped or fails, so CI pipelines
-    cannot silently pass a broken detections file.
+    ``{"name", "action", "changes": [{"field", "old", "new"}], "reason"}``
+    (on skip only). Action is one of ``create`` | ``update`` | ``unchanged``
+    | ``skip``; ``old`` is null for ``create``, ``changes`` is empty for
+    ``unchanged`` and ``skip``. Exits non-zero when any rule is skipped or
+    fails, so CI pipelines cannot silently pass a broken detections file.
     """
     p = Path(file_path)
     try:
