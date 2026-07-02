@@ -92,7 +92,7 @@ def set_keys(
     except KeyError:
         if not create_missing:
             raise
-        if app:
+        if app is not None:
             target = conf.create(stanza, app=app, **kv)
         else:
             target = conf.create(stanza, **kv)
