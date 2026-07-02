@@ -28,6 +28,7 @@ dependencies = [
     "pyyaml>=6.0",
     "tabulate>=0.9",
     "requests>=2.32",
+    "defusedxml>=0.7",
 ]
 
 [project.optional-dependencies]
@@ -38,6 +39,7 @@ dev = [
     "types-requests",
     "types-PyYAML",
     "types-tabulate",
+    "types-defusedxml",
 ]
 
 [project.scripts]
