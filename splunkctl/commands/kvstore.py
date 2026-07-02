@@ -10,12 +10,12 @@ blank output or a raw traceback.
 """
 
 import json
-import urllib.parse
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 import click
+from splunklib.binding import UrlEncoded
 
 from splunkctl import guard, output
 from splunkctl.client import get_client, rest_get_json, rest_post_json
@@ -24,13 +24,22 @@ _OWNER = "nobody"
 _CHUNK_SIZE = 500
 
 
-def _seg(value: str) -> str:
-    """URL-escape a REST API path segment (collection, key, name).
+def _seg(value: str) -> UrlEncoded:
+    """Encode one REST path segment (collection, key, name), slash included.
 
-    Escapes all special characters including '/' so CIDR keys like
-    '10.0.0.0/24' are properly addressed as single segments.
+    Returns an SDK ``UrlEncoded`` rather than a plain ``str`` so the
+    encoding survives untouched through ``Context._abspath`` (which
+    re-quotes any plain ``str`` it receives). Paths built from this MUST
+    use ``+`` concatenation, not f-strings/``.format()`` — interpolating a
+    ``UrlEncoded`` into an f-string coerces it back to plain ``str`` and
+    loses the skip-encode marker, so ``_abspath`` would double-encode it
+    (e.g. a CIDR key's ``%2F`` becoming ``%252F`` on the wire). ``+``
+    concatenation dispatches through ``UrlEncoded.__add__``/``__radd__``,
+    which keeps the whole composed path a ``UrlEncoded``. This mirrors
+    exactly how the SDK's own ``KVStoreCollectionData`` builds its paths
+    and keys (``splunklib/client.py``).
     """
-    return urllib.parse.quote(value, safe="")
+    return UrlEncoded(value, encode_slash=True)
 
 
 def _app_option[F: Callable[..., Any]](f: F) -> F:
@@ -160,7 +169,7 @@ def delete_collection(ctx: click.Context, name: str, *, app: str) -> None:
         return
     client = get_client(ctx)
     client.service.delete(
-        f"storage/collections/config/{_seg(name)}", owner=_OWNER, app=app
+        "storage/collections/config/" + _seg(name), owner=_OWNER, app=app
     )
     output.info(f"KV store collection '{name}' deleted from app '{app}'.")
 
@@ -215,7 +224,7 @@ def query_collection(
     client = get_client(ctx)
     data = rest_get_json(
         client.service,
-        f"storage/collections/data/{_seg(collection)}",
+        "storage/collections/data/" + _seg(collection),
         owner=_OWNER,
         app=app,
         **params,
@@ -256,7 +265,7 @@ def insert_document(
     client = get_client(ctx)
     result = rest_post_json(
         client.service,
-        f"storage/collections/data/{_seg(collection)}",
+        "storage/collections/data/" + _seg(collection),
         doc,
         owner=_OWNER,
         app=app,
@@ -299,7 +308,7 @@ def update_document(
     client = get_client(ctx)
     rest_post_json(
         client.service,
-        f"storage/collections/data/{_seg(collection)}/{_seg(key)}",
+        "storage/collections/data/" + _seg(collection) + "/" + _seg(key),
         doc,
         owner=_OWNER,
         app=app,
@@ -337,7 +346,7 @@ def remove_documents(
             return
         client = get_client(ctx)
         client.service.delete(
-            f"storage/collections/data/{_seg(collection)}/{_seg(key)}",
+            "storage/collections/data/" + _seg(collection) + "/" + _seg(key),
             owner=_OWNER,
             app=app,
         )
@@ -355,7 +364,7 @@ def remove_documents(
         return
     client = get_client(ctx)
     client.service.delete(
-        f"storage/collections/data/{_seg(collection)}",
+        "storage/collections/data/" + _seg(collection),
         owner=_OWNER,
         app=app,
         query=query_json,
@@ -377,7 +386,7 @@ def export_collection(ctx: click.Context, collection: str, *, app: str) -> None:
     client = get_client(ctx)
     data = rest_get_json(
         client.service,
-        f"storage/collections/data/{_seg(collection)}",
+        "storage/collections/data/" + _seg(collection),
         owner=_OWNER,
         app=app,
     )
@@ -433,7 +442,7 @@ def import_documents(
         chunk = docs[start : start + _CHUNK_SIZE]
         rest_post_json(
             client.service,
-            f"storage/collections/data/{_seg(collection)}/batch_save",
+            "storage/collections/data/" + _seg(collection) + "/batch_save",
             chunk,
             owner=_OWNER,
             app=app,

@@ -318,6 +318,26 @@ def test_import_applies_single_batch(mock_gc: MagicMock, tmp_path: Path) -> None
 
 
 @patch(_PATCH)
+def test_import_exactly_500_is_one_batch(mock_gc: MagicMock, tmp_path: Path) -> None:
+    """The chunk boundary is inclusive: exactly 500 docs is one batch,
+    not two (off-by-one regression guard for the ``_CHUNK_SIZE`` math)."""
+    svc = mock_gc.return_value.service
+    svc.post.return_value = _resp([])
+    docs = [{"_key": f"k{i}"} for i in range(500)]
+    jsonl = tmp_path / "docs.jsonl"
+    jsonl.write_text("\n".join(json.dumps(d) for d in docs) + "\n")
+
+    result = CliRunner().invoke(
+        cli, ["--yes", "kvstore", "import", "agenttest_g3", "--file", str(jsonl)]
+    )
+    assert result.exit_code == 0
+    assert svc.post.call_count == 1
+    body = json.loads(svc.post.call_args.kwargs["body"])
+    assert len(body) == 500
+    assert body == docs
+
+
+@patch(_PATCH)
 def test_import_chunks_at_500(mock_gc: MagicMock, tmp_path: Path) -> None:
     svc = mock_gc.return_value.service
     svc.post.return_value = _resp([])
