@@ -41,6 +41,14 @@ def parse_set(pairs: tuple[str, ...]) -> dict[str, str]:
     return out
 
 
+def read_results(stream: Any) -> list[dict[str, Any]]:
+    """Parse a Splunk JSON results stream into a list of dicts."""
+    from splunklib.results import JSONResultsReader
+
+    reader: Any = JSONResultsReader(stream)
+    return [item for item in reader if isinstance(item, dict)]
+
+
 def alert_options[F: Callable[..., Any]](f: F) -> F:
     """Attach the alert-semantics options shared by rules create/update."""
     opts = [

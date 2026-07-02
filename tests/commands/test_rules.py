@@ -1,3 +1,4 @@
+import json
 from unittest.mock import MagicMock, patch
 
 from click.testing import CliRunner
@@ -356,3 +357,67 @@ def test_update_alert_flags_and_app(mock_gc: MagicMock) -> None:
     assert kwargs["dispatch.earliest_time"] == "-24h"
     assert kwargs["dispatch.latest_time"] == "now"
     assert kwargs["alert.digest_mode"] == "0"
+
+
+@patch(_PATCH)
+def test_list_filter_narrows(mock_gc: MagicMock) -> None:
+    a, b = MagicMock(), MagicMock()
+    a.name = "zz_failed_logins"
+    b.name = "Errors in the last day"
+    for m in (a, b):
+        m.content = {}
+        m.access = {"app": "search"}
+    mock_gc.return_value.service.saved_searches.list.return_value = [a, b]
+    result = CliRunner().invoke(cli, ["--json", "rules", "list", "--filter", "FAILED"])
+    assert result.exit_code == 0
+    rows = json.loads(result.output)
+    assert [r["name"] for r in rows] == ["zz_failed_logins"]
+
+
+@patch(_PATCH)
+def test_get_shows_acl(mock_gc: MagicMock) -> None:
+    ss = MagicMock()
+    ss.name = "r1"
+    ss.content = {"search": "x", "alert_comparator": "greater than"}
+    ss.access = {"app": "secops", "owner": "alice", "sharing": "app"}
+    mock_gc.return_value.service.saved_searches.__getitem__.return_value = ss
+    result = CliRunner().invoke(cli, ["--json", "rules", "get", "r1"])
+    assert result.exit_code == 0
+    row = json.loads(result.output)[0]
+    assert row["app"] == "secops"
+    assert row["owner"] == "alice"
+    assert row["sharing"] == "app"
+    assert row["alert_comparator"] == "greater than"
+
+
+@patch(_PATCH)
+def test_share_posts_acl(mock_gc: MagicMock) -> None:
+    ss = MagicMock()
+    ss.access = {"sharing": "user", "owner": "splunk"}
+    mock_client = mock_gc.return_value
+    mock_client.service.saved_searches.__getitem__.return_value = ss
+    result = CliRunner().invoke(
+        cli, ["--yes", "rules", "share", "r1", "--sharing", "app"]
+    )
+    assert result.exit_code == 0, result.output
+    mock_client.set_acl.assert_called_once_with(ss, sharing="app", owner=None)
+
+
+@patch(_PATCH)
+def test_rules_test_dispatches_with_window(mock_gc: MagicMock) -> None:
+    job = MagicMock()
+    job.is_done.return_value = True
+    job.results.return_value = MagicMock()
+    ss = MagicMock()
+    ss.dispatch.return_value = job
+    mock_gc.return_value.service.saved_searches.__getitem__.return_value = ss
+
+    with patch("splunkctl.commands.rules.read_results", return_value=[{"count": "3"}]):
+        result = CliRunner().invoke(
+            cli, ["--json", "rules", "test", "r1", "--earliest", "-24h"]
+        )
+    assert result.exit_code == 0, result.output
+    _, kwargs = ss.dispatch.call_args
+    assert kwargs["dispatch.earliest_time"] == "-24h"
+    assert kwargs["trigger_actions"] == "0"
+    assert json.loads(result.stdout)[0]["count"] == "3"
