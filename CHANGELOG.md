@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.4.1
+
+Cleanup pass after v0.4.0.
+
+- Consolidated `_app_scope` (3 copies) and `_trunc` (2 copies) into
+  shared helpers in `common.py`.
+- `conf get` gains `--app` scoping (was the only conf subcommand without
+  it).
+- Polling-timeout errors (`search run`/`rules test`) now emit
+  `kind: "timeout"` instead of the generic fallback.
+- `_RULE_CHANGE` in `state_io.py` uses `.get()` with a fallback so a
+  future `_rule_diff` kind cannot crash `state diff`.
+- `users roles` list options (`--limit`/`--offset`/`--filter`) moved from
+  the group callback to `roles list` specifically, so they no longer
+  silently no-op on `roles get`/`create`/`update`/`delete`.
+- Doc/test fixes: datamodels percent-rounding wording, copy-named test
+  rename, lookups wiring test docstring.
+
 ## 0.4.0
 
 Bank-SOC readiness release: agent reliability, ES triage, compliance
