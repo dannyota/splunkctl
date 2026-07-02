@@ -44,20 +44,48 @@ class _CLI(click.Group):
             "--format",
             "--fields",
             "--timeout",
+            "--out",
+            "-o",
             "--config",
             "-c",
         }
     )
 
+    def _leaf_opts(self, args: list[str]) -> frozenset[str]:
+        """Option names defined by the subcommand the args resolve to.
+
+        A flag spelled the same as a global one stays with the leaf.
+        """
+        cmd: click.Command = self
+        for tok in args:
+            if tok.startswith("-"):
+                continue
+            if isinstance(cmd, click.Group) and tok in cmd.commands:
+                cmd = cmd.commands[tok]
+            else:
+                break
+        if cmd is self:
+            return frozenset()
+        opts: set[str] = set()
+        for p in cmd.params:
+            opts.update(p.opts)
+            opts.update(p.secondary_opts)
+        return frozenset(opts)
+
     def parse_args(self, ctx: click.Context, args: list[str]) -> list[str]:
         """Move known global flags to the front of the arg list."""
+        leaf_opts = self._leaf_opts(args)
         prefix: list[str] = []
         rest: list[str] = []
         i = 0
         while i < len(args):
-            if args[i] in self._HOIST_FLAGS:
+            if args[i] in self._HOIST_FLAGS and args[i] not in leaf_opts:
                 prefix.append(args[i])
-            elif args[i] in self._HOIST_VALUE and i + 1 < len(args):
+            elif (
+                args[i] in self._HOIST_VALUE
+                and args[i] not in leaf_opts
+                and i + 1 < len(args)
+            ):
                 prefix.append(args[i])
                 prefix.append(args[i + 1])
                 i += 1
