@@ -14,6 +14,7 @@ from splunkctl.commands.commands_meta import commands_meta
 from splunkctl.commands.config_cmd import config_group
 from splunkctl.commands.dashboards import dashboards_group
 from splunkctl.commands.doctor import doctor_cmd
+from splunkctl.commands.es import es_group
 from splunkctl.commands.hec import hec_group
 from splunkctl.commands.indexes import indexes_group
 from splunkctl.commands.info import info
@@ -176,6 +177,7 @@ cli.add_command(commands_meta)
 cli.add_command(config_group)
 cli.add_command(dashboards_group)
 cli.add_command(doctor_cmd)
+cli.add_command(es_group)
 cli.add_command(hec_group)
 cli.add_command(indexes_group)
 cli.add_command(info)

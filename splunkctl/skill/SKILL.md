@@ -5,12 +5,13 @@ tells you how to authenticate, run commands, and handle common workflows.
 
 ## Scope
 
-`splunkctl` targets Splunk Enterprise core over the REST API. There is no
-dedicated `es` command group yet (planned for a later phase). Enterprise
-Security capabilities — notables, risk, correlation-search actions,
-asset/identity lookups — are reachable today through the generic search,
-rules, and lookups commands documented below; see **ES recipes** under
-Workflow patterns.
+`splunkctl` targets Splunk Enterprise core over the REST API. Enterprise
+Security's notable-event triage loop (assign, status/urgency/disposition,
+comment) has a dedicated, feature-detected `es notables` group — see
+**ES notables** under Commands. Other ES capabilities — risk,
+correlation-search actions, asset/identity lookups — are reachable
+through the generic search, rules, and lookups commands; see
+**ES recipes** under Workflow patterns.
 
 ## Auth
 
@@ -241,6 +242,34 @@ splunkctl alerts suppress 'Alert Name' --duration 7200 --yes
 splunkctl alerts unsuppress 'Alert Name' --yes
 ```
 
+### ES notables
+
+Requires Enterprise Security (`SplunkEnterpriseSecuritySuite`) — every
+subcommand feature-detects first and exits 1 with a `not_found` envelope
+naming the app if it's missing. No dedicated SDK entity class; `list`/`get`
+run over oneshot search against `index=notable`, `update` POSTs to
+`/services/notable_update`. Live-verified against ES: pending (local dev
+has Splunk Security Essentials, not ES) — only the feature-detection
+negative path has been verified against a real instance.
+
+```bash
+splunkctl es notables list                                # last 24h, up to 100
+splunkctl es notables list --since -7d --status new --owner unassigned
+splunkctl es notables list --rule beacon --limit 20        # by correlation search
+splunkctl es notables get <event_id>                       # full field set
+splunkctl es notables update <event_id> --status closed \
+    --comment 'false positive' --yes
+splunkctl es notables update <id1> <id2> <id3> \
+    --owner analyst1 --urgency high --yes                  # bulk triage
+```
+
+`--status` accepts a name (`unassigned`/`new`/`in progress`/`pending`/
+`resolved`/`closed`) or the raw integer (0-5, or higher for custom
+statuses). `--disposition` passes through as given (e.g. `disposition:1`)
+— dispositions are instance-configurable, so the CLI doesn't invent a
+name map. `update` requires at least one of `--status`/`--owner`/
+`--urgency`/`--disposition`/`--comment`; none is a usage error (exit 2).
+
 ### Dashboards
 
 ```bash
@@ -449,11 +478,13 @@ splunkctl rules list --app Splunk_Security_Essentials --json | jq '[.[] | select
 
 ### ES recipes
 
-No dedicated `es` command group yet (see Scope) — these generic
-recipes cover the common Enterprise Security workflows in the meantime.
+Notable-event triage (list/get/update) has a dedicated group — see
+**ES notables** under Commands. These recipes cover the rest of
+Enterprise Security, still reachable only through the generic search,
+rules, and lookups commands.
 
 ```bash
-# Read notables
+# Read notables with ad-hoc SPL the es notables group doesn't cover
 splunkctl search run 'index=notable' --earliest -24h --latest now --limit 100
 splunkctl search run 'index=notable status_label!=Closed' --earliest -7d --limit 200
 
