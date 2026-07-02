@@ -1,5 +1,6 @@
 """Tests for parsers commands."""
 
+import json
 from unittest.mock import MagicMock, patch
 
 from click.testing import CliRunner
@@ -236,8 +237,12 @@ def test_set_updates_existing_stanza_multikey(mock_gc: MagicMock) -> None:
     result = CliRunner().invoke(
         cli,
         [
-            "--yes", "parsers", "set", "acme:fw",
-            "TIME_FORMAT=%s", "SHOULD_LINEMERGE=false",
+            "--yes",
+            "parsers",
+            "set",
+            "acme:fw",
+            "TIME_FORMAT=%s",
+            "SHOULD_LINEMERGE=false",
         ],
     )
     assert result.exit_code == 0, result.output
@@ -289,8 +294,14 @@ def test_set_transforms_conf(mock_gc: MagicMock) -> None:
     result = CliRunner().invoke(
         cli,
         [
-            "--yes", "parsers", "set", "acme_dev", "--conf", "transforms",
-            "REGEX=devname=(?<fw_device>\\S+)", "FORMAT=fw_device::$1",
+            "--yes",
+            "parsers",
+            "set",
+            "acme_dev",
+            "--conf",
+            "transforms",
+            "REGEX=devname=(?<fw_device>\\S+)",
+            "FORMAT=fw_device::$1",
         ],
     )
     assert result.exit_code == 0, result.output
@@ -298,9 +309,7 @@ def test_set_transforms_conf(mock_gc: MagicMock) -> None:
 
 
 def test_set_invalid_pair_rejected() -> None:
-    result = CliRunner().invoke(
-        cli, ["--yes", "parsers", "set", "st", "NOEQUALS"]
-    )
+    result = CliRunner().invoke(cli, ["--yes", "parsers", "set", "st", "NOEQUALS"])
     assert result.exit_code != 0
     assert "KEY=VALUE" in result.output + result.stderr
 
@@ -319,3 +328,69 @@ def test_unset_clears_keys_with_warning(mock_gc: MagicMock) -> None:
     _, kwargs = stanza.update.call_args
     assert kwargs == {"TIME_FORMAT": "", "TIME_PREFIX": ""}
     assert "Cleared" in result.stderr
+
+
+@patch(_PATCH)
+def test_reload_posts_both_confs(mock_gc: MagicMock) -> None:
+    svc = mock_gc.return_value.service
+    result = CliRunner().invoke(cli, ["--yes", "parsers", "reload"])
+    assert result.exit_code == 0, result.output
+    paths = [c.args[0] for c in svc.post.call_args_list]
+    assert "/services/configs/conf-props/_reload" in paths
+    assert "/services/configs/conf-transforms/_reload" in paths
+
+
+@patch(_PATCH)
+def test_reload_single_conf(mock_gc: MagicMock) -> None:
+    svc = mock_gc.return_value.service
+    result = CliRunner().invoke(cli, ["--yes", "parsers", "reload", "--conf", "props"])
+    assert result.exit_code == 0
+    paths = [c.args[0] for c in svc.post.call_args_list]
+    assert paths == ["/services/configs/conf-props/_reload"]
+
+
+@patch(_PATCH)
+def test_get_explicit_uses_configs_endpoint(mock_gc: MagicMock) -> None:
+    body = {
+        "entry": [
+            {
+                "content": {
+                    "TIME_FORMAT": "%s",
+                    "eai:appName": "search",
+                    "disabled": False,
+                }
+            }
+        ]
+    }
+    resp = MagicMock()
+    resp.body.read.return_value = json.dumps(body).encode()
+    svc = mock_gc.return_value.service
+    svc.get.return_value = resp
+
+    result = CliRunner().invoke(
+        cli, ["--json", "parsers", "get", "acme:fw", "--explicit"]
+    )
+    assert result.exit_code == 0, result.output
+    row = json.loads(result.stdout)[0]
+    assert row["TIME_FORMAT"] == "%s"
+    assert "eai:appName" not in row
+    path = svc.get.call_args.args[0]
+    assert "configs/conf-props/acme%3Afw" in path
+
+
+@patch(_PATCH)
+def test_sourcetypes_filter(mock_gc: MagicMock) -> None:
+    a, b = MagicMock(), MagicMock()
+    a.name = "acme:fw"
+    b.name = "syslog"
+    for m in (a, b):
+        m.content = {}
+    conf = MagicMock()
+    conf.list.return_value = [a, b]
+    mock_gc.return_value.service.confs.__getitem__.return_value = conf
+
+    result = CliRunner().invoke(
+        cli, ["--json", "parsers", "sourcetypes", "--filter", "acme"]
+    )
+    rows = json.loads(result.output)
+    assert [r["name"] for r in rows] == ["acme:fw"]

@@ -1,6 +1,8 @@
 """Parser / sourcetype commands — props.conf and transforms.conf via confs API."""
 
+import json
 from typing import Any
+from urllib.parse import quote
 
 import click
 
@@ -126,11 +128,21 @@ def unset_keys(
 
 
 @parsers_group.command("sourcetypes")
+@click.option(
+    "--filter",
+    "name_filter",
+    default=None,
+    help="Case-insensitive name substring filter.",
+)
 @click.pass_context
-def sourcetypes(ctx: click.Context) -> None:
+def sourcetypes(ctx: click.Context, name_filter: str | None) -> None:
     """List source types from props.conf."""
     client = get_client(ctx)
     conf = client.service.confs["props"]
+    stanzas = conf.list()
+    if name_filter:
+        needle = name_filter.lower()
+        stanzas = [s for s in stanzas if needle in s.name.lower()]
     rows: list[dict[str, Any]] = [
         {
             "name": s.name,
@@ -138,26 +150,94 @@ def sourcetypes(ctx: click.Context) -> None:
             "description": s.content.get("description", ""),
             "TRANSFORMS": s.content.get("TRANSFORMS", ""),
         }
-        for s in conf.list()
+        for s in stanzas
     ]
-    output.render(ctx, rows)
+    output.render(ctx, rows, empty="No sourcetypes found.")
 
 
 @parsers_group.command("get")
 @click.argument("sourcetype")
+@click.option(
+    "--conf",
+    "conf_name",
+    type=click.Choice(["props", "transforms"]),
+    default="props",
+    help="Conf file to read (default props).",
+)
+@click.option(
+    "--app",
+    default="search",
+    help="App namespace for --explicit (default search).",
+)
+@click.option(
+    "--explicit",
+    is_flag=True,
+    help="Show only explicitly set stanza keys, not the merged view.",
+)
 @click.pass_context
-def get_sourcetype(ctx: click.Context, sourcetype: str) -> None:
-    """Show full props.conf settings for a sourcetype."""
+def get_sourcetype(
+    ctx: click.Context,
+    sourcetype: str,
+    conf_name: str,
+    app: str,
+    *,
+    explicit: bool,
+) -> None:
+    """Show conf settings for a sourcetype (merged, or --explicit only)."""
     client = get_client(ctx)
-    conf = client.service.confs["props"]
+    if explicit:
+        path = (
+            f"/servicesNS/nobody/{quote(app, safe='')}"
+            f"/configs/conf-{conf_name}/{quote(sourcetype, safe='')}"
+        )
+        try:
+            resp = client.service.get(path, output_mode="json")
+        except Exception:
+            output.error(f"Sourcetype '{sourcetype}' not found.")
+            ctx.exit(1)
+            return
+        body = json.loads(resp.body.read())
+        content: dict[str, Any] = body["entry"][0]["content"]
+        row = {"name": sourcetype}
+        row.update(
+            {
+                k: v
+                for k, v in content.items()
+                if not k.startswith("eai:") and k != "disabled"
+            }
+        )
+        output.render(ctx, row)
+        return
+
+    conf = client.service.confs[conf_name]
     try:
         stanza = conf[sourcetype]
     except KeyError:
         output.error(f"Sourcetype '{sourcetype}' not found.")
         ctx.exit(1)
         return
-    row: dict[str, Any] = {"name": stanza.name, **dict(stanza.content)}
+    row = {"name": stanza.name, **dict(stanza.content)}
     output.render(ctx, row)
+
+
+@parsers_group.command("reload")
+@click.option(
+    "--conf",
+    "conf_name",
+    type=click.Choice(["props", "transforms", "all"]),
+    default="all",
+    help="Which conf to reload (default all).",
+)
+@click.pass_context
+def reload_confs(ctx: click.Context, conf_name: str) -> None:
+    """Reload props/transforms so parser changes take effect."""
+    targets = ["props", "transforms"] if conf_name == "all" else [conf_name]
+    if not guard.check(ctx, f"Reload conf: {', '.join(targets)}"):
+        return
+    client = get_client(ctx)
+    for t in targets:
+        client.service.post(f"/services/configs/conf-{t}/_reload")
+    output.info(f"Reloaded: {', '.join(targets)}.")
 
 
 @parsers_group.command("extractions")
