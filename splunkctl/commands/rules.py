@@ -203,7 +203,7 @@ def create(
     **alert_flags: Any,
 ) -> None:
     """Create a saved search."""
-    kwargs: dict[str, Any] = dict(common.alert_kwargs(**alert_flags))
+    kwargs: dict[str, Any] = dict(common.alert_kwargs(actions=actions, **alert_flags))
     if cron is not None:
         kwargs["cron_schedule"] = cron
         kwargs["is_scheduled"] = "1"
@@ -258,7 +258,7 @@ def update(
     **alert_flags: Any,
 ) -> None:
     """Update a saved search."""
-    kwargs: dict[str, Any] = dict(common.alert_kwargs(**alert_flags))
+    kwargs: dict[str, Any] = dict(common.alert_kwargs(actions=actions, **alert_flags))
     if spl is not None:
         kwargs["search"] = spl
     if cron is not None:

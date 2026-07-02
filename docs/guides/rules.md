@@ -17,13 +17,45 @@ so they can live in git, pass through CI, and deploy across instances.
 splunkctl rules list                      # list all saved searches
 splunkctl rules get <name>                # get rule details + SPL
 splunkctl rules create --name 'Rule' --search '<SPL>' \
-    --cron '*/5 * * * *' --actions email --yes
+    --cron '*/5 * * * *' --actions email --email-to soc@bank.example --yes
 splunkctl rules update <name> --search '<SPL>' --yes
 splunkctl rules delete <name> --yes
 splunkctl rules enable <name> --yes
 splunkctl rules disable <name> --yes
 splunkctl rules history <name>            # run history
 ```
+
+### Alert-action flags
+
+`--email-to`, `--email-subject`, and `--webhook-url` are friendly flags for
+the most common alert-action fields, available on both `create` and
+`update`:
+
+| Flag | Field | Requires |
+|---|---|---|
+| `--email-to` | `action.email.to` | `--actions email` to enable |
+| `--email-subject` | `action.email.subject` | `--actions email` to enable |
+| `--webhook-url` | `action.webhook.param.url` | `--actions webhook` to enable |
+
+Setting a flag does not enable its action by itself — Splunk keeps
+`action.*` params inert until the action is named in `--actions`. Passing
+a flag whose action isn't enabled prints a non-blocking advisory
+(`--email-to is set but 'email' is not in --actions`); the command still
+applies. A flag and an equivalent `--set` for the same field is a usage
+error (exit 2) rather than a silent pick — fix the collision instead:
+
+```bash
+splunkctl rules create --name 'Rule' --search '<SPL>' \
+    --actions email --email-to soc@bank.example --yes
+
+# usage error: two sources of truth for the same field
+splunkctl rules create --name 'Rule' --search '<SPL>' \
+    --email-to soc@bank.example --set action.email.to=other@bank.example
+```
+
+`--set action.*` remains the escape hatch for any action field without a
+dedicated flag (ES notable/risk params, `action.webhook.param.method`,
+etc.) — see below.
 
 ### App-private rules
 

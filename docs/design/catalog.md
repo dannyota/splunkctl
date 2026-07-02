@@ -30,7 +30,7 @@ All list surfaces accept uniform `--limit`/`--offset`/`--filter` options
 | `config` | ✅ built | init (--profile), show (--profile), use, test — multi-instance profiles |
 | `info` | ✅ built | (default) |
 | `search` | ✅ built | run (--detach), export, oneshot, jobs, job (--offset/--count/--events/--status-only), cancel, upload |
-| `rules` | ✅ built | list (--filter, --app, --owner), get (--app, --owner), create, update, delete, enable, disable, share, history |
+| `rules` | ✅ built | list (--filter, --app, --owner), get (--app, --owner), create, update (--email-to/--email-subject/--webhook-url over --set), delete, enable, disable, share, history |
 | `rules import/export` | ✅ built | YAML round-trip with alert semantics, dry-run diff |
 | `alerts` | ✅ built | list, get, actions, suppress, unsuppress |
 | `dashboards` | ✅ built | list (type column), get (--definition), create (--type classic/studio/auto, --sharing), update (diff preview), delete, export (--definition, --all --dir), share |

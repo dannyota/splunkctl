@@ -182,7 +182,8 @@ splunkctl rules list --app Splunk_Security_Essentials  # include app-private rul
 splunkctl rules get 'My Rule'
 splunkctl rules get 'My Rule' --app Splunk_Security_Essentials --owner nobody
 splunkctl rules create --name 'New Rule' --search 'index=main error' \
-    --cron '*/5 * * * *' --actions email --description 'Alert on errors' --yes
+    --cron '*/5 * * * *' --actions email --email-to soc@bank.example \
+    --description 'Alert on errors' --yes
 splunkctl rules update 'My Rule' --search 'index=main fail' --yes
 splunkctl rules update 'My Rule' --enabled --yes
 splunkctl rules delete 'My Rule' --yes
@@ -212,11 +213,29 @@ what a correlation search's actions are configured to do.
 `create`/`update --actions email` or `--actions webhook` warn on stderr
 during dry-run if the action's required companion field is missing
 (`action.email.to` for email, `action.webhook.param.url` for webhook) —
-the server otherwise 400s on `--yes`. Supply it with `--set`:
+the server otherwise 400s on `--yes`. First-class flags supply the common
+fields (`create`/`update` both):
+
+| Flag | Field |
+|---|---|
+| `--email-to` | `action.email.to` |
+| `--email-subject` | `action.email.subject` |
+| `--webhook-url` | `action.webhook.param.url` |
 
 ```bash
 splunkctl rules create --name 'New Rule' --search 'index=main error' \
-    --actions email --set action.email.to=soc@bank.example --yes
+    --actions email --email-to soc@bank.example --yes
+```
+
+A flag does not enable its action by itself — `--actions` still must name
+it, or the CLI prints a non-blocking advisory (the command still applies).
+A flag together with an equivalent `--set` for the *same* field is a usage
+error (exit 2) — fix the collision, the CLI won't silently pick one:
+
+```bash
+splunkctl rules create --name 'New Rule' --search 'index=main error' \
+    --email-to soc@bank.example --set action.email.to=other@bank.example
+# Error: --email-to conflicts with --set action.email.to
 ```
 
 `--set KEY=VALUE` (repeatable, `create`/`update` only) sets any raw

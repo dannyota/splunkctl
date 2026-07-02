@@ -199,6 +199,26 @@ def alert_options[F: Callable[..., Any]](f: F) -> F:
             help="Scheduler window in minutes, or 'auto'.",
         ),
         click.option(
+            "--email-to",
+            default=None,
+            help="Email action recipient(s) (action.email.to); does not "
+            "enable the action by itself — pass --actions email too. "
+            "Conflicts with --set action.email.to.",
+        ),
+        click.option(
+            "--email-subject",
+            default=None,
+            help="Email action subject (action.email.subject). Conflicts "
+            "with --set action.email.subject.",
+        ),
+        click.option(
+            "--webhook-url",
+            default=None,
+            help="Webhook action URL (action.webhook.param.url); does not "
+            "enable the action by itself — pass --actions webhook too. "
+            "Conflicts with --set action.webhook.param.url.",
+        ),
+        click.option(
             "--set",
             "set_pairs",
             multiple=True,
@@ -209,6 +229,58 @@ def alert_options[F: Callable[..., Any]](f: F) -> F:
     for opt in reversed(opts):
         f = opt(f)
     return f
+
+
+# Friendly action flags, in the order they're merged: (flag, field, action).
+_ACTION_FLAGS: tuple[tuple[str, str, str], ...] = (
+    ("--email-to", "action.email.to", "email"),
+    ("--email-subject", "action.email.subject", "email"),
+    ("--webhook-url", "action.webhook.param.url", "webhook"),
+)
+
+
+def _merge_action_flags(
+    kwargs: dict[str, str],
+    *,
+    actions: str | None,
+    email_to: str | None,
+    email_subject: str | None,
+    webhook_url: str | None,
+) -> None:
+    """Merge --email-to/--email-subject/--webhook-url into ``kwargs``.
+
+    Each flag is sugar for one raw ``action.*`` field. A flag and an
+    equivalent ``--set`` for the same field is a usage error (exit 2) —
+    two sources of truth for one field must not collide silently. Setting
+    a flag does not enable its action (mirrors Splunk semantics: the
+    action must still be named in ``--actions``); when it isn't, a
+    one-line advisory is printed to stderr, deduplicated per action.
+
+    Raises:
+        click.BadParameter: On a flag/--set collision, or an empty value.
+    """
+    values = {
+        "--email-to": email_to,
+        "--email-subject": email_subject,
+        "--webhook-url": webhook_url,
+    }
+    enabled = {a.strip() for a in (actions or "").split(",") if a.strip()}
+    warned: set[str] = set()
+    for flag, field, action in _ACTION_FLAGS:
+        value = values[flag]
+        if value is None:
+            continue
+        if not value.strip():
+            raise click.BadParameter(f"{flag} must not be empty")
+        if field in kwargs:
+            raise click.BadParameter(f"{flag} conflicts with --set {field}")
+        kwargs[field] = value
+        if action not in enabled and action not in warned:
+            output.warning(
+                f"{flag} is set but '{action}' is not in --actions — "
+                "the action stays disabled."
+            )
+            warned.add(action)
 
 
 def alert_kwargs(
@@ -223,11 +295,17 @@ def alert_kwargs(
     throttle_fields: str | None,
     track: bool | None,
     schedule_window: str | None,
+    email_to: str | None,
+    email_subject: str | None,
+    webhook_url: str | None,
     set_pairs: tuple[str, ...],
+    actions: str | None = None,
 ) -> dict[str, str]:
     """Translate alert flags into saved-search REST fields.
 
-    Starts from ``--set`` pairs; explicit flags overwrite them.
+    Starts from ``--set`` pairs; explicit flags overwrite them. ``actions``
+    is the (not yet applied) ``--actions`` value on this same command, used
+    only to advise on friendly action flags whose action isn't enabled.
     """
     if (alert_comparator is None) != (alert_threshold is None):
         raise click.BadParameter(
@@ -257,6 +335,13 @@ def alert_kwargs(
         kwargs["alert.track"] = "1" if track else "0"
     if schedule_window is not None:
         kwargs["schedule_window"] = schedule_window
+    _merge_action_flags(
+        kwargs,
+        actions=actions,
+        email_to=email_to,
+        email_subject=email_subject,
+        webhook_url=webhook_url,
+    )
     return kwargs
 
 
