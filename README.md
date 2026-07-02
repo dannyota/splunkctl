@@ -1,10 +1,60 @@
+<div align="center">
+
+<a href="https://splunk.danny.vn"><img src="docs/assets/banner.svg" alt="splunkctl — operate Splunk Enterprise as code" width="600"></a>
+
 # splunkctl
 
-CLI tool for Splunk Enterprise SIEM operations.
+**Operate Splunk Enterprise as code — for SOC teams, detection engineers, and AI agents.**
 
-Query, inspect, and manage a remote Splunk Enterprise instance from your
-laptop. Built on the [splunk-sdk-python](https://github.com/dannyota/splunk-sdk-python/tree/splunkctl)
-fork with [Click](https://click.palletsprojects.com/).
+[Docs](https://splunk.danny.vn) · [Catalog](docs/design/catalog.md) · [Releases](https://github.com/dannyota/splunkctl/releases)
+
+</div>
+
+---
+
+A Python CLI that queries, inspects, and manages a **remote** Splunk
+Enterprise instance over the REST API. Built on the
+[splunk-sdk-python](https://github.com/dannyota/splunk-sdk-python/tree/splunkctl)
+fork with [Click](https://click.palletsprojects.com/). The core loop is
+**pull live state → review the diff → push it back** — one `state` engine
+covering rules, parsers, macros, lookups, and dashboards, with a
+change-evidence report artifact for bank change tickets. It's built for
+humans and LLM agents alike: deterministic flags, `--json` everywhere,
+structured error envelopes, and an embedded agent operating guide
+(`splunkctl skill`).
+
+> **Every mutation is dry-run by default.** Nothing changes until you pass
+> `--yes`. Always preview, read it, then apply.
+
+## What it does
+
+- **Config as code** — `state pull` → edit → `state diff` → `state push`
+  across rules, parsers, macros, lookups, and dashboards (diff-only). Push
+  writes a before→after JSON report artifact usable as change-ticket
+  evidence. Push never deletes.
+- **Detection engineering** — rules CRUD + YAML import/export, macros,
+  eventtypes, tags, data model acceleration health, lookup definitions +
+  automatic lookups (transforms.conf/props.conf wiring), and first-class
+  `--email-to`/`--webhook-url` alert-action flags.
+- **ES incident review** — `es notables list/get/update` for the SOC
+  triage loop (status, owner, urgency, disposition, comment via
+  `notable_update`); feature-detected on Enterprise Security.
+- **Compliance & audit** — `audit changes` normalizes both `_audit` event
+  shapes into one schema; `audit rbac` produces a users × roles ×
+  capabilities attestation view for access recertification.
+- **KV store** — collection + document CRUD, JSONL import/export with
+  500-doc batch chunking, query with server-side filtering.
+- **Topology health** — `server cluster/shcluster/deployment` reads
+  distinguish "no threat" from "an indexer is down" in clustered
+  deployments.
+- **Agent reliability** — structured JSON error envelope with typed
+  taxonomy (`auth`/`permission`/`not_found`/`timeout`/...), uniform
+  `--limit`/`--offset`/`--filter` on every list surface, multi-instance
+  profiles with a bank-safety guard banner
+  (`(profile: uat @ host:port)`).
+- **Built for agents** — `splunkctl commands --json` for self-discovery,
+  `splunkctl skill` / `skill install` for LLM agent harnesses, guard
+  markers on every mutation, dual output (TTY = table, pipe = JSON).
 
 ## Install
 
@@ -15,25 +65,47 @@ pip install git+https://github.com/dannyota/splunk-sdk-python@splunkctl
 
 Requires Python 3.13+. The second line installs the
 [forked SDK](https://github.com/dannyota/splunk-sdk-python/tree/splunkctl)
-which adds dashboard, lookup, and HEC token support. Without it, core
-commands (search, rules, alerts, indexes, inputs, apps, users) still work.
+which adds dashboard, lookup, and HEC token entity classes. Without it,
+core commands (search, rules, alerts, indexes, inputs, apps, users) still
+work.
 
 ### Development
 
 ```bash
 git clone https://github.com/dannyota/splunkctl
 cd splunkctl
-pip install -e .
+pip install -e '.[dev]'
 splunkctl --version
 ```
 
-## Quick start
+## Quickstart
 
 ```bash
 splunkctl config init                         # interactive setup
 splunkctl doctor                              # check connection, auth, permissions
 splunkctl search run 'index=main | head 10'   # run a search
 splunkctl rules list                          # list detection rules
+splunkctl commands --json                     # discover every verb
+```
+
+## CLI usage
+
+```bash
+# Read
+splunkctl rules list --app Splunk_Security_Essentials --json
+splunkctl alerts list --json
+splunkctl datamodels acceleration
+splunkctl audit rbac --format csv --out rbac.csv
+
+# Mutate (dry-run first, --yes to apply)
+splunkctl rules disable 'My Rule'             # preview
+splunkctl rules disable 'My Rule' --yes       # apply
+splunkctl es notables update <id> --status closed --owner analyst --yes
+
+# Config-as-code
+splunkctl state pull --dir config/            # snapshot live state
+splunkctl state diff --dir config/            # structured drift report
+splunkctl state push --dir config/ --report r.json --yes  # deploy + evidence
 ```
 
 ## Commands
@@ -41,56 +113,31 @@ splunkctl rules list                          # list detection rules
 | Group | Description |
 |---|---|
 | `doctor` | Connection, auth, health, and permissions check |
-| `config` | Setup, show config, test connectivity |
+| `config` | Setup, profiles (dev/UAT/prod), test connectivity |
 | `info` | Server info (version, OS, license) |
 | `search` | Run, export, oneshot, upload, job management |
-| `rules` | Detection rules — CRUD, import/export (YAML) |
+| `rules` | Detection rules — CRUD, import/export (YAML), alert-action flags |
 | `alerts` | Fired alerts, alert actions, suppression |
-| `dashboards` | Dashboard CRUD (XML) |
+| `dashboards` | Dashboard CRUD (XML/JSON) |
 | `indexes` | Index management |
 | `inputs` | Data inputs (monitor, tcp, udp, script, http) |
-| `lookups` | Lookup table CRUD (CSV, mmdb) |
+| `lookups` | Lookup tables, definitions, automatic lookups |
 | `hec` | HEC token management |
-| `parsers` | Source types and field extractions |
+| `parsers` | Source types, field extractions, import/export |
 | `apps` | App install (.spl/.tar.gz), uninstall, update |
 | `users` | User and role management |
+| `server` | Messages, license, KV store, cluster/SHC/deployment health |
+| `es` | ES notable-event triage (feature-detected) |
+| `audit` | Change audit + RBAC attestation |
+| `kvstore` | KV store collection + document CRUD |
+| `conf` | Generic conf file/stanza editor (any .conf) |
+| `macros` | Search macros — list, get, set |
+| `eventtypes` | Event types — list, get |
+| `tags` | Tags — list, get |
+| `datamodels` | Data model definitions + acceleration health |
+| `state` | Config-as-code pull/diff/push with change-evidence reports |
 | `commands` | Machine-readable command tree (JSON) |
 | `skill` | Embedded agent operating guide |
-
-## Key features
-
-### Detection-as-code
-
-Export existing rules to YAML, version control them, deploy across
-instances:
-
-```bash
-splunkctl rules export --path detections.yml
-splunkctl rules import --path detections.yml        # dry-run preview
-splunkctl --yes rules import --path detections.yml  # apply
-```
-
-### Remote file operations
-
-Upload files from your laptop without SSH access to the server:
-
-```bash
-# Upload threat intel, logs, or sample data for indexing
-splunkctl --yes search upload --path threats.csv --index threat_intel --sourcetype csv
-
-# Upload lookup tables (CSV or GeoIP mmdb)
-splunkctl --yes lookups upload --name threats.csv --path threats.csv
-
-# Install apps from local .spl/.tar.gz packages
-splunkctl --yes apps install --path TA_windows.spl
-```
-
-### Diagnostics
-
-```bash
-splunkctl doctor             # check everything: connection, auth, health, permissions
-splunkctl doctor --json      # machine-readable output
-```
 
 ## Global flags
 
@@ -102,31 +149,42 @@ splunkctl doctor --json      # machine-readable output
 --yes / -y          Apply mutations (skip dry-run preview)
 --timeout N         Request timeout in seconds (default 30)
 --config FILE       Config file path
+--profile NAME      Named profile (dev/UAT/prod)
 --debug             HTTP request/response logging
 ```
 
 ## Dry-run by default
 
 All write operations preview what would change. Pass `--yes` to apply.
+Every preview and confirmation includes the target profile and host so an
+agent never mistakes UAT for prod.
 
 ```bash
-splunkctl rules delete 'My Rule'          # shows preview only
-splunkctl rules delete 'My Rule' --yes    # actually deletes
+splunkctl rules delete 'My Rule'
+# [DRY RUN] Delete saved search 'My Rule' (profile: uat @ uat.splunk.internal:8089)
+# Pass --yes to apply.
+
+splunkctl rules delete 'My Rule' --yes
+# Applying: Delete saved search 'My Rule' (profile: uat @ uat.splunk.internal:8089)
+# Deleted saved search 'My Rule'.
 ```
 
-## Output formats
+## Structured errors
 
-```bash
-splunkctl rules list                      # table (TTY) or JSON (pipe)
-splunkctl rules list --json               # force JSON
-splunkctl rules list --format csv         # CSV
-splunkctl rules list --fields name,cron   # project fields
-splunkctl rules list --out rules.json     # write to file
+Under `--json` or piped output, errors emit a single-line JSON envelope on
+stderr with a typed `kind` for programmatic branching:
+
+```json
+{"error": {"kind": "not_found", "http_status": 404, "message": "..."}}
 ```
+
+Kinds: `auth`, `permission`, `not_found`, `conflict`, `http`, `connection`,
+`timeout`, `error` (fallback).
 
 ## SDK fork
 
-splunkctl depends on a [fork of splunk-sdk-python](https://github.com/dannyota/splunk-sdk-python/tree/splunkctl)
+splunkctl depends on a
+[fork of splunk-sdk-python](https://github.com/dannyota/splunk-sdk-python/tree/splunkctl)
 that adds entity classes missing from the upstream SDK:
 
 | Entity | Service property | Purpose |
@@ -134,8 +192,6 @@ that adds entity classes missing from the upstream SDK:
 | `Dashboard` | `service.dashboards` | Dashboard CRUD |
 | `LookupTableFile` | `service.lookup_table_files` | Lookup table metadata + download |
 | `HECToken` | `service.hec_tokens` | HEC token management |
-
-Install the fork directly:
 
 ```bash
 pip install git+https://github.com/dannyota/splunk-sdk-python@splunkctl
@@ -147,10 +203,13 @@ splunkctl ships with an embedded operating guide for AI agents
 (Claude Code, etc.):
 
 ```bash
-splunkctl skill                           # print the guide
-splunkctl skill install                   # install to ~/.claude/skills/
-splunkctl commands                        # JSON command tree for discovery
+splunkctl skill                    # print the guide
+splunkctl skill install            # install to ~/.claude/skills/
+splunkctl commands --json          # JSON command tree for discovery
 ```
+
+The guide covers auth, every command with examples, ES recipes, SPL
+patterns, the mutation guard, error handling, and workflow recipes.
 
 ## License
 
