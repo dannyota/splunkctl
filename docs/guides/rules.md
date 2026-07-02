@@ -25,6 +25,18 @@ splunkctl rules disable <name> --yes
 splunkctl rules history <name>            # run history
 ```
 
+### App-private rules
+
+`list`/`get` default to the current namespace, which does not include
+saved searches private to a specific app (for example, rules shipped by
+an add-on like Splunk_Security_Essentials). Pass `--app`/`--owner` to
+scope into that namespace:
+
+```bash
+splunkctl rules list --app Splunk_Security_Essentials
+splunkctl rules get 'Generate MITRE Detections Lookup' --app Splunk_Security_Essentials
+```
+
 ## Detection-as-code workflow
 
 Export from prod, edit in git, import to staging, promote.

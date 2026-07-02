@@ -12,21 +12,40 @@ from splunkctl.commands.common import read_results
 from splunkctl.commands.rules_io import export_rules, import_rules
 
 
-def _resolve_rule(ctx: click.Context, client: Any, name: str, app: str | None) -> Any:
-    """Fetch a saved search, optionally within a specific app namespace."""
+def _quoted(value: str) -> str:
+    """Quote a value for an SPL ``field=value`` search filter."""
+    return '"' + value.replace('"', '\\"') + '"'
+
+
+def _resolve_rule(
+    ctx: click.Context,
+    client: Any,
+    name: str,
+    app: str | None,
+    owner: str | None = None,
+) -> Any:
+    """Fetch a saved search, optionally scoped to an app/owner namespace."""
     svc = client.service
-    if app is None:
+    if app is None and owner is None:
         try:
             return svc.saved_searches[name]
         except KeyError:
             output.error(f"Saved search not found: {name}")
             ctx.exit(1)
             raise
-    matches = svc.saved_searches.list(search=f"name={name}", app=app, count=10)
+    scope_kwargs: dict[str, str] = {}
+    if app is not None:
+        scope_kwargs["app"] = app
+    if owner is not None:
+        scope_kwargs["owner"] = owner
+    matches = svc.saved_searches.list(
+        search=f"name={_quoted(name)}", count=10, **scope_kwargs
+    )
     for m in matches:
         if m.name == name:
             return m
-    output.error(f"Saved search not found in app '{app}': {name}")
+    scope = ", ".join(f"{k}={v}" for k, v in scope_kwargs.items())
+    output.error(f"Saved search not found ({scope}): {name}")
     ctx.exit(1)
     raise KeyError(name)
 
@@ -100,11 +119,33 @@ rules_group.add_command(import_rules)
     default=None,
     help="Case-insensitive name substring filter.",
 )
+@click.option(
+    "--app",
+    default=None,
+    help="Only saved searches in this app (default: current namespace, which "
+    "may miss app-private rules — pass --app to see them).",
+)
+@click.option(
+    "--owner",
+    default=None,
+    help="Only saved searches owned by this user (default: current namespace).",
+)
 @click.pass_context
-def list_rules(ctx: click.Context, name_filter: str | None) -> None:
+def list_rules(
+    ctx: click.Context,
+    name_filter: str | None,
+    *,
+    app: str | None,
+    owner: str | None,
+) -> None:
     """List all saved searches."""
     client = get_client(ctx)
-    items = client.service.saved_searches.list()
+    kwargs: dict[str, str] = {}
+    if app is not None:
+        kwargs["app"] = app
+    if owner is not None:
+        kwargs["owner"] = owner
+    items = client.service.saved_searches.list(**kwargs)
     if name_filter:
         needle = name_filter.lower()
         items = [ss for ss in items if needle in ss.name.lower()]
@@ -114,16 +155,17 @@ def list_rules(ctx: click.Context, name_filter: str | None) -> None:
 
 @rules_group.command()
 @click.argument("name")
+@click.option(
+    "--app",
+    default=None,
+    help="Splunk app context (needed to resolve app-private saved searches).",
+)
+@click.option("--owner", default=None, help="Splunk owner context.")
 @click.pass_context
-def get(ctx: click.Context, name: str) -> None:
+def get(ctx: click.Context, name: str, *, app: str | None, owner: str | None) -> None:
     """Get a saved search by name."""
     client = get_client(ctx)
-    try:
-        ss = client.service.saved_searches[name]
-    except KeyError:
-        output.error(f"Saved search not found: {name}")
-        ctx.exit(1)
-        return
+    ss = _resolve_rule(ctx, client, name, app, owner)
     output.render(ctx, _detail(ss))
 
 
