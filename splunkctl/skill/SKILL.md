@@ -520,13 +520,16 @@ Under `--json` or `--format json`, failures print one JSON line to stderr
 instead of `Error: ...` text — `jq`-able, no text-scraping needed:
 
 ```json
-{"error": {"kind": "not_found", "http_status": 404, "message": "Saved search not found: my-rule"}}
+{"error": {"kind": "auth", "http_status": 401, "message": "Authentication failed: Login failed."}}
 ```
 
 - `kind` — a typed failure category (see table below). `message` is the
   same text that would appear after `Error: ` in non-JSON mode.
-- `http_status` — the HTTP status code when the failure came from a REST
-  call; `null` for non-HTTP failures (connection, timeout, app-level).
+- `http_status` — the HTTP status code when the failure came straight from
+  a REST call; `null` for non-HTTP failures (connection, timeout) and for
+  app-level lookups that resolve a name locally without surfacing a raw
+  status code (e.g. `rules get <missing-name>` reports `kind: not_found`
+  with `http_status: null`).
 - Exit code is unchanged (`1`); stdout stays empty/`[]` per the usual
   empty-result contract. Non-JSON formats are unaffected — same `Error:
   ...` text as always.
