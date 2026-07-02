@@ -228,13 +228,22 @@ def list_jobs(ctx: click.Context) -> None:
 @click.argument("sid")
 @click.option("--offset", default=0, type=int, help="Result offset for paging.")
 @click.option(
-    "--count", "result_count", default=0, type=int, help="Max results (0=all).",
+    "--count",
+    "result_count",
+    default=0,
+    type=int,
+    help="Max results (0=all).",
 )
 @click.option(
-    "--events", "show_events", is_flag=True, help="Fetch raw events.",
+    "--events",
+    "show_events",
+    is_flag=True,
+    help="Fetch raw events.",
 )
 @click.option(
-    "--status-only", is_flag=True, help="Show status without results.",
+    "--status-only",
+    is_flag=True,
+    help="Show status without results.",
 )
 @click.pass_context
 def get_job(
@@ -290,6 +299,7 @@ def get_job(
 
 
 @search_group.command("cancel")
+@guard.guarded
 @click.argument("sid")
 @click.pass_context
 def cancel_job(ctx: click.Context, sid: str) -> None:
@@ -325,6 +335,7 @@ def _human_size(nbytes: int) -> str:
 
 
 @search_group.command("upload")
+@guard.guarded
 @click.option(
     "--path",
     "file_path",

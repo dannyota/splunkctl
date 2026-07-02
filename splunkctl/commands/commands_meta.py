@@ -6,6 +6,7 @@ from typing import Any
 import click
 
 from splunkctl import __version__, output
+from splunkctl.guard import is_guarded
 
 
 def _param_entry(p: click.Parameter) -> dict[str, Any]:
@@ -45,6 +46,8 @@ def _walk(group: click.Group) -> list[dict[str, Any]]:
         if isinstance(cmd, click.Group):
             node["subcommands"] = _walk(cmd)
         else:
+            if is_guarded(cmd):
+                node["guarded"] = True
             params: list[dict[str, Any]] = []
             for p in cmd.params:
                 if p.name in ("help",):
@@ -65,8 +68,13 @@ def commands_meta(ctx: click.Context) -> None:
         output.error("Cannot resolve CLI root.")
         ctx.exit(1)
         return
+    global_opts = [
+        _param_entry(p) for p in root.command.params if p.name not in ("help",)
+    ]
     result: dict[str, Any] = {
         "version": __version__,
+        "global_options": global_opts,
+        "note": "guarded commands are dry-run by default; pass --yes to apply",
         "commands": _walk(root.command),
     }
     click.echo(json.dumps(result, indent=2))

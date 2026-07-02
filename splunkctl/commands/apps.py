@@ -67,6 +67,7 @@ def get_app(ctx: click.Context, name: str) -> None:
 
 
 @apps_group.command("install")
+@guard.guarded
 @click.option(
     "--path",
     "file_path",
@@ -100,6 +101,7 @@ def install_app(ctx: click.Context, file_path: str, *, force: bool) -> None:
 
 
 @apps_group.command("uninstall")
+@guard.guarded
 @click.argument("name")
 @click.pass_context
 def uninstall_app(ctx: click.Context, name: str) -> None:
@@ -125,6 +127,7 @@ def uninstall_app(ctx: click.Context, name: str) -> None:
 
 
 @apps_group.command("update")
+@guard.guarded
 @click.argument("name")
 @click.option("--visible/--hidden", default=None, help="Set app visibility.")
 @click.option("--enabled/--disabled", default=None, help="Enable or disable the app.")
@@ -173,6 +176,7 @@ def update_app(
 
 
 @apps_group.command("reload")
+@guard.guarded
 @click.pass_context
 def reload_apps(ctx: click.Context) -> None:
     """Reload all apps."""

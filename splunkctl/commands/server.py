@@ -24,6 +24,7 @@ def server_group() -> None:
 
 
 @server_group.command("messages")
+@guard.guarded
 @click.option("--dismiss", default=None, help="Delete a message by name.")
 @click.pass_context
 def messages(ctx: click.Context, dismiss: str | None) -> None:

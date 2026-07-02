@@ -199,6 +199,7 @@ def _apply_rule(svc: Any, rule: dict[str, Any], *, update: bool) -> str:
 
 
 @click.command("import")
+@guard.guarded
 @click.option(
     "--path",
     "file_path",

@@ -60,6 +60,7 @@ def get_hec(ctx: click.Context, name: str) -> None:
 
 
 @hec_group.command("create")
+@guard.guarded
 @click.option("--name", required=True, help="Token name.")
 @click.option("--index", default=None, help="Default index.")
 @click.option("--indexes", default=None, help="Allowed indexes (comma-separated).")
@@ -101,6 +102,7 @@ def create_hec(
 
 
 @hec_group.command("delete")
+@guard.guarded
 @click.argument("name")
 @click.pass_context
 def delete_hec(ctx: click.Context, name: str) -> None:
@@ -122,6 +124,7 @@ def delete_hec(ctx: click.Context, name: str) -> None:
 
 
 @hec_group.command("enable")
+@guard.guarded
 @click.argument("name")
 @click.pass_context
 def enable_hec(ctx: click.Context, name: str) -> None:
@@ -139,6 +142,7 @@ def enable_hec(ctx: click.Context, name: str) -> None:
 
 
 @hec_group.command("disable")
+@guard.guarded
 @click.argument("name")
 @click.pass_context
 def disable_hec(ctx: click.Context, name: str) -> None:
@@ -159,6 +163,7 @@ _HEC_GLOBAL = "/services/data/inputs/http/http"
 
 
 @hec_group.command("settings")
+@guard.guarded
 @click.option("--enable", "action", flag_value="enable", help="Enable HEC globally.")
 @click.option("--disable", "action", flag_value="disable", help="Disable HEC globally.")
 @click.pass_context
@@ -186,6 +191,7 @@ def hec_settings(ctx: click.Context, action: str | None) -> None:
 
 
 @hec_group.command("send")
+@guard.guarded
 @click.argument("name")
 @click.argument("event")
 @click.option("--index", default=None, help="Target index.")

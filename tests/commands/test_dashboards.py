@@ -58,7 +58,8 @@ def test_list_dashboards_with_app(mock_gc: MagicMock) -> None:
     mock_gc.return_value.service = mock_svc
 
     result = CliRunner().invoke(
-        cli, ["--json", "dashboards", "list", "--app", "myapp"],
+        cli,
+        ["--json", "dashboards", "list", "--app", "myapp"],
     )
     assert result.exit_code == 0
     mock_svc.dashboards.list.assert_called_once_with(app="myapp", owner="-")
@@ -101,7 +102,8 @@ def test_get_definition_studio(mock_gc: MagicMock) -> None:
     mock_gc.return_value.service = mock_svc
 
     result = CliRunner().invoke(
-        cli, ["dashboards", "get", "studio_dash", "--definition"],
+        cli,
+        ["dashboards", "get", "studio_dash", "--definition"],
     )
     assert result.exit_code == 0
     parsed = json.loads(result.output)
@@ -115,7 +117,8 @@ def test_get_definition_classic_errors(mock_gc: MagicMock) -> None:
     mock_gc.return_value.service = mock_svc
 
     result = CliRunner().invoke(
-        cli, ["dashboards", "get", "test_dash", "--definition"],
+        cli,
+        ["dashboards", "get", "test_dash", "--definition"],
     )
     assert result.exit_code != 0
     assert "Not a Studio" in result.stderr
@@ -153,8 +156,14 @@ def test_create_validates_broken_json(mock_gc: MagicMock, tmp_path: Path) -> Non
     result = CliRunner().invoke(
         cli,
         [
-            "dashboards", "create", "--name", "x",
-            "--file", str(bad), "--type", "studio",
+            "dashboards",
+            "create",
+            "--name",
+            "x",
+            "--file",
+            str(bad),
+            "--type",
+            "studio",
         ],
     )
     assert result.exit_code != 0
@@ -189,8 +198,15 @@ def test_create_with_sharing(mock_gc: MagicMock, tmp_path: Path) -> None:
     result = CliRunner().invoke(
         cli,
         [
-            "--yes", "dashboards", "create", "--name", "shared",
-            "--file", str(f), "--sharing", "app",
+            "--yes",
+            "dashboards",
+            "create",
+            "--name",
+            "shared",
+            "--file",
+            str(f),
+            "--sharing",
+            "app",
         ],
     )
     assert result.exit_code == 0
@@ -222,8 +238,13 @@ def test_create_confirmed(mock_gc: MagicMock, tmp_path: Path) -> None:
     result = CliRunner().invoke(
         cli,
         [
-            "--yes", "dashboards", "create",
-            "--name", "new", "--file", str(xml_file),
+            "--yes",
+            "dashboards",
+            "create",
+            "--name",
+            "new",
+            "--file",
+            str(xml_file),
         ],
     )
     assert result.exit_code == 0
@@ -245,7 +266,8 @@ def test_update_shows_diff(mock_gc: MagicMock, tmp_path: Path) -> None:
     mock_gc.return_value.service = mock_svc
 
     result = CliRunner().invoke(
-        cli, ["dashboards", "update", "test_dash", "--file", str(xml_file)],
+        cli,
+        ["dashboards", "update", "test_dash", "--file", str(xml_file)],
     )
     assert result.exit_code == 0
     assert "---" in result.stderr or "+++" in result.stderr
@@ -283,7 +305,8 @@ def test_delete_confirmed(mock_gc: MagicMock) -> None:
     mock_gc.return_value.service = mock_svc
 
     result = CliRunner().invoke(
-        cli, ["--yes", "dashboards", "delete", "test_dash"],
+        cli,
+        ["--yes", "dashboards", "delete", "test_dash"],
     )
     assert result.exit_code == 0
     dash.delete.assert_called_once()
@@ -323,7 +346,8 @@ def test_export_definition(mock_gc: MagicMock) -> None:
     mock_gc.return_value.service = mock_svc
 
     result = CliRunner().invoke(
-        cli, ["dashboards", "export", "studio", "--definition"],
+        cli,
+        ["dashboards", "export", "studio", "--definition"],
     )
     assert result.exit_code == 0
     parsed = json.loads(result.output)
@@ -392,7 +416,8 @@ def test_list_app_filters_rows(mock_gc: MagicMock) -> None:
     mock_gc.return_value.service = mock_svc
 
     result = CliRunner().invoke(
-        cli, ["--json", "dashboards", "list", "--app", "search"],
+        cli,
+        ["--json", "dashboards", "list", "--app", "search"],
     )
     assert result.exit_code == 0
     data = json.loads(result.output)
@@ -412,5 +437,6 @@ def test_list_excludes_non_dashboards_by_default(mock_gc: MagicMock) -> None:
 
     result = CliRunner().invoke(cli, ["--json", "dashboards", "list", "--all"])
     assert [d["name"] for d in json.loads(result.output)] == [
-        "real", "nav_thing",
+        "real",
+        "nav_thing",
     ]

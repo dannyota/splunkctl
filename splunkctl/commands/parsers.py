@@ -22,6 +22,7 @@ parsers_group.add_command(import_parsers)
 
 
 @parsers_group.command("set")
+@guard.guarded
 @click.argument("stanza")
 @click.argument("pairs", nargs=-1, required=True)
 @click.option(
@@ -92,6 +93,7 @@ def set_keys(
 
 
 @parsers_group.command("unset")
+@guard.guarded
 @click.argument("stanza")
 @click.argument("keys", nargs=-1, required=True)
 @click.option(
@@ -226,6 +228,7 @@ def get_sourcetype(
 
 
 @parsers_group.command("reload")
+@guard.guarded
 @click.option(
     "--conf",
     "conf_name",
@@ -268,6 +271,7 @@ def extractions(ctx: click.Context, sourcetype: str | None) -> None:
 
 
 @parsers_group.command("create")
+@guard.guarded
 @click.option("--sourcetype", required=True, help="Sourcetype name.")
 @click.option("--category", default=None, help="Category value.")
 @click.option(
@@ -304,6 +308,7 @@ def create_sourcetype(
 
 
 @parsers_group.command("update")
+@guard.guarded
 @click.argument("sourcetype")
 @click.option("--category", default=None, help="Category value.")
 @click.option(
@@ -351,6 +356,7 @@ def update_sourcetype(
 
 
 @parsers_group.command("delete")
+@guard.guarded
 @click.argument("sourcetype")
 @click.pass_context
 def delete_sourcetype(ctx: click.Context, sourcetype: str) -> None:

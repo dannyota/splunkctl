@@ -151,6 +151,7 @@ def _apply_stanza(client: Any, doc: dict[str, Any]) -> str:
 
 
 @click.command("import")
+@guard.guarded
 @click.option(
     "--path",
     "file_path",

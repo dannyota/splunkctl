@@ -4,9 +4,8 @@ from typing import Any
 
 import click
 
-from splunkctl import output
+from splunkctl import guard, output
 from splunkctl.client import get_client
-from splunkctl.guard import check
 
 
 def _firing_rows(group: Any) -> list[dict[str, Any]]:
@@ -79,6 +78,7 @@ def list_actions(ctx: click.Context) -> None:
 
 
 @alerts_group.command("suppress")
+@guard.guarded
 @click.argument("name")
 @click.option(
     "--duration",
@@ -97,7 +97,7 @@ def suppress_alert(ctx: click.Context, name: str, duration: int) -> None:
         f"Set alert.suppress=1, alert.suppress.period={duration}s "
         f"on saved search '{name}'"
     )
-    if not check(ctx, "Throttle alerts for rule", details=details):
+    if not guard.check(ctx, "Throttle alerts for rule", details=details):
         return
     client = get_client(ctx)
     try:
@@ -113,11 +113,12 @@ def suppress_alert(ctx: click.Context, name: str, duration: int) -> None:
 
 
 @alerts_group.command("unsuppress")
+@guard.guarded
 @click.argument("name")
 @click.pass_context
 def unsuppress_alert(ctx: click.Context, name: str) -> None:
     """Remove alert throttling from a rule's saved search."""
-    if not check(ctx, f"Remove alert throttling from '{name}'"):
+    if not guard.check(ctx, f"Remove alert throttling from '{name}'"):
         return
     client = get_client(ctx)
     try:

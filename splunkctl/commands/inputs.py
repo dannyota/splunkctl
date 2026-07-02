@@ -67,6 +67,7 @@ def get(ctx: click.Context, *, name: str) -> None:
 
 
 @inputs_group.command()
+@guard.guarded
 @click.option("--name", required=True, help="Input name/path.")
 @click.option(
     "--kind",
@@ -109,6 +110,7 @@ def create(
 
 
 @inputs_group.command()
+@guard.guarded
 @click.argument("name")
 @click.option("--index", default=None, help="Target index.")
 @click.option("--sourcetype", default=None, help="Source type.")
@@ -151,6 +153,7 @@ def update(
 
 
 @inputs_group.command()
+@guard.guarded
 @click.argument("name")
 @click.pass_context
 def delete(ctx: click.Context, *, name: str) -> None:
@@ -169,6 +172,7 @@ def delete(ctx: click.Context, *, name: str) -> None:
 
 
 @inputs_group.command()
+@guard.guarded
 @click.argument("name")
 @click.pass_context
 def enable(ctx: click.Context, *, name: str) -> None:
@@ -187,6 +191,7 @@ def enable(ctx: click.Context, *, name: str) -> None:
 
 
 @inputs_group.command()
+@guard.guarded
 @click.argument("name")
 @click.pass_context
 def disable(ctx: click.Context, *, name: str) -> None:

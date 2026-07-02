@@ -30,8 +30,7 @@ def _validate(content: str, dash_type: str) -> str:
             json_mod.loads(content)
         except json_mod.JSONDecodeError as exc:
             raise click.BadParameter(
-                f"Invalid JSON (line {exc.lineno} col {exc.colno}): "
-                f"{exc.msg}"
+                f"Invalid JSON (line {exc.lineno} col {exc.colno}): {exc.msg}"
             ) from exc
         return content
     try:
@@ -69,7 +68,10 @@ def _extract_definition(xml: str) -> str | None:
 
 def _resolve(svc: Any, name: str, app: str) -> Any:
     matches = svc.dashboards.list(
-        search=f"name={name}", app=app, owner="-", count=1,
+        search=f"name={name}",
+        app=app,
+        owner="-",
+        count=1,
     )
     if not matches:
         raise KeyError(name)
@@ -77,12 +79,17 @@ def _resolve(svc: Any, name: str, app: str) -> Any:
 
 
 def _diff_preview(
-    old: str, new: str, max_lines: int = 40,
+    old: str,
+    new: str,
+    max_lines: int = 40,
 ) -> str:
     lines = list(
         difflib.unified_diff(
-            old.splitlines(), new.splitlines(),
-            fromfile="current", tofile="new", lineterm="",
+            old.splitlines(),
+            new.splitlines(),
+            fromfile="current",
+            tofile="new",
+            lineterm="",
         )
     )
     if not lines:
@@ -109,7 +116,10 @@ def dashboards_group() -> None:
 )
 @click.pass_context
 def list_dashboards(
-    ctx: click.Context, *, app: str, show_all: bool,
+    ctx: click.Context,
+    *,
+    app: str,
+    show_all: bool,
 ) -> None:
     """List dashboards."""
     client = get_client(ctx)
@@ -139,12 +149,17 @@ def list_dashboards(
 @click.argument("name")
 @click.option("--app", default="-", help="Splunk app context.")
 @click.option(
-    "--definition", is_flag=True,
+    "--definition",
+    is_flag=True,
     help="Extract Studio JSON definition (errors on classic).",
 )
 @click.pass_context
 def get_dashboard(
-    ctx: click.Context, name: str, *, app: str, definition: bool,
+    ctx: click.Context,
+    name: str,
+    *,
+    app: str,
+    definition: bool,
 ) -> None:
     """Get dashboard details including XML source."""
     client = get_client(ctx)
@@ -179,10 +194,14 @@ _TYPE_CHOICE = click.Choice(["classic", "studio", "auto"])
 
 
 @dashboards_group.command("create")
+@guard.guarded
 @click.option("--name", required=True, help="Dashboard name.")
 @click.option(
-    "--file", "filepath", required=True,
-    type=click.Path(exists=True), help="XML or JSON file.",
+    "--file",
+    "filepath",
+    required=True,
+    type=click.Path(exists=True),
+    help="XML or JSON file.",
 )
 @click.option("--app", default="search", help="Splunk app context.")
 @click.option("--type", "dash_type", type=_TYPE_CHOICE, default="auto")
@@ -223,7 +242,9 @@ def create_dashboard(
     client = get_client(ctx)
     try:
         entity = client.service.dashboards.create(
-            name, content, app=app,
+            name,
+            content,
+            app=app,
         )
     except Exception as exc:
         output.error(f"Create failed: {exc}")
@@ -235,10 +256,14 @@ def create_dashboard(
 
 
 @dashboards_group.command("update")
+@guard.guarded
 @click.argument("name")
 @click.option(
-    "--file", "filepath", required=True,
-    type=click.Path(exists=True), help="XML or JSON file.",
+    "--file",
+    "filepath",
+    required=True,
+    type=click.Path(exists=True),
+    help="XML or JSON file.",
 )
 @click.option("--app", default="search", help="Splunk app context.")
 @click.option("--type", "dash_type", type=_TYPE_CHOICE, default="auto")
@@ -261,9 +286,7 @@ def update_dashboard(
         return
     resolved = dash_type
     if resolved == "auto":
-        resolved = (
-            "studio" if new_content.lstrip().startswith("{") else "classic"
-        )
+        resolved = "studio" if new_content.lstrip().startswith("{") else "classic"
     if resolved == "studio":
         new_content = _studio_wrap(name, new_content)
     client = get_client(ctx)
@@ -283,13 +306,16 @@ def update_dashboard(
 
 
 @dashboards_group.command("delete")
+@guard.guarded
 @click.argument("name")
 @click.option("--app", default="search", help="Splunk app context.")
 @click.pass_context
 def delete_dashboard(ctx: click.Context, name: str, *, app: str) -> None:
     """Delete a dashboard."""
     if not guard.check(
-        ctx, f"Delete dashboard '{name}'", details=f"  app: {app}",
+        ctx,
+        f"Delete dashboard '{name}'",
+        details=f"  app: {app}",
     ):
         return
     client = get_client(ctx)
@@ -307,19 +333,28 @@ def delete_dashboard(ctx: click.Context, name: str, *, app: str) -> None:
 @click.argument("name", required=False, default=None)
 @click.option("--app", default="-", help="Splunk app context.")
 @click.option(
-    "--out", "out_file", type=click.Path(), default=None,
+    "--out",
+    "out_file",
+    type=click.Path(),
+    default=None,
     help="Output file (single dashboard).",
 )
 @click.option(
-    "--definition", is_flag=True,
+    "--definition",
+    is_flag=True,
     help="Extract Studio JSON definition.",
 )
 @click.option(
-    "--all", "export_all", is_flag=True,
+    "--all",
+    "export_all",
+    is_flag=True,
     help="Export all dashboards to --dir.",
 )
 @click.option(
-    "--dir", "out_dir", type=click.Path(), default=None,
+    "--dir",
+    "out_dir",
+    type=click.Path(),
+    default=None,
     help="Directory for --all bulk export.",
 )
 @click.pass_context
@@ -393,6 +428,7 @@ def _export_all(ctx: click.Context, *, app: str, out_dir: str | None) -> None:
 
 
 @dashboards_group.command("share")
+@guard.guarded
 @click.argument("name")
 @click.option(
     "--sharing",
@@ -415,7 +451,9 @@ def share_dashboard(
     if owner:
         details += f"\n  owner: {owner}"
     if not guard.check(
-        ctx, f"Share dashboard '{name}'", details=details,
+        ctx,
+        f"Share dashboard '{name}'",
+        details=details,
     ):
         return
     client = get_client(ctx)

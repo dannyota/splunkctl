@@ -73,6 +73,7 @@ def get_index(ctx: click.Context, name: str) -> None:
 
 
 @indexes_group.command("create")
+@guard.guarded
 @click.option("--name", required=True, help="Index name.")
 @click.option(
     "--datatype",
@@ -122,6 +123,7 @@ def create_index(
 
 
 @indexes_group.command("update")
+@guard.guarded
 @click.argument("name")
 @click.option("--max-size", type=int, default=None, help="Max data size in MB.")
 @click.option(
@@ -165,6 +167,7 @@ def update_index(
 
 
 @indexes_group.command("delete")
+@guard.guarded
 @click.argument("name")
 @click.pass_context
 def delete_index(ctx: click.Context, name: str) -> None:
@@ -184,6 +187,7 @@ def delete_index(ctx: click.Context, name: str) -> None:
 
 
 @indexes_group.command("clean")
+@guard.guarded
 @click.argument("name")
 @click.option(
     "--clean-timeout",
@@ -222,6 +226,7 @@ def clean_index(ctx: click.Context, name: str, clean_timeout: int) -> None:
 
 
 @indexes_group.command("reload")
+@guard.guarded
 @click.pass_context
 def reload_indexes(ctx: click.Context) -> None:
     """Reload all index configurations."""

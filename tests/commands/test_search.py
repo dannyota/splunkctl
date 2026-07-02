@@ -330,9 +330,7 @@ def test_run_detach_renders_sid_no_poll(
 
 @patch(_READER)
 @patch(_PATCH)
-def test_run_truncation_warning(
-    mock_gc: MagicMock, mock_reader: MagicMock
-) -> None:
+def test_run_truncation_warning(mock_gc: MagicMock, mock_reader: MagicMock) -> None:
     mock_job = MagicMock()
     mock_job.sid = "888.1"
     mock_job.is_done.return_value = True
@@ -354,9 +352,7 @@ def test_run_truncation_warning(
 
 @patch(_READER)
 @patch(_PATCH)
-def test_job_paging_kwargs(
-    mock_gc: MagicMock, mock_reader: MagicMock
-) -> None:
+def test_job_paging_kwargs(mock_gc: MagicMock, mock_reader: MagicMock) -> None:
     mock_job = MagicMock()
     mock_job.sid = "777.1"
     mock_job.is_done.return_value = True
@@ -383,9 +379,7 @@ def test_job_paging_kwargs(
 
 @patch(_READER)
 @patch(_PATCH)
-def test_job_events_flag(
-    mock_gc: MagicMock, mock_reader: MagicMock
-) -> None:
+def test_job_events_flag(mock_gc: MagicMock, mock_reader: MagicMock) -> None:
     mock_job = MagicMock()
     mock_job.sid = "666.1"
     mock_job.is_done.return_value = True
@@ -396,9 +390,7 @@ def test_job_events_flag(
     mock_gc.return_value.service = mock_svc
     mock_reader.return_value = [{"_raw": "evt"}]
 
-    result = CliRunner().invoke(
-        cli, ["--json", "search", "job", "666.1", "--events"]
-    )
+    result = CliRunner().invoke(cli, ["--json", "search", "job", "666.1", "--events"])
     assert result.exit_code == 0
     mock_job.events.assert_called_once()
     mock_job.results.assert_not_called()
@@ -406,9 +398,7 @@ def test_job_events_flag(
 
 @patch(_READER)
 @patch(_PATCH)
-def test_job_status_only(
-    mock_gc: MagicMock, mock_reader: MagicMock
-) -> None:
+def test_job_status_only(mock_gc: MagicMock, mock_reader: MagicMock) -> None:
     mock_job = MagicMock()
     mock_job.sid = "555.1"
     mock_job.is_done.return_value = True

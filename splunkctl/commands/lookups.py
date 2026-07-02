@@ -67,6 +67,7 @@ def get_lookup(ctx: click.Context, name: str, *, app: str) -> None:
 
 
 @lookups_group.command("upload")
+@guard.guarded
 @click.argument("name")
 @click.option(
     "--file",
@@ -139,6 +140,7 @@ def download_lookup(
 
 
 @lookups_group.command("update")
+@guard.guarded
 @click.argument("name")
 @click.option(
     "--file",
@@ -167,6 +169,7 @@ def update_lookup(ctx: click.Context, name: str, file_path: str, *, app: str) ->
 
 
 @lookups_group.command("delete")
+@guard.guarded
 @click.argument("name")
 @click.option("--app", default="search", help="Target app (default: search).")
 @click.pass_context

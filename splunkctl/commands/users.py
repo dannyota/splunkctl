@@ -149,6 +149,7 @@ def get_role(ctx: click.Context, name: str) -> None:
 
 
 @roles_group.command("create")
+@guard.guarded
 @click.argument("name")
 @click.option(
     "--capabilities",
@@ -209,6 +210,7 @@ def create_role(
 
 
 @roles_group.command("update")
+@guard.guarded
 @click.argument("name")
 @click.option(
     "--capabilities",
@@ -274,6 +276,7 @@ def update_role(
 
 
 @roles_group.command("delete")
+@guard.guarded
 @click.argument("name")
 @click.pass_context
 def delete_role(ctx: click.Context, name: str) -> None:
@@ -295,6 +298,7 @@ def delete_role(ctx: click.Context, name: str) -> None:
 
 
 @users_group.command("create")
+@guard.guarded
 @click.option("--name", "username", required=True, help="Username.")
 @click.option("--password", required=True, help="Password.")
 @click.option(
@@ -337,6 +341,7 @@ def create_user(
 
 
 @users_group.command("update")
+@guard.guarded
 @click.argument("name")
 @click.option("--roles", default=None, help="Comma-separated role names.")
 @click.option("--email", default=None, help="Email address.")
@@ -400,6 +405,7 @@ def update_user(
 
 
 @users_group.command("delete")
+@guard.guarded
 @click.argument("name")
 @click.pass_context
 def delete_user(ctx: click.Context, name: str) -> None:

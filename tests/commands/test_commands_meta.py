@@ -1,10 +1,14 @@
 """Tests for the commands (meta) command."""
 
+import ast
 import json
+from pathlib import Path
 
 from click.testing import CliRunner
 
 from splunkctl.main import cli
+
+COMMANDS_DIR = Path(__file__).resolve().parent.parent.parent / "splunkctl" / "commands"
 
 
 def test_commands_json_output() -> None:
@@ -135,3 +139,85 @@ def test_commands_option_flags_included() -> None:
     earliest = next(p for p in run_cmd["params"] if p["name"] == "earliest")
     assert "flags" in earliest
     assert "--earliest" in earliest["flags"]
+
+
+def test_commands_global_options() -> None:
+    result = CliRunner().invoke(cli, ["commands"])
+    data = json.loads(result.output)
+    assert "global_options" in data
+    names = [o["name"] for o in data["global_options"]]
+    assert "fmt" in names
+    assert "yes" in names
+
+
+def test_commands_note_field() -> None:
+    result = CliRunner().invoke(cli, ["commands"])
+    data = json.loads(result.output)
+    assert "note" in data
+    assert "guarded" in data["note"]
+    assert "dry-run" in data["note"]
+
+
+def test_guarded_markers_present() -> None:
+    """Mutation commands expose guarded=true in commands JSON."""
+    result = CliRunner().invoke(cli, ["commands"])
+    data = json.loads(result.output)
+
+    def _collect(nodes: list[dict[str, object]]) -> dict[str, bool]:
+        out: dict[str, bool] = {}
+        for n in nodes:
+            if "subcommands" in n:
+                out.update(
+                    _collect(n["subcommands"])  # type: ignore[arg-type]
+                )
+            else:
+                if n.get("guarded"):
+                    out[str(n["name"])] = True
+        return out
+
+    guarded = _collect(data["commands"])
+    assert len(guarded) > 10, f"Expected many guarded cmds, got {len(guarded)}"
+    for expected in ("create", "delete", "update", "enable", "disable"):
+        assert expected in guarded, f"{expected} should be guarded"
+
+
+def test_guard_check_has_decorator_tripwire() -> None:
+    """AST tripwire: every function calling guard.check must have @guard.guarded."""
+    missing: list[str] = []
+    for py in sorted(COMMANDS_DIR.glob("*.py")):
+        if py.name.startswith("_"):
+            continue
+        tree = ast.parse(py.read_text(), filename=str(py))
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            calls_guard = any(
+                isinstance(call, ast.Call)
+                and isinstance(call.func, ast.Attribute)
+                and call.func.attr == "check"
+                and isinstance(call.func.value, ast.Name)
+                and call.func.value.id == "guard"
+                for call in ast.walk(node)
+                if isinstance(call, ast.Call)
+            )
+            if not calls_guard:
+                continue
+            has_decorator = any(
+                (
+                    isinstance(d, ast.Attribute)
+                    and d.attr == "guarded"
+                    and isinstance(d.value, ast.Name)
+                    and d.value.id == "guard"
+                )
+                or (
+                    isinstance(d, ast.Call)
+                    and isinstance(d.func, ast.Attribute)
+                    and d.func.attr == "guarded"
+                )
+                for d in node.decorator_list
+            )
+            if not has_decorator:
+                missing.append(f"{py.name}:{node.name}")
+    assert not missing, (
+        f"Functions call guard.check() but lack @guard.guarded: {missing}"
+    )

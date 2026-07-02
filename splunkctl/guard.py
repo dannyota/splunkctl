@@ -20,3 +20,17 @@ def check(ctx: click.Context, action: str, *, details: str = "") -> bool:
         click.echo(details, err=True)
     click.echo("Pass --yes to apply.", err=True)
     return False
+
+
+def guarded[F](cmd: F) -> F:
+    """Mark a Click command callback as a guarded mutation."""
+    cmd.guarded = True  # type: ignore[attr-defined]
+    return cmd
+
+
+def is_guarded(cmd: click.Command) -> bool:
+    """Check whether a command is a guarded mutation."""
+    if getattr(cmd, "guarded", False):
+        return True
+    cb = getattr(cmd, "callback", None)
+    return bool(getattr(cb, "guarded", False)) if cb else False

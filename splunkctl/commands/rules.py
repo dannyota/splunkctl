@@ -128,6 +128,7 @@ def get(ctx: click.Context, name: str) -> None:
 
 
 @rules_group.command()
+@guard.guarded
 @click.option("--name", required=True, help="Saved search name.")
 @click.option("--search", "spl", required=True, help="SPL query.")
 @click.option("--cron", default=None, help="Cron schedule.")
@@ -177,6 +178,7 @@ def create(
 
 
 @rules_group.command()
+@guard.guarded
 @click.argument("name")
 @click.option("--search", "spl", default=None, help="SPL query.")
 @click.option("--cron", default=None, help="Cron schedule.")
@@ -234,6 +236,7 @@ def update(
 
 
 @rules_group.command()
+@guard.guarded
 @click.argument("name")
 @click.pass_context
 def delete(ctx: click.Context, name: str) -> None:
@@ -253,6 +256,7 @@ def delete(ctx: click.Context, name: str) -> None:
 
 
 @rules_group.command()
+@guard.guarded
 @click.argument("name")
 @click.pass_context
 def enable(ctx: click.Context, name: str) -> None:
@@ -272,6 +276,7 @@ def enable(ctx: click.Context, name: str) -> None:
 
 
 @rules_group.command()
+@guard.guarded
 @click.argument("name")
 @click.pass_context
 def disable(ctx: click.Context, name: str) -> None:
@@ -291,6 +296,7 @@ def disable(ctx: click.Context, name: str) -> None:
 
 
 @rules_group.command()
+@guard.guarded
 @click.argument("name")
 @click.option(
     "--sharing",
