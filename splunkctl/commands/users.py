@@ -89,11 +89,8 @@ def list_users(ctx: click.Context) -> None:
     """List all users."""
     client = get_client(ctx)
     users = client.service.users.list()
-    if not users:
-        output.info("No users found.")
-        return
     rows = [_user_row(u) for u in users]
-    output.render(ctx, rows)
+    output.render(ctx, rows, empty="No users found.")
 
 
 @users_group.command("get")
@@ -117,11 +114,8 @@ def list_roles(ctx: click.Context) -> None:
     """List all roles."""
     client = get_client(ctx)
     roles = client.service.roles.list()
-    if not roles:
-        output.info("No roles found.")
-        return
     rows = [_role_row(r) for r in roles]
-    output.render(ctx, rows)
+    output.render(ctx, rows, empty="No roles found.")
 
 
 @users_group.command("create")

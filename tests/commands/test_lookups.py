@@ -63,6 +63,10 @@ def test_list_lookups_empty(mock_gc: MagicMock) -> None:
 
     result = CliRunner().invoke(cli, ["--json", "lookups", "list"])
     assert result.exit_code == 0
+    assert result.stdout.strip() == "[]"
+
+    result = CliRunner().invoke(cli, ["--format", "table", "lookups", "list"])
+    assert result.exit_code == 0
     assert "No lookup tables found" in result.stderr
 
 

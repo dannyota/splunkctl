@@ -33,10 +33,7 @@ def list_alerts(ctx: click.Context) -> None:
                 "severity": content.get("severity", ""),
             }
         )
-    if not rows:
-        output.info("No fired alerts.")
-        return
-    output.render(ctx, rows)
+    output.render(ctx, rows, empty="No fired alerts.")
 
 
 @alerts_group.command("get")

@@ -31,10 +31,7 @@ def list_lookups(ctx: click.Context, *, app: str) -> None:
         }
         for lk in items
     ]
-    if not rows:
-        output.info("No lookup tables found.")
-        return
-    output.render(ctx, rows)
+    output.render(ctx, rows, empty="No lookup tables found.")
 
 
 @lookups_group.command("get")

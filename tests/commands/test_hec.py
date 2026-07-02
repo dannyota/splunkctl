@@ -47,6 +47,12 @@ def test_list_hec_empty(mock_gc: MagicMock) -> None:
 
     result = CliRunner().invoke(cli, ["hec", "list"])
     assert result.exit_code == 0
+    # piped empty result is a valid JSON payload, not a bare message
+    assert result.stdout.strip() == "[]"
+
+    result = CliRunner().invoke(cli, ["--format", "table", "hec", "list"])
+    assert result.exit_code == 0
+    assert result.stdout == ""
     assert "No HEC tokens found" in result.stderr
 
 

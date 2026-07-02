@@ -29,10 +29,7 @@ def list_hec(ctx: click.Context) -> None:
         }
         for t in items
     ]
-    if not rows:
-        output.info("No HEC tokens found.")
-        return
-    output.render(ctx, rows)
+    output.render(ctx, rows, empty="No HEC tokens found.")
 
 
 @hec_group.command("get")
