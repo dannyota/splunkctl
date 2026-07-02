@@ -29,6 +29,22 @@ def _mock_svc_without_es() -> MagicMock:
     return svc
 
 
+def _http_error(status: int, reason: str, msg: str) -> Exception:
+    """Build a real splunklib HTTPError, matching what a live call actually
+    raises (so errors.classify's name-based check applies)."""
+    from splunklib.binding import HTTPError
+
+    xml_body = (
+        f'<response><messages><msg type="ERROR">{msg}</msg></messages></response>'
+    ).encode()
+    resp = MagicMock()
+    resp.status = status
+    resp.reason = reason
+    resp.body.read.return_value = xml_body
+    resp.headers = []
+    return HTTPError(resp)
+
+
 # --- unit: status mapping ---
 
 
@@ -391,6 +407,38 @@ def test_notables_update_missing_event_ids_is_usage_error() -> None:
         cli, ["--yes", "es", "notables", "update", "--status", "new"]
     )
     assert result.exit_code == 2
+
+
+@patch(_PATCH)
+def test_notables_update_permission_denied_classified_envelope(
+    mock_gc: MagicMock,
+) -> None:
+    svc = _mock_svc_with_es()
+    svc.post.side_effect = _http_error(
+        403, "Forbidden", "You don't have permission to modify notables."
+    )
+    mock_gc.return_value.service = svc
+
+    result = CliRunner().invoke(
+        cli,
+        [
+            "--yes",
+            "--json",
+            "es",
+            "notables",
+            "update",
+            "evt-1",
+            "--status",
+            "closed",
+        ],
+    )
+    assert result.exit_code == 1
+    last_line = result.stderr.strip().splitlines()[-1]
+    payload = json.loads(last_line)
+    assert payload["error"]["kind"] == "permission"
+    assert payload["error"]["http_status"] == 403
+    assert "Traceback" not in result.output
+    assert "Traceback" not in result.stderr
 
 
 # --- commands --json self-discovery ---

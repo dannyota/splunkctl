@@ -76,6 +76,7 @@ def _list_spl(
     """
     clauses = ["search index=notable"]
     if status_filter is not None:
+        # safe: _status_to_int guarantees an int/known-name; never raw user text
         clauses.append(f"status={_status_to_int(status_filter)}")
     if owner_filter is not None:
         clauses.append(f"owner={spl_quote(owner_filter)}")
@@ -234,10 +235,5 @@ def update_notables(
     svc = _require_es(ctx)
     if svc is None:
         return
-    try:
-        svc.post("/services/notable_update", **payload)
-    except Exception as exc:
-        output.error(f"Update failed: {exc}")
-        ctx.exit(1)
-        return
+    svc.post("/services/notable_update", **payload)
     output.info(f"Updated {len(event_ids)} notable(s).")

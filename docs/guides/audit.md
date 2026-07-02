@@ -75,6 +75,7 @@ POST .../search/v2/jobs/ (body: {'search': 'search index=_audit', ...})
 fetch — the raw fetch itself is unbounded (`count=0`) within the
 `--since`/`--until` window, so a `--user`/`--action` filter never misses
 a match just because it fell outside an arbitrary raw-fetch cutoff.
+A very wide `--since` over a large `_audit` index may fetch all events in that range before limiting, which can be slow; narrow `--since` when possible.
 `--user`/`--object-type` are case-insensitive exact match; `--action` is case-insensitive substring match.
 
 ## `audit rbac`: aggregation
