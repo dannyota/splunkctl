@@ -498,6 +498,38 @@ A `tags.conf` stanza is named `<field>=<value>` (e.g.
 with value `enabled`/`disabled`. `tags list` shows only the enabled
 tag names per stanza; `tags get` shows every tag's actual state.
 
+### Data models (CIM/tstats acceleration)
+
+No SDK entity — raw REST over `datamodel/model` (definitions) and
+`admin/summarization` (acceleration build status; percent complete and
+the summarized range do NOT live on the model resource itself). Full
+guide: `docs/guides/datamodels.md`.
+
+```bash
+splunkctl datamodels list                             # name, app, accelerated, disabled
+splunkctl datamodels list --app Splunk_SA_CIM --filter auth
+
+splunkctl datamodels get Authentication                # detection-engineering summary
+splunkctl datamodels get Authentication --definition   # raw objects/fields/calculations JSON
+
+splunkctl datamodels acceleration                      # every accelerated model's build status
+splunkctl datamodels acceleration Authentication        # one model, accelerated or not
+
+splunkctl datamodels rebuild Authentication --yes       # re-summarize from scratch (guarded)
+```
+
+`acceleration` (no name) lists only models whose acceleration config is
+enabled — `enabled`, `has_summary` (built at least once), `is_complete`/
+`percent_complete`, `size`, `earliest_summarized`/`latest_summarized`,
+`last_error`; cleanly renders empty when nothing is accelerated. Named
+with a model that isn't accelerated, it still shows the row
+(`enabled: false`) rather than erroring — only a nonexistent model is an
+error. `rebuild` has no dedicated REST verb: it disables then
+re-enables acceleration with the same `earliest_time` window (exactly
+what Splunk Web's own "Rebuild" button does), dropping and rebuilding
+the summary from scratch; a non-accelerated model exits 1 before the
+dry-run/`--yes` guard even runs.
+
 ### Apps
 
 ```bash
@@ -609,6 +641,32 @@ splunkctl rules list --json | jq '[.[] | select(.disabled == "1")]'
 # rules (e.g. Splunk_Security_Essentials) are silently excluded:
 splunkctl rules list --app Splunk_Security_Essentials --json | jq '[.[] | select(.disabled == "1")]'
 ```
+
+### Check CIM acceleration health before trusting a tstats detection
+
+A `| tstats` detection only sees what its data model has actually
+summarized — before trusting (or debugging) one, confirm the model
+behind it is not just accelerated, but complete and current:
+
+```bash
+splunkctl rules get 'My tstats Detection' --json | jq -r .search
+# note the datamodel=<Name> the search reads from, then:
+splunkctl datamodels acceleration <Name>
+```
+
+Read the row: `enabled: false` means the detection is running `tstats`
+against a model that was never accelerated at all (it'll silently return
+nothing, or fall back to a slow raw search depending on the SPL) —
+accelerate it or fix the detection. `has_summary: false` means
+accelerated but never built yet (cron hasn't fired). `is_complete:
+false`/`percent_complete` under 100 means still backfilling — expect
+gaps in the earliest part of the window. `last_error` non-empty means
+the build itself is failing — that's the root cause of "this detection
+never fires," not the SPL. If `latest_summarized` is far behind now,
+the schedule is falling behind volume; consider `datamodels rebuild
+<Name> --yes` only if the summary looks corrupted/stuck, since a
+rebuild re-summarizes from scratch rather than catching up
+incrementally.
 
 ### ES recipes
 

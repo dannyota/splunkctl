@@ -44,6 +44,7 @@ All list surfaces accept uniform `--limit`/`--offset`/`--filter` options
 | `macros` | ✅ built | list (--app, F2 paging/filter, arg-form stanza `name(n)`), get (--app, resolves bare name to its arg-form), set (--definition, --args, diff preview) — thin `conf_ops` wrapper over `macros.conf`; only mutation in this group |
 | `eventtypes` | ✅ built | list (--app, F2 paging/filter), get (--app) — read-only `conf_ops` wrapper over `eventtypes.conf` |
 | `tags` | ✅ built | list (--app, F2 paging/filter, enabled-tags-only summary), get (--app, full enabled/disabled breakdown) — read-only `conf_ops` wrapper over `tags.conf`'s `field=value` stanza shape |
+| `datamodels` | ✅ built | list (--app, F2 paging/filter), get (--app, --definition), acceleration (`[name]`, build status: percent complete/summarized range/size/last error), rebuild (guarded, disable-then-re-enable) — no SDK entity, raw REST over `datamodel/model` + `admin/summarization`; live-verified for list/get/acceleration and rebuild's dry-run/not-accelerated paths, `rebuild --yes`/populated acceleration status unit-tested only (no CIM data model installed on the local dev instance) |
 | `apps` | ✅ built | list, get, install, uninstall, update, reload |
 | `users` | ✅ built | list, get, create, update (--password), delete |
 | `users roles` | ✅ built | list, get, create, update, delete |
