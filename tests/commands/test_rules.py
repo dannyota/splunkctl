@@ -4,6 +4,8 @@ from click.testing import CliRunner
 
 from splunkctl.main import cli
 
+_PATCH = "splunkctl.commands.rules.get_client"
+
 
 def _mock_ss(name: str = "test-rule") -> MagicMock:
     ss = MagicMock()
@@ -218,3 +220,139 @@ def test_history(mock_gc: MagicMock) -> None:
     assert result.exit_code == 0
     assert "1234567890.42" in result.output
     assert "DONE" in result.output
+
+
+@patch(_PATCH)
+def test_create_threshold_flags(mock_gc: MagicMock) -> None:
+    result = CliRunner().invoke(
+        cli,
+        [
+            "--yes",
+            "rules",
+            "create",
+            "--name",
+            "det1",
+            "--search",
+            "index=_internal | head 1",
+            "--cron",
+            "*/5 * * * *",
+            "--alert-comparator",
+            "greater than",
+            "--alert-threshold",
+            "5",
+            "--severity",
+            "4",
+            "--track",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    _, kwargs = mock_gc.return_value.service.saved_searches.create.call_args
+    assert kwargs["alert_type"] == "number of events"
+    assert kwargs["alert_comparator"] == "greater than"
+    assert kwargs["alert_threshold"] == "5"
+    assert kwargs["alert.severity"] == "4"
+    assert kwargs["alert.track"] == "1"
+    assert kwargs["cron_schedule"] == "*/5 * * * *"
+
+
+@patch(_PATCH)
+def test_create_throttle_expands(mock_gc: MagicMock) -> None:
+    result = CliRunner().invoke(
+        cli,
+        [
+            "--yes",
+            "rules",
+            "create",
+            "--name",
+            "det2",
+            "--search",
+            "x",
+            "--throttle",
+            "600",
+            "--throttle-fields",
+            "user,src",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    _, kwargs = mock_gc.return_value.service.saved_searches.create.call_args
+    assert kwargs["alert.suppress"] == "1"
+    assert kwargs["alert.suppress.period"] == "600s"
+    assert kwargs["alert.suppress.fields"] == "user,src"
+
+
+@patch(_PATCH)
+def test_create_set_passthrough_flags_win(mock_gc: MagicMock) -> None:
+    result = CliRunner().invoke(
+        cli,
+        [
+            "--yes",
+            "rules",
+            "create",
+            "--name",
+            "det3",
+            "--search",
+            "x",
+            "--set",
+            "action.email.to=soc@example.com",
+            "--set",
+            "alert_threshold=99",
+            "--alert-comparator",
+            "greater than",
+            "--alert-threshold",
+            "5",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    _, kwargs = mock_gc.return_value.service.saved_searches.create.call_args
+    assert kwargs["action.email.to"] == "soc@example.com"
+    assert kwargs["alert_threshold"] == "5"
+
+
+def test_create_comparator_requires_threshold() -> None:
+    result = CliRunner().invoke(
+        cli,
+        [
+            "--yes",
+            "rules",
+            "create",
+            "--name",
+            "d",
+            "--search",
+            "x",
+            "--alert-comparator",
+            "greater than",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "together" in result.output + result.stderr
+
+
+@patch(_PATCH)
+def test_update_alert_flags_and_app(mock_gc: MagicMock) -> None:
+    ss = MagicMock()
+    ss.name = "det4"
+    mock_gc.return_value.service.saved_searches.list.return_value = [ss]
+    result = CliRunner().invoke(
+        cli,
+        [
+            "--yes",
+            "rules",
+            "update",
+            "det4",
+            "--app",
+            "secops",
+            "--earliest",
+            "-24h",
+            "--latest",
+            "now",
+            "--set",
+            "alert.digest_mode=0",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    _, list_kwargs = mock_gc.return_value.service.saved_searches.list.call_args
+    assert list_kwargs.get("app") == "secops"
+    _, kwargs = ss.update.call_args
+    assert kwargs["dispatch.earliest_time"] == "-24h"
+    assert kwargs["dispatch.latest_time"] == "now"
+    assert kwargs["alert.digest_mode"] == "0"

@@ -6,7 +6,27 @@ import click
 
 from splunkctl import guard, output
 from splunkctl.client import get_client
+from splunkctl.commands import common
 from splunkctl.commands.rules_io import export_rules, import_rules
+
+
+def _resolve_rule(ctx: click.Context, client: Any, name: str, app: str | None) -> Any:
+    """Fetch a saved search, optionally within a specific app namespace."""
+    svc = client.service
+    if app is None:
+        try:
+            return svc.saved_searches[name]
+        except KeyError:
+            output.error(f"Saved search not found: {name}")
+            ctx.exit(1)
+            raise
+    matches = svc.saved_searches.list(search=f"name={name}", app=app, count=10)
+    for m in matches:
+        if m.name == name:
+            return m
+    output.error(f"Saved search not found in app '{app}': {name}")
+    ctx.exit(1)
+    raise KeyError(name)
 
 
 def _summarize(ss: Any) -> dict[str, Any]:
@@ -91,9 +111,11 @@ def get(ctx: click.Context, name: str) -> None:
 @click.option("--description", default=None, help="Description.")
 @click.option("--actions", default=None, help="Alert actions (comma-separated).")
 @click.option("--disabled", is_flag=True, default=False, help="Create disabled.")
+@common.alert_options
 @click.pass_context
 def create(
     ctx: click.Context,
+    /,
     *,
     name: str,
     spl: str,
@@ -102,9 +124,10 @@ def create(
     description: str | None,
     actions: str | None,
     disabled: bool,
+    **alert_flags: Any,
 ) -> None:
     """Create a saved search."""
-    kwargs: dict[str, Any] = {}
+    kwargs: dict[str, Any] = dict(common.alert_kwargs(**alert_flags))
     if cron is not None:
         kwargs["cron_schedule"] = cron
         kwargs["is_scheduled"] = "1"
@@ -133,6 +156,7 @@ def create(
 @click.argument("name")
 @click.option("--search", "spl", default=None, help="SPL query.")
 @click.option("--cron", default=None, help="Cron schedule.")
+@click.option("--app", default=None, help="Splunk app context of the rule.")
 @click.option("--description", default=None, help="Description.")
 @click.option("--actions", default=None, help="Alert actions (comma-separated).")
 @click.option(
@@ -140,19 +164,23 @@ def create(
     default=None,
     help="Enable or disable scheduling.",
 )
+@common.alert_options
 @click.pass_context
 def update(
     ctx: click.Context,
+    /,
     name: str,
     *,
     spl: str | None,
     cron: str | None,
+    app: str | None,
     description: str | None,
     actions: str | None,
     enabled: bool | None,
+    **alert_flags: Any,
 ) -> None:
     """Update a saved search."""
-    kwargs: dict[str, Any] = {}
+    kwargs: dict[str, Any] = dict(common.alert_kwargs(**alert_flags))
     if spl is not None:
         kwargs["search"] = spl
     if cron is not None:
@@ -176,12 +204,7 @@ def update(
         return
 
     client = get_client(ctx)
-    try:
-        ss = client.service.saved_searches[name]
-    except KeyError:
-        output.error(f"Saved search not found: {name}")
-        ctx.exit(1)
-        return
+    ss = _resolve_rule(ctx, client, name, app)
     ss.update(**kwargs).refresh()
     output.info(f"Updated saved search '{name}'.")
 
