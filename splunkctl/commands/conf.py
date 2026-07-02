@@ -166,7 +166,12 @@ def set_keys(
     ):
         return
 
-    _, created = conf_ops.set_keys(client, file, stanza, kv)
+    try:
+        _, created = conf_ops.set_keys(client, file, stanza, kv)
+    except KeyError as exc:
+        output.error(_not_found_message(exc, file, stanza), kind="not_found")
+        ctx.exit(1)
+        return
     verb = "Created" if created else "Updated"
     output.info(f"{verb} {file} stanza '{stanza}' ({len(kv)} key(s)).")
 

@@ -273,6 +273,37 @@ def test_set_invalid_pair_rejected(mock_gc: MagicMock) -> None:
     assert "KEY=VALUE" in result.output + result.stderr
 
 
+@patch(_PATCH)
+def test_set_apply_race_conf_file_vanishes(mock_gc: MagicMock) -> None:
+    """Conf file does not exist at all, so both the preview fetch and the
+    apply call's internal lookup raise KeyError on the conf file itself.
+
+    conf_ops.set_keys() does ``client.service.confs[conf_name]`` outside
+    its create try/except, so a missing conf file must produce the same
+    clean not_found envelope, not a raw traceback.
+    """
+    svc = mock_gc.return_value.service
+    svc.confs.__getitem__.side_effect = KeyError("badfile")
+
+    result = CliRunner().invoke(
+        cli,
+        [
+            "--yes",
+            "--json",
+            "conf",
+            "set",
+            "badfile",
+            "my_macro",
+            "definition=index=main",
+        ],
+    )
+    assert result.exit_code == 1, result.output
+    last_line = result.stderr.strip().splitlines()[-1]
+    payload = json.loads(last_line)
+    assert payload["error"]["kind"] == "not_found"
+    assert "badfile" in payload["error"]["message"]
+
+
 # --- unset ---
 
 
