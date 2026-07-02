@@ -88,9 +88,26 @@ def is_table(ctx: click.Context) -> bool:
 
 
 def _resolve_table(obj: dict[str, Any]) -> bool:
-    if obj.get("json") or obj.get("format") in ("json", "jsonl", "csv"):
+    if _resolves_to_json(obj):
         return False
     return obj.get("format") == "table" or sys.stdout.isatty()
+
+
+def _resolves_to_json(obj: dict[str, Any]) -> bool:
+    """True when the effective output format resolves to JSON.
+
+    Mirrors the data-rendering default in :func:`render`: explicit
+    ``--json``/``--format json``, or no format flag given while stdout is
+    not a tty (the piped default). Explicit ``table``/``csv``/``jsonl``
+    never resolve to JSON. Shared by ``_resolve_table`` (data) and
+    ``_json_errors`` (errors) so both payloads follow one contract.
+    """
+    fmt: str | None = obj.get("format")
+    if obj.get("json") or fmt == "json":
+        return True
+    if fmt is not None:
+        return False
+    return not sys.stdout.isatty()
 
 
 def error(
@@ -101,10 +118,14 @@ def error(
 ) -> None:
     """Print an error to stderr.
 
-    Under ``--json``/``--format json`` this emits a single-line JSON
-    envelope — ``{"error": {"kind", "http_status", "message"}}`` — instead
-    of the human ``Error: ...`` line, so an agent can branch on failures
-    without scraping text. Every other format keeps the human text.
+    Emits a single-line JSON envelope — ``{"error": {"kind", "http_status",
+    "message"}}`` — instead of the human ``Error: ...`` line whenever the
+    payload format resolves to JSON: explicit ``--json``/``--format json``,
+    or no format flag given while stdout is piped (the same default
+    ``render()`` uses for data). Explicit ``table``/``csv``/``jsonl`` keep
+    the human text. This mirrors the data-format contract so an agent
+    piping splunkctl without ``--json`` still gets a `jq`-able error on
+    failure, not just on success.
 
     Args:
         msg: Human-readable message (no ``Error: `` prefix — this function
@@ -123,12 +144,16 @@ def error(
 
 
 def _json_errors() -> bool:
-    """True when the active Click context resolves to --json/--format json."""
+    """True when the active Click context resolves to JSON output.
+
+    Uses the same resolution as data rendering (see ``_resolves_to_json``)
+    so success and failure follow one dual-output contract.
+    """
     ctx = click.get_current_context(silent=True)
     if ctx is None:
         return False
     obj: dict[str, Any] = ctx.obj or {}
-    return bool(obj.get("json")) or obj.get("format") == "json"
+    return _resolves_to_json(obj)
 
 
 def info(msg: str) -> None:

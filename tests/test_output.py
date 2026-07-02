@@ -1,6 +1,7 @@
 """Tests for splunkctl.output."""
 
 import json
+import sys
 from pathlib import Path
 
 import click
@@ -176,9 +177,40 @@ def test_error_human_text_unchanged_for_table_format() -> None:
     assert result.stderr == "Error: rule1 missing\n"
 
 
-def test_error_human_text_unchanged_when_no_format_flags() -> None:
+def test_error_envelope_when_piped_no_format_flags() -> None:
+    """No format flags + non-tty stdout (CliRunner's default) resolves to
+    JSON, mirroring the data-rendering piped default — an agent piping
+    splunkctl without ``--json`` still gets a `jq`-able error envelope."""
     result = CliRunner().invoke(
         _error_cmd("rule1 missing", kind="not_found", http_status=404)
+    )
+    payload = json.loads(result.stderr)
+    assert payload == {
+        "error": {"kind": "not_found", "http_status": 404, "message": "rule1 missing"}
+    }
+
+
+def test_error_human_text_when_tty_no_format_flags(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A real tty with no format flags keeps human error text — only the
+    piped default resolves to JSON."""
+
+    @click.command()
+    @click.pass_context
+    def cmd(ctx: click.Context) -> None:
+        monkeypatch.setattr(sys.stdout, "isatty", lambda: True)
+        ctx.ensure_object(dict)
+        ctx.obj.update({"json": False, "format": None})
+        output.error("rule1 missing", kind="not_found", http_status=404)
+
+    result = CliRunner().invoke(cmd)
+    assert result.stderr == "Error: rule1 missing\n"
+
+
+def test_error_human_text_unchanged_for_csv_format() -> None:
+    result = CliRunner().invoke(
+        _error_cmd("rule1 missing", kind="not_found", http_status=404, format="csv")
     )
     assert result.stderr == "Error: rule1 missing\n"
 

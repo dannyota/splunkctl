@@ -516,8 +516,10 @@ splunkctl search oneshot '| metadata type=sources index=main' --limit 100
 
 ### JSON error envelope
 
-Under `--json` or `--format json`, failures print one JSON line to stderr
-instead of `Error: ...` text — `jq`-able, no text-scraping needed:
+Errors follow the same dual-output rule as data: piped stdout or `--json`/
+`--format json` prints one JSON line to stderr instead of `Error: ...`
+text — `jq`-able, no text-scraping needed — while a TTY (or an explicit
+`--format table`/`csv`/`jsonl`) keeps human text:
 
 ```json
 {"error": {"kind": "auth", "http_status": 401, "message": "Authentication failed: Login failed."}}
@@ -543,7 +545,7 @@ instead of `Error: ...` text — `jq`-able, no text-scraping needed:
 | `http` | any other HTTP error status |
 | `connection` | socket/SSL/DNS failure — Splunk unreachable |
 | `timeout` | request timed out |
-| `usage` | app-level argument validation failure |
+| `usage` | reserved for app-level argument validation — not yet emitted |
 | `error` | fallback for unclassified app errors |
 
 Recipe: `splunkctl rules get my-rule --json 2>&1 1>/dev/null | jq -r .error.kind`
