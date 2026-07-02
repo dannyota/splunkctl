@@ -318,6 +318,29 @@ def test_unset_not_found(mock_gc: MagicMock) -> None:
     assert "not found" in result.output
 
 
+@patch(_PATCH)
+def test_unset_apply_race_stanza_vanishes(mock_gc: MagicMock) -> None:
+    """Stanza exists at preview time but is gone by the time --yes applies.
+
+    conf_ops.unset_keys() does its own fresh lookup, so this exercises the
+    apply-time KeyError (not the preview fetch's) — it must produce the
+    same clean not_found envelope, not a raw traceback.
+    """
+    svc = mock_gc.return_value.service
+    stanza = _stanza("my_macro", {"definition": "index=main"})
+    conf = MagicMock()
+    conf.__getitem__.side_effect = [stanza, KeyError("nope")]
+    svc.confs.__getitem__.return_value = conf
+
+    result = CliRunner().invoke(
+        cli, ["--yes", "--json", "conf", "unset", "macros", "my_macro", "definition"]
+    )
+    assert result.exit_code == 1, result.output
+    last_line = result.stderr.strip().splitlines()[-1]
+    payload = json.loads(last_line)
+    assert payload["error"]["kind"] == "not_found"
+
+
 # --- reload ---
 
 

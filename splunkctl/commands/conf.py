@@ -18,6 +18,23 @@ from splunkctl.commands import conf_ops
 from splunkctl.commands.common import fetch_page, list_options, parse_set
 
 
+def _not_found_message(exc: KeyError, file: str, stanza: str) -> str:
+    """Render a not-found message, naming the file when that's what's missing.
+
+    ``conf_ops.get_stanza``/``unset_keys`` do a two-step SDK lookup
+    (``client.service.confs[file][stanza]``) and the underlying SDK raises
+    ``KeyError(key)`` with whichever key 404'd — ``file`` when the conf
+    file itself doesn't exist, ``stanza`` when the file exists but the
+    stanza doesn't. Reuse that key to tell the two cases apart; fall back
+    to the stanza-not-found phrasing when the key doesn't match either
+    (e.g. a mock or SDK version that doesn't preserve it).
+    """
+    missing = exc.args[0] if exc.args else None
+    if missing is not None and str(missing) == file:
+        return f"Conf file '{file}.conf' not found."
+    return f"Stanza '{stanza}' not found in {file}.conf."
+
+
 def _app_scope(app: str | None) -> dict[str, str]:
     """Build the ``app``/``owner`` kwargs for an app-scoped list call.
 
@@ -113,8 +130,8 @@ def get(ctx: click.Context, file: str, stanza: str, key: str | None) -> None:
     client = get_client(ctx)
     try:
         entity = conf_ops.get_stanza(client, file, stanza)
-    except KeyError:
-        output.error(f"Stanza '{stanza}' not found in {file}.conf.", kind="not_found")
+    except KeyError as exc:
+        output.error(_not_found_message(exc, file, stanza), kind="not_found")
         ctx.exit(1)
         return
     content: dict[str, Any] = dict(entity.content)
@@ -167,8 +184,8 @@ def unset_keys(
     client = get_client(ctx)
     try:
         entity = conf_ops.get_stanza(client, file, stanza)
-    except KeyError:
-        output.error(f"Stanza '{stanza}' not found in {file}.conf.", kind="not_found")
+    except KeyError as exc:
+        output.error(_not_found_message(exc, file, stanza), kind="not_found")
         ctx.exit(1)
         return
     current: dict[str, Any] = dict(entity.content)
@@ -180,7 +197,12 @@ def unset_keys(
     ):
         return
 
-    conf_ops.unset_keys(client, file, stanza, keys)
+    try:
+        conf_ops.unset_keys(client, file, stanza, keys)
+    except KeyError as exc:
+        output.error(_not_found_message(exc, file, stanza), kind="not_found")
+        ctx.exit(1)
+        return
     output.info(
         f"Cleared {len(keys)} key(s) on '{stanza}' in {file}.conf "
         "(REST cannot remove conf keys; values set to empty)."
