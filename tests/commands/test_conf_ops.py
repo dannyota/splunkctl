@@ -3,6 +3,7 @@
 from unittest.mock import MagicMock
 
 import pytest
+from splunklib.binding import UrlEncoded
 
 from splunkctl.commands.conf_ops import (
     diff_lines,
@@ -265,3 +266,18 @@ def test_reload_conf_posts_expected_path() -> None:
     client = MagicMock()
     reload_conf(client, "macros")
     client.service.post.assert_called_once_with("/services/configs/conf-macros/_reload")
+
+
+def test_reload_conf_encodes_slash_in_conf_name() -> None:
+    """A conf name is free-form input on ``conf reload`` (unlike ``parsers
+    reload``'s fixed ``Choice``), so a slash must come out percent-encoded
+    on the wire, not interpolated raw -- mirrors the kvstore/datamodels
+    wire-form test pattern (see test_kvstore_escaping.py)."""
+    client = MagicMock()
+    reload_conf(client, "my/conf")
+    call_path = client.service.post.call_args[0][0]
+    assert call_path == "/services/configs/conf-my%2Fconf/_reload"
+    # idempotent under a second UrlEncoded(...) pass -- what Context._abspath
+    # does to whatever path it's handed -- so it can't be double-encoded.
+    assert isinstance(call_path, UrlEncoded)
+    assert UrlEncoded(call_path) == call_path

@@ -11,6 +11,20 @@ messages for their own command surface.
 from types import SimpleNamespace
 from typing import Any
 
+from splunklib.binding import UrlEncoded
+
+
+def _seg(value: str) -> UrlEncoded:
+    """Encode one REST path segment (conf name), slash included.
+
+    Returns an SDK ``UrlEncoded`` rather than a plain ``str`` so the
+    encoding survives untouched through ``Context._abspath``. Paths built
+    from this MUST use ``+`` concatenation, not f-strings — see
+    ``kvstore._seg`` for the full rationale (same convention, copied here
+    to keep every raw-REST command group consistent).
+    """
+    return UrlEncoded(value, encode_slash=True)
+
 
 def get_stanza(
     client: Any, conf_name: str, stanza: str, *, app: str | None = None
@@ -119,4 +133,4 @@ def unset_keys(client: Any, conf_name: str, stanza: str, keys: tuple[str, ...]) 
 
 def reload_conf(client: Any, conf_name: str) -> None:
     """POST the conf reload endpoint for one conf file."""
-    client.service.post(f"/services/configs/conf-{conf_name}/_reload")
+    client.service.post("/services/configs/conf-" + _seg(conf_name) + "/_reload")
