@@ -75,7 +75,7 @@ POST .../search/v2/jobs/ (body: {'search': 'search index=_audit', ...})
 fetch — the raw fetch itself is unbounded (`count=0`) within the
 `--since`/`--until` window, so a `--user`/`--action` filter never misses
 a match just because it fell outside an arbitrary raw-fetch cutoff.
-`--user`/`--object-type` are exact match; `--action` is substring match.
+`--user`/`--object-type` are case-insensitive exact match; `--action` is case-insensitive substring match.
 
 ## `audit rbac`: aggregation
 
@@ -108,9 +108,9 @@ output round-trips cleanly through Python's `csv` module.
 |------|-----------|--------------|
 | `--since` | `changes` | Earliest time (default `-24h`) |
 | `--until` | `changes` | Latest time (default `now`) |
-| `--user` | `changes` | Filter by user, exact match |
-| `--action` | `changes` | Filter by action, substring match |
-| `--object-type` | `changes` | Filter by object type, exact match |
+| `--user` | `changes` | Filter by user, case-insensitive exact match |
+| `--action` | `changes` | Filter by action, case-insensitive substring match |
+| `--object-type` | `changes` | Filter by object type, case-insensitive exact match |
 | `--limit` | `changes` | Max results after client-side filtering (default 500) |
 | `--roles-only` | `rbac` | One row per role instead of per user |
 

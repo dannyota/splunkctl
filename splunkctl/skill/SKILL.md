@@ -281,9 +281,9 @@ with the raw line in `object`.
 
 ```bash
 splunkctl audit changes                                # last 24h, up to 500
-splunkctl audit changes --since -7d --user jdoe         # exact-match user
-splunkctl audit changes --action edit --json            # substring-match action
-splunkctl audit changes --object-type saved_search      # exact-match object type
+splunkctl audit changes --since -7d --user jdoe         # case-insensitive exact-match user
+splunkctl audit changes --action edit --json            # case-insensitive substring-match action
+splunkctl audit changes --object-type saved_search      # case-insensitive exact-match object type
 splunkctl audit rbac                                    # users x roles x caps x indexes
 splunkctl audit rbac --format csv --out recert.csv      # recertification export
 splunkctl audit rbac --roles-only                       # one row per role instead
@@ -292,7 +292,7 @@ splunkctl audit rbac --roles-only                       # one row per role inste
 SECURITY: `changes`'s dispatched SPL is always the constant
 `search index=_audit` — `--since`/`--until` go through the search job's
 time-range kwargs, and `--user`/`--action`/`--object-type` filter the
-normalized rows client-side. No flag value ever reaches the SPL string,
+normalized rows client-side (case-insensitive). No flag value ever reaches the SPL string,
 even adversarial ones. `rbac`'s `capabilities`/`srch_indexes_allowed`
 columns aggregate across each principal's direct roles AND the full
 transitive closure of imported roles (dedup, sort, `;`-joined — never

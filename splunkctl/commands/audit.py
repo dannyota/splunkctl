@@ -100,19 +100,22 @@ def audit_group() -> None:
 @click.option("--since", default="-24h", help="Earliest time (default -24h).")
 @click.option("--until", default="now", help="Latest time (default now).")
 @click.option(
-    "--user", "user_filter", default=None, help="Filter by user (exact match)."
+    "--user",
+    "user_filter",
+    default=None,
+    help="Filter by user (case-insensitive).",
 )
 @click.option(
     "--action",
     "action_filter",
     default=None,
-    help="Filter by action (substring match).",
+    help="Filter by action, substring (case-insensitive).",
 )
 @click.option(
     "--object-type",
     "object_type_filter",
     default=None,
-    help="Filter by object type (exact match).",
+    help="Filter by object type (case-insensitive).",
 )
 @click.option(
     "--limit",
@@ -152,12 +155,13 @@ def changes(
     rows = [parse_event(r) for r in read_results(stream)]
 
     if user_filter is not None:
-        rows = [r for r in rows if r["user"] == user_filter]
+        rows = [r for r in rows if r["user"].lower() == user_filter.lower()]
     if action_filter is not None:
         needle = action_filter.lower()
         rows = [r for r in rows if needle in r["action"].lower()]
     if object_type_filter is not None:
-        rows = [r for r in rows if r["object_type"] == object_type_filter]
+        obj_type_lower = object_type_filter.lower()
+        rows = [r for r in rows if r["object_type"].lower() == obj_type_lower]
 
     rows.sort(key=lambda r: r["time"], reverse=True)
     output.render(ctx, rows[:limit], empty="No audit events found.")

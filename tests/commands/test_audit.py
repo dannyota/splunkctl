@@ -218,6 +218,38 @@ def test_changes_object_type_filter(mock_gc: MagicMock, mock_read: MagicMock) ->
 
 @patch(_READ_RESULTS)
 @patch(_PATCH)
+def test_changes_user_filter_is_case_insensitive(
+    mock_gc: MagicMock, mock_read: MagicMock
+) -> None:
+    mock_gc.return_value.service = MagicMock()
+    mock_read.return_value = _rows(_LEGACY_NO_OBJECT, _LEGACY_WITH_OBJECT)
+
+    result = CliRunner().invoke(
+        cli, ["--json", "audit", "changes", "--user", "ANALYST2"]
+    )
+    rows = json.loads(result.stdout)
+    assert len(rows) == 1
+    assert rows[0]["user"] == "analyst2"
+
+
+@patch(_READ_RESULTS)
+@patch(_PATCH)
+def test_changes_object_type_filter_is_case_insensitive(
+    mock_gc: MagicMock, mock_read: MagicMock
+) -> None:
+    mock_gc.return_value.service = MagicMock()
+    mock_read.return_value = _rows(_JSON_OBJECT_EDIT, _LEGACY_NO_OBJECT)
+
+    result = CliRunner().invoke(
+        cli, ["--json", "audit", "changes", "--object-type", "SAVED_SEARCH"]
+    )
+    rows = json.loads(result.stdout)
+    assert len(rows) == 1
+    assert rows[0]["object_type"] == "saved_search"
+
+
+@patch(_READ_RESULTS)
+@patch(_PATCH)
 def test_changes_limit_applies_after_filtering(
     mock_gc: MagicMock, mock_read: MagicMock
 ) -> None:
@@ -405,6 +437,45 @@ def test_rbac_empty_users(mock_gc: MagicMock) -> None:
     result = CliRunner().invoke(cli, ["--format", "table", "audit", "rbac"])
     assert result.exit_code == 0
     assert "No users found" in result.stderr
+
+
+@patch(_PATCH)
+def test_rbac_closure_handles_import_cycle(mock_gc: MagicMock) -> None:
+    """Test that genuine import cycles (A->B->A) terminate without infinite loop."""
+    svc = MagicMock()
+    svc.roles = [
+        _role_entity("role_a", imported_roles=["role_b"], capabilities=["cap_a"]),
+        _role_entity("role_b", imported_roles=["role_a"], capabilities=["cap_b"]),
+    ]
+    svc.users = [_user_entity("cycler", roles=["role_a"])]
+    mock_gc.return_value.service = svc
+
+    result = CliRunner().invoke(cli, ["--json", "audit", "rbac"])
+    assert result.exit_code == 0
+    rows = json.loads(result.stdout)
+    assert len(rows) == 1
+    # Both capabilities aggregated despite the cycle
+    assert rows[0]["capabilities"] == "cap_a;cap_b"
+
+
+@patch(_PATCH)
+def test_rbac_closure_skips_dangling_imported_role(mock_gc: MagicMock) -> None:
+    """Test that dangling imported roles (not in role_map) are skipped silently."""
+    svc = MagicMock()
+    svc.roles = [
+        _role_entity(
+            "real_role", imported_roles=["nonexistent_role"], capabilities=["cap_real"]
+        ),
+    ]
+    svc.users = [_user_entity("user", roles=["real_role"])]
+    mock_gc.return_value.service = svc
+
+    result = CliRunner().invoke(cli, ["--json", "audit", "rbac"])
+    assert result.exit_code == 0
+    rows = json.loads(result.stdout)
+    assert len(rows) == 1
+    # Only real_role's capability, nonexistent_role silently skipped
+    assert rows[0]["capabilities"] == "cap_real"
 
 
 # --- commands --json self-discovery ---
