@@ -144,6 +144,36 @@ def test_get_rule_with_app_and_owner_both_given(mock_gc: MagicMock) -> None:
 
 
 @patch(_PATCH)
+def test_update_rule_with_app_resolves_across_owners(mock_gc: MagicMock) -> None:
+    """rules update --app X resolves via app=X, owner="-" (v0.3.1 fix)."""
+    ss = _mock_ss("sse-rule")
+    svc = _setup_svc(mock_gc)
+    svc.saved_searches.list.return_value = [ss]
+
+    result = CliRunner().invoke(
+        cli,
+        [
+            "--yes",
+            "rules",
+            "update",
+            "sse-rule",
+            "--app",
+            "Splunk_Security_Essentials",
+            "--description",
+            "updated",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    svc.saved_searches.list.assert_called_once_with(
+        search='name="sse-rule"',
+        count=10,
+        app="Splunk_Security_Essentials",
+        owner="-",
+    )
+    ss.update.assert_called_once_with(description="updated")
+
+
+@patch(_PATCH)
 def test_get_rule_with_owner_only_unchanged(mock_gc: MagicMock) -> None:
     """--owner alone (no --app): unchanged, owner passed as-is, no app key."""
     ss = _mock_ss("r1")

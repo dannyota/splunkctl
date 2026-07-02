@@ -1,6 +1,6 @@
 """Shared helpers for command groups."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from typing import Any
 
 import click
@@ -41,6 +41,92 @@ def parse_set(pairs: tuple[str, ...]) -> dict[str, str]:
             raise click.BadParameter(f"'{key}' is read-only")
         out[key] = value
     return out
+
+
+def list_options[F: Callable[..., Any]](f: F) -> F:
+    """Attach the uniform list options: ``--limit``, ``--offset``, ``--filter``.
+
+    Defaults leave behavior unchanged: without flags the SDK call is made
+    bare and fetches the entire collection.
+    """
+    opts = [
+        click.option(
+            "--limit",
+            type=click.IntRange(min=1),
+            default=None,
+            help="Return at most N entries (default: all).",
+        ),
+        click.option(
+            "--offset",
+            type=click.IntRange(min=0),
+            default=0,
+            help="Skip the first N entries.",
+        ),
+        click.option(
+            "--filter",
+            "name_filter",
+            default=None,
+            help="Case-insensitive name substring; --limit/--offset then "
+            "apply to the filtered set.",
+        ),
+    ]
+    for opt in reversed(opts):
+        f = opt(f)
+    return f
+
+
+def _entity_name(entity: Any) -> str:
+    return str(entity.name)
+
+
+def filter_by_name[T](
+    items: Iterable[T],
+    name_filter: str | None,
+    *,
+    name_of: Callable[[Any], str] | None = None,
+) -> list[T]:
+    """Case-insensitive name-substring filter; pass-through when ``None``."""
+    if name_filter is None:
+        return list(items)
+    key = name_of if name_of is not None else _entity_name
+    needle = name_filter.lower()
+    return [item for item in items if needle in key(item).lower()]
+
+
+def page_slice[T](items: list[T], *, limit: int | None, offset: int) -> list[T]:
+    """Apply client-side offset then limit to an already-filtered list."""
+    if offset:
+        items = items[offset:]
+    if limit is not None:
+        items = items[:limit]
+    return items
+
+
+def fetch_page[T](
+    fetch: Callable[..., Iterable[T]],
+    *,
+    limit: int | None,
+    offset: int,
+    name_filter: str | None,
+    name_of: Callable[[Any], str] | None = None,
+) -> list[T]:
+    """Fetch one page of entities from an SDK collection ``.list``-style call.
+
+    Without ``--filter`` paging is server-side: ``count``/``offset`` pass
+    through to the SDK call, and are omitted entirely when unset so the
+    fetch-everything default stays untouched. With ``--filter`` everything
+    is fetched, filtered on the entity name, and offset/limit apply
+    client-side to the filtered set.
+    """
+    if name_filter is None:
+        kwargs: dict[str, int] = {}
+        if limit is not None:
+            kwargs["count"] = limit
+        if offset:
+            kwargs["offset"] = offset
+        return list(fetch(**kwargs))
+    items = filter_by_name(fetch(), name_filter, name_of=name_of)
+    return page_slice(items, limit=limit, offset=offset)
 
 
 def read_results(stream: Any) -> list[dict[str, Any]]:

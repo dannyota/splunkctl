@@ -8,7 +8,7 @@ import requests as req
 
 from splunkctl import guard, output
 from splunkctl.client import get_client
-from splunkctl.commands.common import parse_set
+from splunkctl.commands.common import fetch_page, list_options, parse_set
 
 
 @click.group("hec")
@@ -17,11 +17,23 @@ def hec_group() -> None:
 
 
 @hec_group.command("list")
+@list_options
 @click.pass_context
-def list_hec(ctx: click.Context) -> None:
+def list_hec(
+    ctx: click.Context,
+    *,
+    limit: int | None,
+    offset: int,
+    name_filter: str | None,
+) -> None:
     """List HEC tokens."""
     client = get_client(ctx)
-    items = client.service.hec_tokens.list()
+    items = fetch_page(
+        client.service.hec_tokens.list,
+        limit=limit,
+        offset=offset,
+        name_filter=name_filter,
+    )
     rows: list[dict[str, Any]] = [
         {
             "name": t.name,

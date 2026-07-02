@@ -9,6 +9,7 @@ from splunklib.results import JSONResultsReader
 
 from splunkctl import guard, output
 from splunkctl.client import get_client
+from splunkctl.commands.common import fetch_page, list_options
 
 _GENERATING = (
     "abstract",
@@ -195,14 +196,28 @@ def oneshot_search(
 
 
 @search_group.command("jobs")
+@list_options
 @click.pass_context
-def list_jobs(ctx: click.Context) -> None:
-    """List running and recent search jobs."""
+def list_jobs(
+    ctx: click.Context,
+    *,
+    limit: int | None,
+    offset: int,
+    name_filter: str | None,
+) -> None:
+    """List running and recent search jobs (--filter matches the sid)."""
     client = get_client(ctx)
     svc = client.service
 
+    jobs = fetch_page(
+        svc.jobs.list,
+        limit=limit,
+        offset=offset,
+        name_filter=name_filter,
+        name_of=lambda j: str(j.sid),
+    )
     rows: list[dict[str, Any]] = []
-    for job in svc.jobs:
+    for job in jobs:
         content: dict[str, Any] = dict(job.content)
         acl: dict[str, Any] = job.access
         dur = content.get("runDuration", "")

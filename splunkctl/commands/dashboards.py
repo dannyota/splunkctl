@@ -10,6 +10,7 @@ import defusedxml.ElementTree as ET
 
 from splunkctl import guard, output
 from splunkctl.client import get_client
+from splunkctl.commands.common import filter_by_name, list_options, page_slice
 
 
 def _detect_type(xml: str) -> str:
@@ -114,14 +115,22 @@ def dashboards_group() -> None:
     is_flag=True,
     help="Include non-dashboard views.",
 )
+@list_options
 @click.pass_context
 def list_dashboards(
     ctx: click.Context,
     *,
     app: str,
     show_all: bool,
+    limit: int | None,
+    offset: int,
+    name_filter: str | None,
 ) -> None:
-    """List dashboards."""
+    """List dashboards.
+
+    --filter/--limit/--offset apply client-side, after the app and
+    dashboard-type row filters.
+    """
     client = get_client(ctx)
     items = client.service.dashboards.list(app=app, owner="-")
     rows: list[dict[str, Any]] = []
@@ -142,6 +151,8 @@ def list_dashboards(
                 "label": d.content.get("label", ""),
             }
         )
+    rows = filter_by_name(rows, name_filter, name_of=lambda r: str(r["name"]))
+    rows = page_slice(rows, limit=limit, offset=offset)
     output.render(ctx, rows, empty="No dashboards found.")
 
 

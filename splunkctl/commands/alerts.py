@@ -6,6 +6,7 @@ import click
 
 from splunkctl import guard, output
 from splunkctl.client import get_client
+from splunkctl.commands.common import filter_by_name, list_options, page_slice
 
 
 def _firing_rows(group: Any) -> list[dict[str, Any]]:
@@ -31,15 +32,28 @@ def alerts_group() -> None:
 
 
 @alerts_group.command("list")
+@list_options
 @click.pass_context
-def list_alerts(ctx: click.Context) -> None:
-    """List fired alerts (one row per firing, with sid for drill-down)."""
+def list_alerts(
+    ctx: click.Context,
+    *,
+    limit: int | None,
+    offset: int,
+    name_filter: str | None,
+) -> None:
+    """List fired alerts (one row per firing, with sid for drill-down).
+
+    --filter matches the rule name; --limit/--offset page the firing rows
+    client-side (a row is one firing, not one rule).
+    """
     client = get_client(ctx)
     rows: list[dict[str, Any]] = []
     for group in client.service.fired_alerts:
         if group.name == "-":
             continue
         rows.extend(_firing_rows(group))
+    rows = filter_by_name(rows, name_filter, name_of=lambda r: str(r["rule"]))
+    rows = page_slice(rows, limit=limit, offset=offset)
     output.render(ctx, rows, empty="No fired alerts.")
 
 

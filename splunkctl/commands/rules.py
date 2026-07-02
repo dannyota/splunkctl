@@ -128,12 +128,6 @@ rules_group.add_command(import_rules)
 
 @rules_group.command("list")
 @click.option(
-    "--filter",
-    "name_filter",
-    default=None,
-    help="Case-insensitive name substring filter.",
-)
-@click.option(
     "--app",
     default=None,
     help="Only saved searches in this app (default: current namespace, which "
@@ -144,13 +138,16 @@ rules_group.add_command(import_rules)
     default=None,
     help="Only saved searches owned by this user (default: current namespace).",
 )
+@common.list_options
 @click.pass_context
 def list_rules(
     ctx: click.Context,
-    name_filter: str | None,
     *,
     app: str | None,
     owner: str | None,
+    limit: int | None,
+    offset: int,
+    name_filter: str | None,
 ) -> None:
     """List all saved searches."""
     client = get_client(ctx)
@@ -160,10 +157,12 @@ def list_rules(
         kwargs["owner"] = owner if owner is not None else "-"
     elif owner is not None:
         kwargs["owner"] = owner
-    items = client.service.saved_searches.list(**kwargs)
-    if name_filter:
-        needle = name_filter.lower()
-        items = [ss for ss in items if needle in ss.name.lower()]
+    items = common.fetch_page(
+        lambda **pg: client.service.saved_searches.list(**kwargs, **pg),
+        limit=limit,
+        offset=offset,
+        name_filter=name_filter,
+    )
     rows = [_summarize(ss) for ss in items]
     output.render(ctx, rows, empty="No saved searches found.")
 

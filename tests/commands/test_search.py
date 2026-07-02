@@ -146,7 +146,7 @@ def test_list_jobs(mock_gc: MagicMock) -> None:
     }
 
     mock_svc = MagicMock()
-    mock_svc.jobs.__iter__ = MagicMock(return_value=iter([mock_job]))
+    mock_svc.jobs.list.return_value = [mock_job]
     mock_gc.return_value.service = mock_svc
 
     runner = CliRunner()
@@ -154,6 +154,8 @@ def test_list_jobs(mock_gc: MagicMock) -> None:
     assert result.exit_code == 0
     assert "1234567890.1" in result.output
     assert "DONE" in result.output
+    # default stays a bare fetch — no count/offset kwargs
+    mock_svc.jobs.list.assert_called_once_with()
 
 
 @patch("splunkctl.commands.search.JSONResultsReader")
@@ -433,7 +435,7 @@ def test_jobs_includes_owner_and_spl(mock_gc: MagicMock) -> None:
     }
     mock_job.access = {"owner": "splunk", "app": "search", "sharing": "user"}
     mock_svc = MagicMock()
-    mock_svc.jobs.__iter__ = MagicMock(return_value=iter([mock_job]))
+    mock_svc.jobs.list.return_value = [mock_job]
     mock_gc.return_value.service = mock_svc
 
     result = CliRunner().invoke(cli, ["--json", "search", "jobs"])

@@ -7,6 +7,7 @@ import click
 
 from splunkctl import guard, output
 from splunkctl.client import get_client
+from splunkctl.commands.common import fetch_page, list_options
 
 
 @click.group("lookups")
@@ -16,11 +17,24 @@ def lookups_group() -> None:
 
 @lookups_group.command("list")
 @click.option("--app", default="-", help="Splunk app context (default: all).")
+@list_options
 @click.pass_context
-def list_lookups(ctx: click.Context, *, app: str) -> None:
+def list_lookups(
+    ctx: click.Context,
+    *,
+    app: str,
+    limit: int | None,
+    offset: int,
+    name_filter: str | None,
+) -> None:
     """List lookup table files."""
     client = get_client(ctx)
-    items = client.service.lookup_table_files.list(app=app, owner="-")
+    items = fetch_page(
+        lambda **pg: client.service.lookup_table_files.list(app=app, owner="-", **pg),
+        limit=limit,
+        offset=offset,
+        name_filter=name_filter,
+    )
     rows: list[dict[str, Any]] = [
         {
             "name": lk.name,

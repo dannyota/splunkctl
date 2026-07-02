@@ -7,6 +7,7 @@ from splunklib.client import OperationError
 
 from splunkctl import guard, output
 from splunkctl.client import get_client
+from splunkctl.commands.common import fetch_page, list_options
 
 _LIST_FIELDS = (
     "datatype",
@@ -49,11 +50,24 @@ def indexes_group() -> None:
 
 
 @indexes_group.command("list")
+@list_options
 @click.pass_context
-def list_indexes(ctx: click.Context) -> None:
+def list_indexes(
+    ctx: click.Context,
+    *,
+    limit: int | None,
+    offset: int,
+    name_filter: str | None,
+) -> None:
     """List all indexes."""
     client = get_client(ctx)
-    rows = [_index_row(idx) for idx in client.service.indexes.list()]
+    items = fetch_page(
+        client.service.indexes.list,
+        limit=limit,
+        offset=offset,
+        name_filter=name_filter,
+    )
+    rows = [_index_row(idx) for idx in items]
     output.render(ctx, rows)
 
 

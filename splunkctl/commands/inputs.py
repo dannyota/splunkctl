@@ -6,6 +6,7 @@ import click
 
 from splunkctl import guard, output
 from splunkctl.client import get_client
+from splunkctl.commands.common import filter_by_name, list_options, page_slice
 
 VALID_KINDS = ("monitor", "tcp", "udp", "script", "http")
 
@@ -40,13 +41,27 @@ def inputs_group() -> None:
     default=None,
     help="Filter by input kind.",
 )
+@list_options
 @click.pass_context
-def list_inputs(ctx: click.Context, *, kind: str | None) -> None:
-    """List data inputs."""
+def list_inputs(
+    ctx: click.Context,
+    *,
+    kind: str | None,
+    limit: int | None,
+    offset: int,
+    name_filter: str | None,
+) -> None:
+    """List data inputs.
+
+    --filter/--limit/--offset apply client-side, after the --kind filter
+    (the SDK inputs collection is a union across input kinds).
+    """
     client = get_client(ctx)
     rows = [_input_row(i) for i in client.service.inputs.list()]
     if kind:
         rows = [r for r in rows if r["kind"] == kind]
+    rows = filter_by_name(rows, name_filter, name_of=lambda r: str(r["name"]))
+    rows = page_slice(rows, limit=limit, offset=offset)
     output.render(ctx, rows)
 
 

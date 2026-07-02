@@ -6,7 +6,7 @@ import click
 
 from splunkctl import guard, output
 from splunkctl.client import get_client
-from splunkctl.commands.common import parse_set
+from splunkctl.commands.common import fetch_page, list_options, parse_set
 
 _MAX_CAPS = 5
 
@@ -82,11 +82,23 @@ def users_group() -> None:
 
 
 @users_group.command("list")
+@list_options
 @click.pass_context
-def list_users(ctx: click.Context) -> None:
+def list_users(
+    ctx: click.Context,
+    *,
+    limit: int | None,
+    offset: int,
+    name_filter: str | None,
+) -> None:
     """List all users."""
     client = get_client(ctx)
-    users = client.service.users.list()
+    users = fetch_page(
+        client.service.users.list,
+        limit=limit,
+        offset=offset,
+        name_filter=name_filter,
+    )
     rows = [_user_row(u) for u in users]
     output.render(ctx, rows, empty="No users found.")
 
@@ -110,12 +122,24 @@ def get_user(ctx: click.Context, name: str) -> None:
 
 
 @users_group.group("roles", invoke_without_command=True)
+@list_options
 @click.pass_context
-def roles_group(ctx: click.Context) -> None:
+def roles_group(
+    ctx: click.Context,
+    *,
+    limit: int | None,
+    offset: int,
+    name_filter: str | None,
+) -> None:
     """Manage roles (bare invocation lists all roles)."""
     if ctx.invoked_subcommand is None:
         client = get_client(ctx)
-        roles = client.service.roles.list()
+        roles = fetch_page(
+            client.service.roles.list,
+            limit=limit,
+            offset=offset,
+            name_filter=name_filter,
+        )
         truncate = output.is_table(ctx)
         rows = [_role_row(r, truncate=truncate) for r in roles]
         output.render(ctx, rows, empty="No roles found.")

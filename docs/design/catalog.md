@@ -22,6 +22,9 @@ command group, updated in the same commit that moves it forward.
 
 ## Command groups
 
+All list surfaces accept uniform `--limit`/`--offset`/`--filter` options
+(filter first, then paging; defaults fetch everything) — see SKILL.md.
+
 | Group | Status | Subcommands |
 |---|---|---|
 | `config` | ✅ built | init, show, test |

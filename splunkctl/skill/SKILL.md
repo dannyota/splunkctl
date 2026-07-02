@@ -60,6 +60,28 @@ Token auth: set `SPLUNK_TOKEN` for service-account access without a password.
   rejected the request, etc.), 2 = usage error (missing/invalid flags or
   arguments — Click rejects before any request is made). Dry-run exits 0.
 
+## List paging & filtering
+
+Every list surface (`rules list`, `alerts list`, `dashboards list`,
+`indexes list`, `inputs list`, `lookups list`, `hec list`, `apps list`,
+`users list`, `users roles`, `parsers sourcetypes`, `parsers extractions`,
+`search jobs`) accepts three uniform options:
+
+| Option | Meaning |
+|---|---|
+| `--limit N` | Return at most N entries (N ≥ 1; default: all) |
+| `--offset N` | Skip the first N entries (N ≥ 0) |
+| `--filter STR` | Case-insensitive name substring, applied before paging |
+
+- **Defaults are complete.** Without flags, every list fetches the entire
+  collection — there is no hidden page size. An unflagged `rules list
+  --app -` or `users list` is a full inventory.
+- **Order**: `--filter` narrows first; `--limit`/`--offset` then page the
+  filtered set.
+- `--filter` matches the name column (`search jobs` matches the sid;
+  `alerts list` matches the rule name and pages firing rows).
+- Existing flags compose: `rules list --app X --filter beacon --limit 10`.
+
 ## Commands
 
 ### Doctor
@@ -109,7 +131,7 @@ splunkctl rules enable 'My Rule' --yes
 splunkctl rules disable 'My Rule' --yes
 splunkctl rules share 'My Rule' --sharing app --yes
 splunkctl rules history 'My Rule'
-splunkctl rules list --filter 'disabled=1'   # filter by key=value
+splunkctl rules list --filter mitre          # name substring (case-insensitive)
 splunkctl rules export --path detections.yml
 splunkctl rules export --path detections.yml --name 'My Rule'
 splunkctl rules import --path detections.yml --yes

@@ -8,7 +8,13 @@ import click
 
 from splunkctl import guard, output
 from splunkctl.client import get_client
-from splunkctl.commands.common import parse_set
+from splunkctl.commands.common import (
+    fetch_page,
+    filter_by_name,
+    list_options,
+    page_slice,
+    parse_set,
+)
 from splunkctl.commands.parsers_io import export_parsers, import_parsers
 
 
@@ -135,21 +141,19 @@ def unset_keys(
 
 
 @parsers_group.command("sourcetypes")
-@click.option(
-    "--filter",
-    "name_filter",
-    default=None,
-    help="Case-insensitive name substring filter.",
-)
+@list_options
 @click.pass_context
-def sourcetypes(ctx: click.Context, name_filter: str | None) -> None:
+def sourcetypes(
+    ctx: click.Context,
+    *,
+    limit: int | None,
+    offset: int,
+    name_filter: str | None,
+) -> None:
     """List source types from props.conf."""
     client = get_client(ctx)
     conf = client.service.confs["props"]
-    stanzas = conf.list()
-    if name_filter:
-        needle = name_filter.lower()
-        stanzas = [s for s in stanzas if needle in s.name.lower()]
+    stanzas = fetch_page(conf.list, limit=limit, offset=offset, name_filter=name_filter)
     rows: list[dict[str, Any]] = [
         {
             "name": s.name,
@@ -250,23 +254,38 @@ def reload_confs(ctx: click.Context, conf_name: str) -> None:
 
 @parsers_group.command("extractions")
 @click.option("--sourcetype", default=None, help="Filter by name substring.")
+@list_options
 @click.pass_context
-def extractions(ctx: click.Context, sourcetype: str | None) -> None:
+def extractions(
+    ctx: click.Context,
+    *,
+    sourcetype: str | None,
+    limit: int | None,
+    offset: int,
+    name_filter: str | None,
+) -> None:
     """List field extractions from transforms.conf."""
     client = get_client(ctx)
     conf = client.service.confs["transforms"]
-    rows: list[dict[str, Any]] = []
-    for stanza in conf.list():
-        if sourcetype and sourcetype not in stanza.name:
-            continue
-        rows.append(
-            {
-                "name": stanza.name,
-                "REGEX": stanza.content.get("REGEX", ""),
-                "FORMAT": stanza.content.get("FORMAT", ""),
-                "DEST_KEY": stanza.content.get("DEST_KEY", ""),
-            }
+    if sourcetype is None:
+        stanzas = fetch_page(
+            conf.list, limit=limit, offset=offset, name_filter=name_filter
         )
+    else:
+        # --sourcetype keeps its client-side substring semantics; paging
+        # then applies to the filtered set.
+        stanzas = [s for s in conf.list() if sourcetype in s.name]
+        stanzas = filter_by_name(stanzas, name_filter)
+        stanzas = page_slice(stanzas, limit=limit, offset=offset)
+    rows: list[dict[str, Any]] = [
+        {
+            "name": stanza.name,
+            "REGEX": stanza.content.get("REGEX", ""),
+            "FORMAT": stanza.content.get("FORMAT", ""),
+            "DEST_KEY": stanza.content.get("DEST_KEY", ""),
+        }
+        for stanza in stanzas
+    ]
     output.render(ctx, rows)
 
 

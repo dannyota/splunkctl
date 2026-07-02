@@ -7,6 +7,7 @@ import click
 
 from splunkctl import guard, output
 from splunkctl.client import get_client
+from splunkctl.commands.common import fetch_page, list_options
 
 _APP_FIELDS = ("label", "version", "visible", "disabled", "author", "description")
 
@@ -37,12 +38,21 @@ def apps_group() -> None:
 
 
 @apps_group.command("list")
+@list_options
 @click.pass_context
-def list_apps(ctx: click.Context) -> None:
+def list_apps(
+    ctx: click.Context,
+    *,
+    limit: int | None,
+    offset: int,
+    name_filter: str | None,
+) -> None:
     """List installed apps."""
     client = get_client(ctx)
     svc = client.service
-    apps = svc.apps.list()
+    apps = fetch_page(
+        svc.apps.list, limit=limit, offset=offset, name_filter=name_filter
+    )
     if not apps:
         output.info("No apps found.")
         return
