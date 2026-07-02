@@ -223,7 +223,8 @@ def alert_options[F: Callable[..., Any]](f: F) -> F:
             "set_pairs",
             multiple=True,
             help="Raw saved-search field KEY=VALUE (repeatable); "
-            "explicit flags win over --set.",
+            "--email-to/--email-subject/--webhook-url conflict with their "
+            "equivalent --set fields (exit 2), not override.",
         ),
     ]
     for opt in reversed(opts):

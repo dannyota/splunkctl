@@ -41,8 +41,12 @@ Setting a flag does not enable its action by itself — Splunk keeps
 `action.*` params inert until the action is named in `--actions`. Passing
 a flag whose action isn't enabled prints a non-blocking advisory
 (`--email-to is set but 'email' is not in --actions`); the command still
-applies. A flag and an equivalent `--set` for the same field is a usage
-error (exit 2) rather than a silent pick — fix the collision instead:
+applies. Note: on `update`, this advisory fires based on the current
+invocation's `--actions`, so it may fire even if the action is already
+enabled server-side (e.g., when rotating an email recipient without
+re-specifying `--actions email`). A flag and an equivalent `--set` for
+the same field is a usage error (exit 2) rather than a silent pick — fix
+the collision instead:
 
 ```bash
 splunkctl rules create --name 'Rule' --search '<SPL>' \

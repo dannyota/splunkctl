@@ -298,86 +298,6 @@ def test_create_email_to_with_email_action_no_advisory(mock_gc: MagicMock) -> No
     assert "Warning" not in result.output
 
 
-# --- E5 integration: missing-field warning suppressed once flag given ---
-
-
-@patch(_PATCH)
-def test_create_email_to_suppresses_e5_missing_field_warning(
-    mock_gc: MagicMock,
-) -> None:
-    svc = MagicMock()
-    mock_gc.return_value.service = svc
-
-    result = CliRunner().invoke(
-        cli,
-        [
-            "--yes",
-            "rules",
-            "create",
-            "--name",
-            "r1",
-            "--search",
-            "index=main",
-            "--actions",
-            "email",
-            "--email-to",
-            "soc@bank.example",
-        ],
-    )
-    assert result.exit_code == 0, result.output
-    assert "requires action.email.to" not in result.output
-
-
-@patch(_PATCH)
-def test_create_webhook_url_suppresses_e5_missing_field_warning(
-    mock_gc: MagicMock,
-) -> None:
-    svc = MagicMock()
-    mock_gc.return_value.service = svc
-
-    result = CliRunner().invoke(
-        cli,
-        [
-            "--yes",
-            "rules",
-            "create",
-            "--name",
-            "r1",
-            "--search",
-            "index=main",
-            "--actions",
-            "webhook",
-            "--webhook-url",
-            "https://hooks.example/x",
-        ],
-    )
-    assert result.exit_code == 0, result.output
-    assert "requires action.webhook.param.url" not in result.output
-
-
-@patch(_PATCH)
-def test_create_email_action_without_email_to_still_warns_e5(
-    mock_gc: MagicMock,
-) -> None:
-    """Sanity check: without the flag, E5's own warning is untouched."""
-    result = CliRunner().invoke(
-        cli,
-        [
-            "rules",
-            "create",
-            "--name",
-            "r1",
-            "--search",
-            "index=main",
-            "--actions",
-            "email",
-        ],
-    )
-    assert result.exit_code == 0
-    assert "requires action.email.to" in result.output
-    mock_gc.assert_not_called()
-
-
 # --- update path ---
 
 
@@ -446,24 +366,96 @@ def test_update_email_to_without_email_action_warns(mock_gc: MagicMock) -> None:
     mock_gc.assert_not_called()  # advisory alone stays offline, like other dry runs
 
 
-@patch(_PATCH)
-def test_update_email_to_suppresses_e5_missing_field_warning(
-    mock_gc: MagicMock,
-) -> None:
-    ss = _mock_update_ss()
-    mock_gc.return_value.service.saved_searches.__getitem__.return_value = ss
+# --- flag + UNRELATED --set must NOT error (conflict only on same field) ---
 
+
+@patch(_PATCH)
+def test_create_flag_and_unrelated_set_succeeds(mock_gc: MagicMock) -> None:
+    """Flag and --set for DIFFERENT action fields must succeed."""
+    svc = MagicMock()
+    mock_gc.return_value.service = svc
+
+    result = CliRunner().invoke(
+        cli,
+        [
+            "--yes",
+            "rules",
+            "create",
+            "--name",
+            "r1",
+            "--search",
+            "index=main",
+            "--actions",
+            "email",
+            "--email-to",
+            "a@b",
+            "--set",
+            "action.email.cc=c@d",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    _, kwargs = svc.saved_searches.create.call_args
+    assert kwargs["action.email.to"] == "a@b"
+    assert kwargs["action.email.cc"] == "c@d"
+
+
+# --- update: conflicts on --email-subject and --webhook-url ---
+
+
+def test_update_email_subject_conflicts_with_set() -> None:
     result = CliRunner().invoke(
         cli,
         [
             "rules",
             "update",
             "r1",
-            "--actions",
-            "email",
-            "--email-to",
-            "soc@bank.example",
+            "--email-subject",
+            "a",
+            "--set",
+            "action.email.subject=b",
         ],
     )
-    assert result.exit_code == 0, result.output
-    assert "requires action.email.to" not in result.output
+    assert result.exit_code == 2
+    assert "--email-subject conflicts with --set action.email.subject" in result.output
+
+
+def test_update_webhook_url_conflicts_with_set() -> None:
+    result = CliRunner().invoke(
+        cli,
+        [
+            "rules",
+            "update",
+            "r1",
+            "--webhook-url",
+            "https://a",
+            "--set",
+            "action.webhook.param.url=https://b",
+        ],
+    )
+    assert result.exit_code == 2
+    assert (
+        "--webhook-url conflicts with --set action.webhook.param.url" in result.output
+    )
+
+
+# --- empty-value rejection for --email-subject and --webhook-url ---
+
+
+def test_create_email_subject_empty_rejected() -> None:
+    result = CliRunner().invoke(
+        cli,
+        ["rules", "create", "--name", "r1", "--search", "x", "--email-subject", ""],
+    )
+    assert result.exit_code == 2
+    assert "--email-subject" in result.output
+    assert "empty" in result.output
+
+
+def test_create_webhook_url_empty_rejected() -> None:
+    result = CliRunner().invoke(
+        cli,
+        ["rules", "create", "--name", "r1", "--search", "x", "--webhook-url", ""],
+    )
+    assert result.exit_code == 2
+    assert "--webhook-url" in result.output
+    assert "empty" in result.output
