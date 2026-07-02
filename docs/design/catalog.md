@@ -36,7 +36,7 @@ All list surfaces accept uniform `--limit`/`--offset`/`--filter` options
 | `dashboards` | ✅ built | list (type column), get (--definition), create (--type classic/studio/auto, --sharing), update (diff preview), delete, export (--definition, --all --dir), share |
 | `indexes` | ✅ built | list, get, create, update, delete, clean, reload |
 | `inputs` | ✅ built | list, get, create, update, delete, enable, disable |
-| `lookups` | ✅ built | list, get, upload, update, download, delete |
+| `lookups` | ✅ built | list, get, upload, update, download, delete, define (--file/--collection), auto (LOOKUP-* wiring), definitions |
 | `hec` | ✅ built | list, get, create (--set), delete, enable, disable, settings (--enable/--disable), send |
 | `parsers` | ✅ built | sourcetypes, get (--key), set, unset, create, update, delete, reload |
 | `parsers import/export` | ✅ built | YAML round-trip for props/transforms stanzas |

@@ -357,7 +357,29 @@ splunkctl lookups update my_lookup.csv --file updated.csv --app search --yes
 splunkctl lookups download my_lookup.csv --app search
 splunkctl lookups download my_lookup.csv --app search --out local.csv
 splunkctl lookups delete my_lookup.csv --app search --yes
+
+splunkctl lookups define my_def --file my_lookup.csv --yes       # transforms.conf
+splunkctl lookups define my_def --collection my_coll --yes       # kvstore-backed
+splunkctl lookups auto my_def --sourcetype my_st \
+    --input host --output owner --yes                            # props.conf LOOKUP-*
+splunkctl lookups definitions                                    # list transforms.conf lookup stanzas
 ```
+
+Uploading a table file makes it exist server-side; it isn't a usable
+*lookup* until `define` binds a name to it (transforms.conf) and,
+usually, `auto` wires that name onto a sourcetype (props.conf
+`LOOKUP-<name> = ...`) so matching events enrich automatically with no
+`| lookup` in the SPL. Both are guarded, both delegate to `conf_ops`
+(no hand-rolled SDK conf access). `define` requires exactly one of
+`--file`/`--collection` (else exit 2) and warns, without blocking, if
+`--file` names a table that doesn't exist yet in that app. `auto`
+requires at least one `--input` and one `--output` (else exit 2, both
+repeatable); `--input FIELD[:LOOKUP_FIELD]` gives the event field first
+and the lookup table's column second only if it differs;
+`--output LOOKUP_FIELD[:EVENT_FIELD]` gives the lookup column first and
+the event-side rename second. `--overwrite` (default) emits `OUTPUT`;
+`--no-overwrite` emits `OUTPUTNEW`. Full define -> auto -> enrich
+worked example: `docs/guides/lookups.md`.
 
 ### KV store (collections + data CRUD)
 
@@ -399,9 +421,9 @@ a silent failure. `export`/`import` round-trip JSONL with `_key`
 preserved, so re-importing an export upserts onto the same documents
 (`batch_save` semantics). A raw collection name isn't automatically
 usable via `| inputlookup` — that needs a lookup *definition*
-(`transforms.conf`) binding the collection to a lookup name, which H4
-(lookup definitions & automatic lookups) will wire up; until then define
-it manually via Splunk Web.
+(`transforms.conf`) binding the collection to a lookup name:
+`splunkctl lookups define <name> --collection <collection> --yes` (see
+**Lookups** above).
 
 ### HEC (HTTP Event Collector)
 
@@ -776,6 +798,28 @@ splunkctl search upload --path firewall.log --yes
 splunkctl lookups download hosts.csv --app search --out hosts.csv
 # Edit hosts.csv locally...
 splunkctl lookups update hosts.csv --file hosts.csv --app search --yes
+```
+
+### Wire an automatic lookup (upload -> define -> auto -> enrich)
+
+```bash
+# 1. Upload the table file
+splunkctl lookups upload threat_indicators.csv --file threat_indicators.csv --yes
+
+# 2. Define: bind a name to it (or --collection for a KV store-backed one)
+splunkctl lookups define threat_intel --file threat_indicators.csv --yes
+
+# 3. Auto: wire the definition onto every event of a sourcetype
+splunkctl lookups auto threat_intel --sourcetype firewall_logs \
+    --input dest_ip:ip --output threat_level --yes
+
+# 4. Verify: events of that sourcetype now carry threat_level, no
+# `| lookup` needed in the search
+splunkctl search oneshot 'sourcetype=firewall_logs | table dest_ip threat_level' --limit 10
+
+# Confirm the written stanzas directly if there's no live traffic yet:
+splunkctl conf get transforms threat_intel
+splunkctl conf get props firewall_logs
 ```
 
 ### Check index health

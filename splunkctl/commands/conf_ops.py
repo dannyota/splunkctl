@@ -52,6 +52,7 @@ def set_keys(
     stanza: str,
     kv: dict[str, str],
     *,
+    app: str | None = None,
     sharing: str | None = None,
     create_missing: bool = True,
 ) -> tuple[Any, bool]:
@@ -62,6 +63,17 @@ def set_keys(
     sharing, since user-private stanzas do not apply at index time for
     props/transforms and are surprising defaults elsewhere too.
 
+    ``app``, when given, scopes both the existing-stanza lookup (the same
+    wildcard-owner namespace tuple :func:`get_stanza` uses) and a newly
+    created stanza's namespace (passed straight through to
+    ``Collection.create`` as a namespace kwarg, the same way
+    ``dashboards create`` picks its target app). This is the one path
+    through ``conf_ops`` that lets a mutation choose *which app* a
+    stanza lands in — every other caller (``parsers set``, ``conf set``,
+    ``macros set``) writes to the connection's current default
+    namespace. Omitted (the default), behavior is unchanged from before
+    ``app`` existed.
+
     Returns:
         The stanza entity and whether it was created.
 
@@ -70,13 +82,20 @@ def set_keys(
     """
     conf = client.service.confs[conf_name]
     try:
-        target = conf[stanza]
+        target = (
+            conf[stanza]
+            if app is None
+            else conf[stanza, SimpleNamespace(owner="-", app=app)]
+        )
         target.update(**kv)
         created = False
     except KeyError:
         if not create_missing:
             raise
-        target = conf.create(stanza, **kv)
+        if app:
+            target = conf.create(stanza, app=app, **kv)
+        else:
+            target = conf.create(stanza, **kv)
         created = True
 
     if sharing or created:
