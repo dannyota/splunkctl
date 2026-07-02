@@ -426,11 +426,12 @@ def test_jobs_includes_owner_and_spl(mock_gc: MagicMock) -> None:
     mock_job.sid = "444.1"
     mock_job.content = {
         "dispatchState": "DONE",
-        "author": "admin",
+        "author": None,
         "search": "search index=main | stats count",
         "eventCount": "10",
         "runDuration": "0.5",
     }
+    mock_job.access = {"owner": "splunk", "app": "search", "sharing": "user"}
     mock_svc = MagicMock()
     mock_svc.jobs.__iter__ = MagicMock(return_value=iter([mock_job]))
     mock_gc.return_value.service = mock_svc
@@ -438,5 +439,5 @@ def test_jobs_includes_owner_and_spl(mock_gc: MagicMock) -> None:
     result = CliRunner().invoke(cli, ["--json", "search", "jobs"])
     assert result.exit_code == 0
     data = json.loads(result.output)
-    assert data[0]["owner"] == "admin"
+    assert data[0]["owner"] == "splunk"
     assert "stats count" in data[0]["spl"]

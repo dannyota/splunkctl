@@ -204,6 +204,7 @@ def list_jobs(ctx: click.Context) -> None:
     rows: list[dict[str, Any]] = []
     for job in svc.jobs:
         content: dict[str, Any] = dict(job.content)
+        acl: dict[str, Any] = job.access
         dur = content.get("runDuration", "")
         if isinstance(dur, (float, str)):
             try:
@@ -215,7 +216,7 @@ def list_jobs(ctx: click.Context) -> None:
             {
                 "sid": job.sid,
                 "status": content.get("dispatchState", ""),
-                "owner": content.get("author", ""),
+                "owner": acl.get("owner", ""),
                 "spl": spl[:60] + ("…" if len(spl) > 60 else ""),
                 "event_count": content.get("eventCount", 0),
                 "run_duration": dur,
