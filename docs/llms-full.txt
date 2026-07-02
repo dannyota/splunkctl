@@ -1,0 +1,2457 @@
+# splunkctl — full documentation
+
+> CLI tool to operate Splunk Enterprise as code — for SOC teams, detection engineers, and AI agents.
+
+---
+
+## Source: https://splunkctl.danny.vn/#/guides/install
+
+# Install
+
+## From GitHub
+
+```bash
+pip install git+https://github.com/dannyota/splunkctl
+```
+
+This pulls the forked SDK (`splunkctl` branch) automatically as a
+dependency.
+
+## From source
+
+```bash
+git clone https://github.com/dannyota/splunkctl.git
+cd splunkctl
+pip install -e .
+```
+
+## Verify
+
+```bash
+splunkctl --version
+splunkctl doctor           # check connection + auth + permissions
+```
+
+## Requirements
+
+- Python 3.13+
+- A running Splunk Enterprise instance with the REST API enabled (port 8089)
+
+---
+
+## Source: https://splunkctl.danny.vn/#/guides/configure
+
+# Configure
+
+## Interactive setup
+
+```bash
+splunkctl config init
+```
+
+Prompts for host, port, auth method (token or username/password), tests the
+connection, and writes `~/.splunkctl/config.yaml` with `0600` permissions.
+
+## Config file
+
+Location: `~/.splunkctl/config.yaml`
+
+```yaml
+host: "localhost"
+port: 8089
+scheme: "https"
+username: "admin"
+password: ""            # optional, can use token instead
+token: ""               # bearer token (preferred)
+verify_ssl: false       # self-signed certs common in Splunk
+app: "search"           # default app context
+owner: "nobody"         # default owner context
+```
+
+## Profiles (dev/UAT/prod)
+
+For more than one Splunk instance, add a `profiles:` map and a `current:`
+pointer instead of the flat keys above:
+
+```yaml
+profiles:
+  dev:
+    host: "dev.splunk.internal"
+    username: "admin"
+    password: "devpass"
+  uat:
+    host: "uat.splunk.internal"
+    token: "..."
+  prod:
+    host: "prod.splunk.internal"
+    token: "..."
+current: "uat"           # active profile when nothing else selects one
+```
+
+```bash
+splunkctl config init --profile uat ...   # create/update one named profile
+splunkctl config use uat                  # point 'current' at it (no connectivity test)
+splunkctl config show                     # active profile (redacted) + other names
+splunkctl config show --profile prod      # show a specific profile without switching
+splunkctl --profile prod rules list       # override for a single invocation
+```
+
+**Selection precedence**: `--profile <name>` global flag > `current:`
+pointer > `default`.
+
+**Legacy files keep working.** A plain flat file (no `profiles:` key) is
+treated as an implicit profile named `default` — nothing to migrate. Bare
+`config init` writes that flat shape — unless the destination file already
+has a `profiles:` key, in which case it folds the new values into
+`profiles.default` instead, leaving sibling profiles and `current`
+untouched (bare `config init` never clobbers an existing multi-profile
+file). The first time you run `config init --profile <name>` against a
+legacy file, it's upgraded to the `profiles:` schema in place: the old flat
+keys move under `profiles.default`, the new named profile is added
+alongside it, and file permissions stay `0600`.
+
+**Guard banner.** Every dry-run preview and `--yes` confirmation prints
+which instance is about to be mutated —
+`[DRY RUN] ... (profile: uat @ uat.splunk.internal:8089)` — so switching
+between dev/UAT/prod never happens silently. The banner is built from local
+config only; it never opens a connection.
+
+## Environment variables
+
+| Variable | Maps to |
+|---|---|
+| `SPLUNK_HOST` | `host` |
+| `SPLUNK_PORT` | `port` |
+| `SPLUNK_TOKEN` | `token` |
+| `SPLUNK_USER` | `username` |
+| `SPLUNK_PASS` | `password` |
+
+Env vars override fields of whichever profile is selected — same as they
+override the flat config today.
+
+## Resolution priority
+
+1. CLI flags (`--host`, `--port`, `--token`)
+2. Environment variables
+3. Profile (config file)
+
+## Verify
+
+```bash
+splunkctl config show    # display config (secrets redacted)
+splunkctl config test    # test connectivity + auth
+```
+
+---
+
+## Source: https://splunkctl.danny.vn/#/guides/doctor
+
+# Doctor
+
+Diagnose connection, authentication, server health, and user permissions
+in a single command.
+
+## Why this matters
+
+`doctor` is the first command to run on a fresh setup, the first command
+an LLM agent should call to bootstrap its session, and the fastest way
+to isolate what broke when a previously working instance stops
+responding. It validates every layer of the stack -- network, auth,
+license, permissions, web UI -- so you do not waste time debugging the
+wrong layer.
+
+## Commands
+
+```bash
+splunkctl doctor                  # check everything
+splunkctl doctor --json           # machine-readable output
+```
+
+## What it checks
+
+1. **Connection** -- can we reach the REST API?
+2. **Authentication** -- are credentials valid?
+3. **Server health** -- version, OS, license status
+4. **Permissions** -- 9 key capabilities: `search`, `admin_all_objects`,
+   `edit_user`, `edit_roles`, `edit_tcp`, `edit_monitor`, `list_inputs`,
+   `rest_apps_management`, `change_own_password`
+5. **Web UI** -- is the Splunk Web interface reachable? (needed for
+   lookup upload and app install)
+
+## Exit codes
+
+- `0` -- all checks passed
+- `1` -- one or more checks failed
+
+## Recipes
+
+### First-run validation
+
+After setting credentials in `.env` or `~/.splunkctl/config.yaml`, run
+doctor to confirm everything is wired up:
+
+```bash
+splunkctl doctor
+```
+
+### CI pipeline gate
+
+Fail a pipeline early if the Splunk instance is unreachable or the
+service account lacks required permissions:
+
+```bash
+splunkctl doctor --json || exit 1
+```
+
+### LLM agent bootstrap
+
+An agent should call `doctor --json` at session start, parse the
+result, and abort with a clear message if any check fails:
+
+```bash
+splunkctl doctor --json | jq '.checks[] | select(.status == "FAIL")'
+```
+
+### Isolate a failure layer
+
+When something breaks, `doctor` tells you whether the problem is
+network, auth, license, or permissions -- so you fix the right thing.
+
+---
+
+## Source: https://splunkctl.danny.vn/#/guides/search
+
+# Search
+
+Run SPL queries against a remote Splunk instance from your laptop.
+This is the primary interface for threat hunting, incident response,
+and ad-hoc log analysis without opening Splunk Web.
+
+## Commands
+
+```
+splunkctl search run '<SPL>'              # sync search, wait for results
+splunkctl search export '<SPL>'           # streaming export (large result sets)
+splunkctl search oneshot '<SPL>'          # fire-and-forget, small queries
+splunkctl search jobs                     # list running/recent search jobs
+splunkctl search job <sid>                # check status + fetch results by SID
+splunkctl search cancel <sid> --yes       # kill a running search
+splunkctl search upload --path file --yes # ingest a local file into Splunk
+```
+
+**run** creates a normal job, polls until done, returns results. Use for
+most interactive work -- detection tuning, hunting, triage queries.
+
+**export** streams results without creating a job artifact. Use for bulk
+extraction (e.g. pulling a week of firewall logs into a local file for
+offline analysis). No result-count cap.
+
+**oneshot** is the fastest path for small, read-only queries. No job
+object, no poll loop. Good for counts, stats, and quick checks.
+
+## Common options
+
+| Flag | Default | Notes |
+|---|---|---|
+| `--earliest` | none | Splunk time syntax: `-1h`, `-7d@d`, `2025-01-15T00:00:00` |
+| `--latest` | `now` | Use `@d` to snap to midnight boundaries |
+| `--limit` | 100 | Max rows returned (run/oneshot only; export has no cap) |
+| `--app` | none | App namespace context (e.g. `SplunkEnterpriseSecuritySuite`) |
+
+## Practical examples
+
+Threat hunting -- find brute-force SSH attempts in the last 24 hours:
+
+```bash
+splunkctl search run \
+    'index=auth sourcetype=linux_secure "Failed password" | stats count by src_ip | where count > 20' \
+    --earliest -24h
+```
+
+Incident response -- pull all DNS queries to a suspect domain:
+
+```bash
+splunkctl search export \
+    'index=dns query="*.evil-domain.com" | table _time src_ip query answer' \
+    --earliest -7d | jq . > dns_hits.json
+```
+
+Detection tuning -- test a correlation search before saving it:
+
+```bash
+splunkctl search run \
+    'index=wineventlog EventCode=4625 | stats count by Account_Name, src_ip | where count > 10' \
+    --earliest -1d --limit 500
+```
+
+Quick count -- how many events hit an index today:
+
+```bash
+splunkctl search oneshot 'index=main | stats count' --earliest '@d'
+```
+
+## Time-range tips
+
+- Always scope `--earliest`. Unscoped searches scan all time and are slow.
+- Use snap-to modifiers: `-1d@d` = yesterday midnight, `-1h@h` = top of
+  the previous hour. Reduces bucket scanning.
+- For exports over days/weeks, break into daily chunks to avoid timeouts
+  on heavy indexes.
+
+## Job management
+
+Long-running searches (stats over weeks, large tstats) run async. Check
+on them or kill stragglers:
+
+```bash
+splunkctl search jobs                     # see all active/recent jobs
+splunkctl search job 1719648000.12345     # poll a specific SID
+splunkctl search cancel 1719648000.12345 --yes
+```
+
+## Upload -- ingest local files into remote Splunk
+
+Your laptop has a CSV of threat intel IOCs or sample logs from a vendor.
+Splunk is remote. `upload` reads the local file and pushes it to the
+remote instance via the `receivers/simple` REST endpoint -- no SSH, no
+shared filesystem, no server-side path needed.
+
+Use cases:
+- Push a threat-intel CSV (STIX export, OSINT feed) into a `threat_intel`
+  index for correlation searches.
+- Ingest sample logs from a new data source to build parsing rules
+  (props/transforms) before onboarding the real feed.
+- Replay captured traffic or pcap summaries into Splunk for analysis.
+
+```bash
+splunkctl search upload --path iocs.csv --index threat_intel --sourcetype csv --yes
+splunkctl search upload --path sample_paloalto.log --index sandbox --sourcetype pan:traffic --yes
+splunkctl search upload --path captured.json --index main --host web-prod-03 --yes
+```
+
+Options: `--index` (default `main`), `--sourcetype` (auto if omitted),
+`--source` (defaults to filename), `--host` (host metadata override).
+Dry-run by default; add `--yes` to execute.
+
+## SPL normalization
+
+Bare keywords get `search` prepended automatically. Pipe-leading queries
+and generating commands (`makeresults`, `inputlookup`, `tstats`, etc.)
+pass through unchanged.
+
+---
+
+## Source: https://splunkctl.danny.vn/#/guides/rules
+
+# Detection rules
+
+`splunkctl rules` manages saved searches (detections) over the REST API
+so they can live in git, pass through CI, and deploy across instances.
+
+## Why detection-as-code
+
+- **Version control** -- every SPL change is a commit with author and diff.
+- **Code review** -- detections go through PR review before production.
+- **CI/CD** -- lint and validate in a pipeline before import.
+- **Cross-instance** -- export from prod, import to staging with one command.
+- **Reproducibility** -- rebuild a detection library from a YAML file.
+
+## Commands
+
+```bash
+splunkctl rules list                      # list all saved searches
+splunkctl rules get <name>                # get rule details + SPL
+splunkctl rules create --name 'Rule' --search '<SPL>' \
+    --cron '*/5 * * * *' --actions email --email-to soc@bank.example --yes
+splunkctl rules update <name> --search '<SPL>' --yes
+splunkctl rules delete <name> --yes
+splunkctl rules enable <name> --yes
+splunkctl rules disable <name> --yes
+splunkctl rules history <name>            # run history
+```
+
+### Alert-action flags
+
+`--email-to`, `--email-subject`, and `--webhook-url` are friendly flags for
+the most common alert-action fields, available on both `create` and
+`update`:
+
+| Flag | Field | Requires |
+|---|---|---|
+| `--email-to` | `action.email.to` | `--actions email` to enable |
+| `--email-subject` | `action.email.subject` | `--actions email` to enable |
+| `--webhook-url` | `action.webhook.param.url` | `--actions webhook` to enable |
+
+Setting a flag does not enable its action by itself — Splunk keeps
+`action.*` params inert until the action is named in `--actions`. Passing
+a flag whose action isn't enabled prints a non-blocking advisory
+(`--email-to is set but 'email' is not in --actions`); the command still
+applies. Note: on `update`, this advisory fires based on the current
+invocation's `--actions`, so it may fire even if the action is already
+enabled server-side (e.g., when rotating an email recipient without
+re-specifying `--actions email`). A flag and an equivalent `--set` for
+the same field is a usage error (exit 2) rather than a silent pick — fix
+the collision instead:
+
+```bash
+splunkctl rules create --name 'Rule' --search '<SPL>' \
+    --actions email --email-to soc@bank.example --yes
+
+# usage error: two sources of truth for the same field
+splunkctl rules create --name 'Rule' --search '<SPL>' \
+    --email-to soc@bank.example --set action.email.to=other@bank.example
+```
+
+`--set action.*` remains the escape hatch for any action field without a
+dedicated flag (ES notable/risk params, `action.webhook.param.method`,
+etc.) — see below.
+
+### App-private rules
+
+`list`/`get` default to the current namespace, which does not include
+saved searches private to a specific app (for example, rules shipped by
+an add-on like Splunk_Security_Essentials). Pass `--app` to scope into
+that namespace — the owner is automatically wildcarded, so app-private
+rules owned by any user are included. Add `--owner` only to narrow the
+scope to a single user's rules:
+
+```bash
+splunkctl rules list --app Splunk_Security_Essentials
+splunkctl rules get 'Generate MITRE Detections Lookup' --app Splunk_Security_Essentials
+```
+
+## Detection-as-code workflow
+
+Export from prod, edit in git, import to staging, promote.
+
+```bash
+# 1. Export production detections
+splunkctl rules export --path detections.yml
+# 2. Edit in git -- tune SPL, adjust thresholds, commit, open PR.
+# 3. Import to staging (dry-run first -- always)
+splunkctl rules import --path detections.yml            # preview
+splunkctl rules import --path detections.yml --yes      # apply
+# 4. Promote to prod (same file, different SPLUNK_HOST)
+SPLUNK_HOST=prod.corp splunkctl rules import --path detections.yml --yes
+```
+
+### Filtering and safe imports
+
+```bash
+splunkctl rules export --path ess.yml --app SplunkEnterpriseSecuritySuite
+splunkctl rules export --path brute.yml --name 'Brute Force' --name 'Credential Stuffing'
+splunkctl rules import --path detections.yml --no-update --yes  # new rules only
+```
+
+`--no-update` seeds a fresh instance without clobbering rules analysts
+have tuned in-place. `--name` is repeatable; `--app` filters by app context.
+
+## YAML format reference
+
+```yaml
+- name: "Brute Force - Multiple Failed Logins"
+  search: >
+    index=auth sourcetype=linux_secure action=failure
+    | bin _time span=5m
+    | stats count dc(user) as users values(user) as targets by src
+    | where count > 20 AND users > 3
+  description: "Distributed brute force across multiple accounts"
+  cron_schedule: "*/10 * * * *"
+  is_scheduled: "1"
+  actions: "email,notable"
+  alert.severity: "4"
+  alert.suppress: "1"
+  alert.suppress.period: "1h"
+  alert.suppress.fields: "src"
+  dispatch.earliest_time: "-15m"
+  dispatch.latest_time: "now"
+```
+
+### Supported fields
+
+| Field | Required | Description |
+|---|---|---|
+| `name` | yes | Saved search name (unique per app) |
+| `search` | yes | SPL query |
+| `description` | no | Human-readable summary |
+| `cron_schedule` | no | Cron expression (auto-sets `is_scheduled`) |
+| `is_scheduled` | no | `"1"` to enable scheduling |
+| `disabled` | no | `"1"` to create in disabled state |
+| `actions` | no | Alert actions, comma-separated (`email`, `notable`) |
+| `alert_type` | no | Trigger condition type |
+| `alert.severity` | no | `"1"` (info) through `"6"` (critical) |
+| `alert.suppress` | no | `"1"` to suppress; set `.period` and `.fields` |
+| `alert.track` | no | `"1"` to track triggered alert count |
+| `dispatch.earliest_time` | no | Search window start (e.g. `"-1h"`) |
+| `dispatch.latest_time` | no | Search window end (e.g. `"now"`) |
+| `app` | no | App context (omitted defaults to `search`) |
+
+Any `SavedSearch` REST API attribute can be included -- unknown keys pass
+through as-is.
+
+## Agent usage
+
+LLM agents can drive these commands for detection engineering:
+
+```bash
+# Audit: find unscheduled rules
+splunkctl rules list --json | jq '.[] | select(.is_scheduled == "0")'
+# Export-edit-reimport cycle
+splunkctl rules export --path /tmp/rules.yml
+# (agent edits YAML programmatically)
+splunkctl rules import --path /tmp/rules.yml --yes
+# Create a detection inline
+splunkctl rules create --name 'Lateral Movement - PsExec' \
+    --search 'index=win EventCode=7045 ServiceName="PSEXESVC"' \
+    --cron '*/5 * * * *' --actions notable --yes
+```
+
+`--json` on `list`/`get` gives structured output for parsing. Dry-run
+default prevents accidental mutations -- `--yes` is required to apply.
+
+---
+
+## Source: https://splunkctl.danny.vn/#/guides/alerts
+
+# Alerts
+
+Fired alerts are the SOC's incoming work queue. During an incident, you
+need to see what triggered, when, and at what severity. During planned
+maintenance, you need to suppress noisy rules before they flood the
+on-call channel. After the fact, auditors ask which alerts fired and
+which were suppressed. These commands cover all three workflows.
+
+## Commands
+
+```bash
+splunkctl alerts list                         # list fired alerts
+splunkctl alerts get 'Alert Name'             # details for one alert group
+splunkctl alerts actions                      # list alert action types
+splunkctl alerts suppress 'Alert Name' \
+    --duration 7200 --yes                     # suppress for 2 hours
+```
+
+## Triage during an incident
+
+List all currently fired alerts to see what the environment is telling you.
+Output includes name, trigger count, triggered time, and severity.
+
+```bash
+splunkctl alerts list
+splunkctl alerts get 'Brute Force Login Attempts'
+```
+
+## Check alert action types
+
+See which action types (email, webhook, script, etc.) are configured on
+the instance. Useful before creating or modifying saved searches that
+fire alerts.
+
+```bash
+splunkctl alerts actions
+```
+
+## Suppress during a maintenance window
+
+Suppression is guarded -- dry-run by default. The first command below
+previews the change; the second applies it. Duration is in seconds.
+
+```bash
+splunkctl alerts suppress 'Brute Force Login Attempts' --duration 7200
+splunkctl alerts suppress 'Brute Force Login Attempts' --duration 7200 --yes
+```
+
+Suppress multiple alerts in a loop during a planned outage:
+
+```bash
+for rule in 'Brute Force Login Attempts' 'Failed VPN Auth' 'DNS Exfil'; do
+  splunkctl alerts suppress "$rule" --duration 14400 --yes
+done
+```
+
+## JSON output for scripts and agents
+
+Pass `--json` to get structured output suitable for piping into `jq`,
+feeding into an LLM agent, or storing as audit evidence.
+
+```bash
+splunkctl alerts list --json                          # all fired alerts
+splunkctl alerts list --json | jq '.[] | select(.severity >= 6)'
+splunkctl alerts get 'Brute Force Login Attempts' --json > alert_detail.json
+```
+
+An LLM agent can consume the JSON directly to decide next steps --
+for example, correlating fired alerts with a change window calendar
+or auto-filing tickets for high-severity triggers.
+
+## Options
+
+| Flag | Applies to | Description |
+|------|-----------|-------------|
+| `--duration` | `suppress` | Suppression length in seconds (default 3600) |
+| `--json` | all | Force JSON output regardless of TTY |
+| `--format` | all | Output format: `table`, `json`, `csv`, `jsonl` |
+| `--yes` | `suppress` | Apply the mutation (skip dry-run preview) |
+
+---
+
+## Source: https://splunkctl.danny.vn/#/guides/dashboards
+
+# Dashboards
+
+## Commands
+
+```bash
+splunkctl dashboards list                 # list dashboards
+splunkctl dashboards list --app search    # filter by app
+splunkctl dashboards get <name>           # get definition (XML)
+splunkctl dashboards create --name new_dash --file dash.xml \
+    --app search --yes
+splunkctl dashboards update <name> --file updated.xml \
+    --app search --yes
+splunkctl dashboards delete <name> --app search --yes
+splunkctl dashboards export <name> --out dash.xml
+```
+
+Uses the `Dashboard`/`Dashboards` entity classes from the SDK fork.
+
+---
+
+## Source: https://splunkctl.danny.vn/#/guides/indexes
+
+# Indexes
+
+Create, configure, and manage Splunk indexes.
+
+## Why it matters
+
+Indexes are the storage layer for all Splunk data. Getting them right
+determines retention compliance, search performance, and storage cost.
+Separate indexes let you apply different retention periods (e.g. 90 days
+for threat intel, 1 year for security logs), control access via roles,
+and size capacity per data tier.
+
+## Commands
+
+```bash
+splunkctl indexes list                        # list all indexes
+splunkctl indexes get main                    # full index details
+splunkctl indexes create --name my_index --yes
+splunkctl indexes create --name metrics_idx \
+    --datatype metric --max-size 500 \
+    --frozen-period 604800 --yes              # metrics index
+splunkctl indexes update my_index \
+    --max-size 1000 --yes                     # resize
+splunkctl indexes update my_index \
+    --frozen-period 2592000 --yes             # change retention
+splunkctl indexes delete my_index --yes       # delete
+splunkctl indexes clean my_index --yes        # remove all events
+splunkctl indexes reload --yes                # reload configs
+```
+
+## Practical examples
+
+### Separate indexes for security workloads
+
+```bash
+# Threat intel -- short retention, small volume
+splunkctl indexes create --name threat_intel \
+    --max-size 100 --frozen-period 7776000 --yes   # 90 days
+
+# Security event logs -- long retention, large volume
+splunkctl indexes create --name security_logs \
+    --max-size 5000 --frozen-period 31536000 --yes # 365 days
+```
+
+### Capacity planning
+
+```bash
+# Current size and event counts across all indexes
+splunkctl indexes list --json \
+    | jq '.[] | {name, totalEventCount, currentDBSizeMB, maxTotalDataSizeMB}'
+
+# Find indexes approaching their size limit (over 80% full)
+splunkctl indexes list --json \
+    | jq '.[] | select(.currentDBSizeMB / .maxTotalDataSizeMB > 0.8)
+          | {name, pct_used: (100 * .currentDBSizeMB / .maxTotalDataSizeMB)}'
+```
+
+### Health checks
+
+```bash
+# Indexes with zero events (possibly misconfigured)
+splunkctl indexes list --json \
+    | jq '[.[] | select(.totalEventCount == "0")] | .[].name'
+
+# Verify retention settings match compliance requirements
+splunkctl indexes get security_logs --json \
+    | jq '{frozenTimePeriodInSecs, maxTotalDataSizeMB}'
+```
+
+## Notes
+
+- `--frozen-period` is in seconds (86400 = 1 day, 2592000 = 30 days).
+- `maxTotalDataSizeMB` is a high-water mark; Splunk freezes buckets when
+  the index reaches this limit. Plan for headroom.
+- Deleting an index does not free disk immediately; frozen buckets remain
+  on the filesystem until manually removed from the Splunk server.
+
+---
+
+## Source: https://splunkctl.danny.vn/#/guides/inputs
+
+# Data inputs
+
+Manage monitor, TCP, UDP, script, and HTTP data inputs.
+
+## Why it matters
+
+Inputs control what data enters Splunk -- which log sources, at what
+volume, into which index, with which sourcetype. Misconfigured inputs
+cause parsing failures, license overages, and detection blind spots.
+
+## Commands
+
+```bash
+splunkctl inputs list                         # list all inputs
+splunkctl inputs list --kind monitor          # filter by type
+splunkctl inputs get /var/log/syslog          # get input details
+splunkctl inputs create --name /var/log/app.log \
+    --kind monitor --index main \
+    --sourcetype syslog --yes                 # create monitor input
+splunkctl inputs update /var/log/app.log \
+    --sourcetype json --yes                   # change sourcetype
+splunkctl inputs delete /var/log/app.log --yes
+splunkctl inputs enable /var/log/app.log --yes
+splunkctl inputs disable /var/log/app.log --yes
+```
+
+## Input kinds
+
+`monitor`, `tcp`, `udp`, `script`, `http` (HEC). Use `--kind` to filter
+the list or specify the type when creating.
+
+## Practical examples
+
+### Onboard a new log source
+
+```bash
+# Monitor a new application log, route to a dedicated index
+splunkctl inputs create --name /var/log/webapp/access.log \
+    --kind monitor --index security_logs \
+    --sourcetype access_combined --yes
+
+# Accept syslog over TCP on port 5514
+splunkctl inputs create --name 5514 \
+    --kind tcp --index security_logs \
+    --sourcetype syslog --yes
+```
+
+### Audit and lifecycle
+
+```bash
+# List all monitor inputs and their target indexes
+splunkctl inputs list --kind monitor --json \
+    | jq '.[] | {name, index, sourcetype, disabled}'
+
+# Disable an input during maintenance (no data loss, just paused)
+splunkctl inputs disable /var/log/old_app.log --yes
+
+# Re-enable after maintenance
+splunkctl inputs enable /var/log/old_app.log --yes
+
+# Remove a decommissioned source
+splunkctl inputs delete /var/log/retired_app.log --yes
+```
+
+### Verify data flow
+
+```bash
+# After creating an input, confirm events are arriving
+splunkctl search run 'index=security_logs sourcetype=access_combined
+    | head 5' --earliest -15m
+```
+
+## Notes
+
+- Inputs are managed on the Splunk server via REST API; `splunkctl`
+  does not need filesystem access to the server.
+- Disabling an input stops ingestion but preserves the configuration.
+  Use this for maintenance windows instead of deleting.
+- TCP/UDP inputs bind to a port on the Splunk server. Confirm the port
+  is not already in use before creating.
+
+---
+
+## Source: https://splunkctl.danny.vn/#/guides/lookups
+
+# Lookups
+
+Lookups turn raw events into actionable intelligence. SecOps teams use
+them for threat intel enrichment (IoC feeds correlated at search time),
+asset/identity lists (mapping IPs to owners for triage), and GeoIP
+databases (flagging logins from unexpected regions). Keeping these tables
+current is the difference between a detection that fires and one that
+misses.
+
+## Commands
+
+```bash
+splunkctl lookups list                    # list lookup files
+splunkctl lookups list --app search       # filter by app
+splunkctl lookups get <name>              # get lookup metadata
+splunkctl lookups upload <name> --file data.csv --app search --yes
+splunkctl lookups update <name> --file updated.csv --app search --yes
+splunkctl lookups download <name> --app search
+splunkctl lookups download <name> --app search --out local.csv
+splunkctl lookups delete <name> --app search --yes
+
+splunkctl lookups define <defname> --file <file.csv> --yes       # transforms.conf
+splunkctl lookups define <defname> --collection <coll> --yes     # kvstore-backed
+splunkctl lookups auto <defname> --sourcetype <st> \
+    --input <field> --output <field> --yes                       # props.conf LOOKUP-*
+splunkctl lookups definitions                                    # list transforms.conf lookup stanzas
+```
+
+## Lookup definitions & automatic lookups
+
+Uploading a CSV makes a table file that exists on the server, but Splunk
+doesn't know it's a *lookup* until two more things are wired up:
+
+1. A **lookup definition** (`transforms.conf`) binds a name to the table
+   file (or, for a KV store collection, to `external_type=kvstore` +
+   `collection=<name>`) -- this is what `| lookup <defname> ...` and
+   `| inputlookup <defname>` reference.
+2. An **automatic lookup** (`props.conf` `LOOKUP-*`) wires that
+   definition onto a sourcetype so every matching event gets enriched
+   at search time, with no `| lookup` needed in the SPL at all.
+
+`lookups define` writes the first; `lookups auto` writes the second.
+Both are guarded (dry-run by default, `--yes` to apply) and both
+delegate the actual conf write to the same `conf_ops` core `conf`/
+`parsers`/`macros` use -- there's exactly one implementation of the SDK
+plumbing.
+
+```bash
+# 1. Define: bind a name to the uploaded table
+splunkctl lookups define threat_intel --file threat_indicators.csv --yes
+
+# KV store collection instead of a table file (G3-created collections
+# aren't queryable via `| inputlookup` until they have a definition):
+splunkctl lookups define asset_intel --collection assets --yes
+
+# Optional tuning: how strict the match is, and what to do when it misses
+splunkctl lookups define threat_intel --file threat_indicators.csv \
+    --max-matches 1 --case-sensitive --default-match unknown --yes
+
+# 2. Auto: wire the definition onto a sourcetype
+splunkctl lookups auto threat_intel --sourcetype firewall_logs \
+    --input dest_ip:ip --output threat_level --output threat_category --yes
+
+# 3. Enrich: events of that sourcetype now carry threat_level/
+# threat_category automatically, no `| lookup` required
+splunkctl search oneshot 'sourcetype=firewall_logs | table dest_ip threat_level threat_category'
+
+# Read side: what lookup definitions already exist
+splunkctl lookups definitions
+splunkctl lookups definitions --app SA-ThreatIntelligence
+```
+
+`--input`/`--output` are repeatable (at least one of each is required,
+else a usage error/exit 2) and take an optional `FIELD:RENAME` form:
+`--input` is `event_field[:lookup_table_field]` (the field you already
+have, then the lookup table's column name only if it differs);
+`--output` is `lookup_table_field[:event_field]` (the column you're
+pulling in, then what to call it on the event). `--overwrite`
+(default) emits `OUTPUT` (always overwrite); `--no-overwrite` emits
+`OUTPUTNEW` (only fill fields the event doesn't already have).
+`lookups define` requires exactly one of `--file`/`--collection` (else
+exit 2), and warns -- without blocking -- if `--file` names a table that
+doesn't exist yet in that app.
+
+## Remote upload
+
+Upload works from your laptop -- no SSH, no SCP, no server filesystem
+access. The CLI uploads through the Splunk Web UI form handler (same
+mechanism the browser uses), so you can push files to a remote instance
+across the network. Supports CSV and mmdb (GeoIP) files.
+
+```bash
+# Push a threat intel feed update
+splunkctl lookups upload threat_indicators.csv \
+    --file threat_indicators.csv --app SA-ThreatIntelligence --yes
+
+# Refresh the asset/identity list
+splunkctl lookups update asset_lookup.csv \
+    --file asset_lookup.csv --app SA-IdentityManagement --yes
+
+# Update a GeoIP database
+splunkctl lookups upload GeoIP2-City.mmdb --file GeoIP2-City.mmdb --yes
+
+# Download the current lookup for diff before updating
+splunkctl lookups download threat_indicators.csv \
+    --app SA-ThreatIntelligence --out current_threats.csv
+```
+
+## Automating threat feed updates
+
+Combine with standard tools to build a lightweight feed pipeline:
+
+```bash
+# Fetch a fresh STIX/CSV feed, then push it
+curl -sO https://feeds.example.com/iocs_latest.csv
+splunkctl lookups update threat_indicators.csv \
+    --file iocs_latest.csv --app SA-ThreatIntelligence --yes
+```
+
+## Implementation notes
+
+Uses `LookupTableFile`/`LookupTableFiles` entity classes from the SDK
+fork for metadata and download. Upload goes through the `client.py` Web
+UI workaround (the REST API requires a server-side path). `define`/
+`auto`/`definitions` go through `conf_ops` against `transforms.conf`/
+`props.conf` instead -- no dedicated SDK entity class for either, since
+`conf_ops`'s generic stanza get/set already covers it.
+
+---
+
+## Source: https://splunkctl.danny.vn/#/guides/hec
+
+# HEC tokens
+
+HEC (HTTP Event Collector) is Splunk's HTTP/JSON ingestion endpoint.
+SecOps teams use it to push data into Splunk from sources that do not
+have a forwarder: SOAR playbooks sending enrichment results back to
+Splunk, custom scripts forwarding threat intel, CI/CD pipelines logging
+deploy events, and cloud services that can only webhook out. Managing
+HEC tokens programmatically means you can provision, rotate, and revoke
+ingestion credentials without touching the Web UI.
+
+## Commands
+
+```bash
+splunkctl hec list                            # list all HEC tokens
+splunkctl hec get my_token                    # get token details
+splunkctl hec create --name my_token \
+    --index main --yes                        # create token
+splunkctl hec create --name my_token \
+    --index main --indexes 'main,_internal' \
+    --sourcetype json --yes                   # with allowed indexes
+splunkctl hec delete my_token --yes           # delete token
+splunkctl hec enable my_token --yes           # enable token
+splunkctl hec disable my_token --yes          # disable token
+```
+
+## Practical examples
+
+```bash
+# Provision a token for a SOAR integration (scoped to one index)
+splunkctl hec create --name soar_enrichment \
+    --index notable_enrichments --sourcetype json --yes
+
+# Provision a token for a custom threat feed ingester
+splunkctl hec create --name threat_feed_ingest \
+    --index threat_intel --indexes 'threat_intel' \
+    --sourcetype stix_ioc --yes
+
+# Rotate a compromised token: disable old, create replacement
+splunkctl hec disable old_webhook_token --yes
+splunkctl hec create --name new_webhook_token \
+    --index webhook_events --sourcetype json --yes
+
+# Audit all HEC tokens -- find enabled tokens and their indexes
+splunkctl hec list --json | jq '.[] | {name, index, disabled}'
+
+# Revoke a decommissioned integration
+splunkctl hec delete legacy_siem_bridge --yes
+```
+
+## Note on naming
+
+Splunk prefixes HEC token names with `http://` internally. Creating
+`my_token` results in a token named `http://my_token`. The CLI handles
+this transparently -- you always use the short name.
+
+## Implementation notes
+
+Uses `HECToken`/`HECTokens` entity classes from the SDK fork. Token
+CRUD goes through the REST API (no Web UI workaround needed).
+
+---
+
+## Source: https://splunkctl.danny.vn/#/guides/parsers
+
+# Parsers
+
+Manage source types (`props.conf`) and field extractions
+(`transforms.conf`) via the REST API.
+
+## Why this matters
+
+Every new data source that lands in Splunk needs a source type to tell
+the indexer how to break events and a set of field extractions to make
+the data searchable. When you onboard a custom appliance, a SaaS
+webhook, or a home-grown app, the parser config is what turns raw text
+into structured, queryable fields. Managing this as code means
+repeatable onboarding across environments and auditable change history.
+
+## Commands
+
+```bash
+splunkctl parsers sourcetypes                 # list source types
+splunkctl parsers get syslog                  # full sourcetype config
+splunkctl parsers extractions                 # list field extractions
+splunkctl parsers create --sourcetype mysource \
+    --category Custom --yes                   # create sourcetype
+splunkctl parsers create --sourcetype mysource \
+    --category Custom \
+    --transforms my_extraction --yes          # with extraction
+splunkctl parsers update mysource \
+    --category Operating_System --yes         # update category
+splunkctl parsers delete mysource --yes       # delete sourcetype
+```
+
+## Recipes
+
+### Onboard a custom log source
+
+Create a source type for a new appliance and verify it exists:
+
+```bash
+splunkctl parsers create --sourcetype firewall_appliance_v2 \
+    --category Network_Security --yes
+splunkctl parsers get firewall_appliance_v2
+```
+
+### Audit all field extractions
+
+Dump every extraction to JSON for review or diffing between instances:
+
+```bash
+splunkctl parsers extractions --json \
+  | jq '[.[] | {name, type, stanza}]' > extractions.json
+```
+
+### Check a source type before editing
+
+Preview the full config to confirm the current state:
+
+```bash
+splunkctl parsers get mysource --json | jq .
+```
+
+## Tips
+
+- Changes to `props.conf` / `transforms.conf` may require a Splunk
+  restart to take effect.
+- Use `--json` output to diff parser configs across dev and prod
+  instances.
+- Source type names are case-sensitive. Match the exact casing from the
+  data input configuration.
+
+---
+
+## Source: https://splunkctl.danny.vn/#/guides/apps
+
+# Apps
+
+Splunk's detection and enrichment capabilities live in apps --
+Technology Add-ons (TAs) for data normalization, security content packs
+like Splunk Enterprise Security, and custom apps with org-specific
+detections. Managing these remotely lets you deploy, update, and audit
+apps across instances without SSH or manual Web UI clicks.
+
+## Commands
+
+```bash
+splunkctl apps list                           # list installed apps
+splunkctl apps get SplunkForwarder            # get app details
+splunkctl apps install --path ./app.spl --yes # install from local file
+splunkctl apps install --path ./app.tar.gz \
+    --force --yes                             # force overwrite
+splunkctl apps uninstall my_app --yes         # uninstall
+splunkctl apps update my_app --enabled \
+    --visible --yes                           # enable + show
+splunkctl apps update my_app --disabled \
+    --hidden --yes                            # disable + hide
+splunkctl apps reload --yes                   # reload all apps
+```
+
+## Remote install
+
+`apps install --path` uploads a local `.spl` or `.tar.gz` package to
+the remote Splunk instance via the Web UI handler. No SSH, no SCP, no
+server filesystem access needed -- push from your laptop to any
+reachable instance.
+
+Use `--force` to overwrite an existing app of the same name.
+
+## Practical examples
+
+```bash
+# Deploy a TA for Windows event log normalization
+splunkctl apps install \
+    --path ./Splunk_TA_windows-8.9.0.spl --yes
+
+# Upgrade a security content pack (force overwrite)
+splunkctl apps install \
+    --path ./DA-ESS-ContentUpdate-4.29.0.spl --force --yes
+
+# Disable an app during an incident (stop its scheduled searches)
+splunkctl apps update SplunkEnterpriseSecuritySuite \
+    --disabled --yes
+
+# Re-enable after the incident
+splunkctl apps update SplunkEnterpriseSecuritySuite \
+    --enabled --yes
+
+# Audit installed apps -- pipe JSON to jq for scripting
+splunkctl apps list --json | jq '.[] | {name, version, disabled}'
+
+# Reload all app configs after a bulk change
+splunkctl apps reload --yes
+```
+
+## Notes
+
+- App install may require a Splunk restart to activate new modular
+  inputs or scripted lookups. The CLI does not restart automatically.
+- `--force` is required when reinstalling or upgrading an app that
+  already exists on the instance.
+
+---
+
+## Source: https://splunkctl.danny.vn/#/guides/users
+
+# Users and roles
+
+Manage Splunk users and roles via the REST API.
+
+## Why this matters
+
+Access control is the backbone of any SecOps deployment. Auditors ask
+who has admin privileges, compliance frameworks (SOC 2, HIPAA) require
+periodic access reviews, and every new analyst needs a correctly scoped
+account on day one. Running these checks through the CLI gives you
+a repeatable, scriptable workflow instead of clicking through the web UI.
+
+## Commands
+
+```bash
+splunkctl users list                          # list all users
+splunkctl users get admin                     # user details
+splunkctl users roles                         # list all roles
+splunkctl users create --name newuser \
+    --password 'pass' --roles user \
+    --email user@example.com --yes            # create user
+splunkctl users update newuser \
+    --roles 'user,power' --yes                # change roles
+splunkctl users delete newuser --yes          # delete user
+```
+
+## Recipes
+
+### Audit privileged accounts
+
+List every user with `admin_all_objects` capability:
+
+```bash
+splunkctl users roles --json \
+  | jq '[.[] | select(.capabilities | index("admin_all_objects")) | .name]'
+```
+
+### Onboard a new SOC analyst
+
+Create a user with the `user` role, then verify:
+
+```bash
+splunkctl users create --name jdoe \
+    --password "$(openssl rand -base64 16)" \
+    --roles user --email jdoe@example.com --yes
+splunkctl users get jdoe
+```
+
+### Periodic access review
+
+Dump all users and roles to a file for compliance review:
+
+```bash
+splunkctl users list --json | jq '.[] | {name, roles, email}' > review.json
+splunkctl users roles --json | jq '.[] | {name, capabilities}' >> review.json
+```
+
+## Tips
+
+- Role changes take effect on the user's next login; no restart needed.
+- The `--json` flag produces machine-readable output suitable for piping
+  into `jq`, compliance scripts, or LLM agent tool chains.
+
+---
+
+## Source: https://splunkctl.danny.vn/#/guides/knowledge
+
+# Macros, eventtypes, tags
+
+Friendly, object-shaped verbs over `macros.conf`, `eventtypes.conf`, and
+`tags.conf` — the knowledge objects detections lean on most. Only
+`macros set` mutates; `eventtypes` and `tags` are **read-only**.
+
+## Why this matters
+
+Detections rarely stand alone: a correlation search calls a macro to
+expand a reusable SPL fragment, an eventtype classifies raw events into
+a named category, and a tag (via `tags.conf`) is what actually makes an
+eventtype CIM-compliant. `conf` already reaches all three (and every
+other conf file) generically, but its stanza-naming rules are file
+-specific enough to be worth a friendlier surface: a macro with
+arguments is stored as `name(argcount)`, not `name`, and a tags.conf
+stanza is a `field=value` pair whose keys are tag names, not config
+keys. `macros`/`eventtypes`/`tags` encode those two shapes so an agent
+(or a human) doesn't have to.
+
+These are **convenience verbs** — they share `conf`'s stanza core
+(`conf_ops.py`) rather than re-implementing it, and `conf` remains the
+tool for anything they don't cover (creating/editing an eventtype or
+tag assignment, or any other conf file).
+
+## Commands
+
+```bash
+splunkctl macros list --app Splunk_Security_Essentials   # macros with definitions
+splunkctl macros list --filter Sort                       # name-substring filter
+splunkctl macros get Sort_MITRE_Rows                       # resolves to Sort_MITRE_Rows(1)
+splunkctl macros get "Sort_MITRE_Rows(1)"                  # exact arg-form name also works
+splunkctl macros set my_macro --definition 'index=main' --yes
+splunkctl macros set my_macro \
+    --definition 'eval x=$a$+$b$' --args a,b --yes         # writes my_macro(2)
+
+splunkctl eventtypes list                                  # name, search, app, disabled
+splunkctl eventtypes get cim:authentication                # full stanza
+
+splunkctl tags list                                        # field=value -> enabled tag names
+splunkctl tags get "eventtype=cim%3Aauthentication"         # full enabled/disabled breakdown
+```
+
+## Macro argument-form resolution
+
+Splunk stores a macro that takes arguments under a stanza named
+`name(n)` (`n` = the argument count) — `Sort_MITRE_Rows(1)`, not
+`Sort_MITRE_Rows`. `macros get <name>` tries an exact stanza match
+first (this alone covers a no-arg macro or a name already spelled out
+with its `(n)` suffix); if that misses and `name` has no `(...)` of its
+own, it falls back to the macros.conf listing and picks the
+argument-form stanza whose base name matches. If more than one
+arg-count variant of the same base name exists (unusual, but legal),
+the lowest arg count wins — pass the full `name(n)` to reach the others.
+
+`macros set` does **not** do this resolution — it is a thin name-to
+-stanza mapping, not a lookup: `--args a,b` computes `name(2)`, no
+`--args` computes the bare `name`, and that's the stanza written,
+whether or not it previously existed. To update an existing arg-form
+macro, pass `--args` with the same argument count, or fall back to
+`conf set macros "name(n)" definition=... --yes` directly.
+
+## tags.conf shape
+
+A `tags.conf` stanza is named `<field>=<value>` (e.g.
+`eventtype=cim:authentication`) — not a free-form stanza name. Every
+key inside that stanza is a tag name, and its value is `enabled` or
+`disabled`; the top-level `disabled` key is the stanza's own
+enable/disable flag, not a tag, and is excluded from both views below.
+
+- `tags list` shows one row per stanza with only the **enabled** tag
+  names (`;`-joined) — a quick "what does this event carry" summary.
+- `tags get <field=value>` shows every tag key and its actual state
+  (enabled or disabled), for full-detail auditing.
+
+Splunk's REST layer leaves a colon inside a tag value percent-encoded
+(`cim:authentication` becomes `cim%3Aauthentication` in the stanza
+name) — copy the `field_value` exactly as `tags list` prints it when
+passing it to `tags get`.
+
+## Recipes
+
+### Audit what a detection's macro actually expands to
+
+```bash
+splunkctl rules get my_detection --json | jq -r .search
+splunkctl macros get my_detection_macro --json | jq -r .definition
+```
+
+### Find every eventtype backing a CIM data model
+
+```bash
+splunkctl eventtypes list --app Splunk_SA_CIM --filter cim: --json \
+  | jq '[.[] | {name, search}]'
+```
+
+### Check whether an eventtype is actually tagged
+
+```bash
+splunkctl tags get "eventtype=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" 'cim:authentication')"
+```
+
+## Tips
+
+- `--app` on any `list`/`get` matters the same way it does on `conf
+  list`/`rules list`: the unscoped default can miss app-private
+  stanzas, and `get` uses `--app` to disambiguate a name that exists in
+  more than one app.
+- `macros set` always previews a field-level diff before applying
+  (`definition: add -> ...` for a new macro, `old -> new` for an
+  update) — same mechanism as `conf set`.
+- Long `definition`/`search` values are truncated for table display
+  only (`… [+N chars]`); `--json`/`--format json` always carries the
+  full text.
+
+---
+
+## Source: https://splunkctl.danny.vn/#/guides/conf
+
+# Conf
+
+Generic conf file/stanza editor over the REST `confs` API — the escape
+hatch for any Splunk conf file that doesn't have a dedicated command
+group yet: `macros`, `eventtypes`, `tags`, `limits`, `authorize`,
+`server`, `web`, and everything else under `$SPLUNK_HOME/etc/*/local`.
+
+## Why this matters
+
+Detections depend on more than saved searches: macros expand reusable
+SPL fragments, eventtypes classify events, tags drive CIM compliance,
+and calculated fields live in `props.conf` alongside sourcetypes.
+`parsers` only reaches `props.conf`/`transforms.conf`; `conf` reaches
+every other conf file the same way, so nothing detection-relevant is
+locked out of code review or CI.
+
+There is **no blocklist** — `conf` can edit `authorize.conf`,
+`server.conf`, and `web.conf` just as readily as `macros.conf`. The
+dry-run guard and `--yes` are the only safety net: every `set`/`unset`/
+`reload` preview names the exact file and stanza before it touches
+anything, so review the preview before applying to a sensitive file.
+
+## Commands
+
+```bash
+splunkctl conf files                          # list conf files
+splunkctl conf list macros                    # list stanzas in macros.conf
+splunkctl conf list macros --app my_app       # scope to one app's stanzas
+splunkctl conf get macros my_macro            # full stanza config
+splunkctl conf get macros my_macro --key definition  # one key
+splunkctl conf set macros my_macro \
+    definition='index=main' --yes             # create/update keys
+splunkctl conf unset macros my_macro definition --yes  # clear a key
+splunkctl conf reload macros --yes            # reload the conf file
+```
+
+## Recipes
+
+### Add a macro
+
+Create a macro and verify it before rollout:
+
+```bash
+splunkctl conf set macros my_macro \
+    definition='index=main sourcetype=syslog' --yes
+splunkctl conf get macros my_macro
+```
+
+### Audit an eventtype
+
+```bash
+splunkctl conf get eventtypes authentication --json | jq .
+```
+
+### Review a stanza change before applying
+
+`conf set` always previews a field-level diff — old value on the left,
+new value on the right, `add` for a brand-new key:
+
+```bash
+splunkctl conf set macros my_macro definition='index=main'
+# [DRY RUN] ...
+#   definition: index=old -> index=main
+```
+
+### List conf files to find the right one
+
+```bash
+splunkctl conf files --filter tag
+```
+
+## Tips
+
+- `conf set` creates the stanza if it doesn't exist yet — there's no
+  separate create step.
+- The REST API has no true per-key delete; `conf unset` sets keys to
+  the empty string (same mechanism `parsers unset` uses). To fully
+  remove a stanza, use the dedicated command group for that conf file
+  when one exists (e.g. `parsers delete` for `props.conf`).
+- `--app` on `conf list`/`conf files` matters: the unscoped default
+  view can miss app-private stanzas, same as `rules list`/`dashboards
+  list`.
+- Reload the conf file after a `set`/`unset` if the change needs to
+  take effect immediately (`conf reload <file> --yes`).
+
+---
+
+## Source: https://splunkctl.danny.vn/#/guides/state
+
+# State (config-as-code, change evidence)
+
+`state` is the bank change-management workflow: pull a versioned
+snapshot of an instance's detection content, edit it like code, diff
+it against the live instance, then push -- with a savable before→after
+JSON artifact a change ticket can reference as evidence. It unifies
+`rules`/`parsers` import-export and read-only introspection of macros,
+lookups, and dashboards into one pull → edit → diff → push loop.
+
+## Why this matters
+
+A SOC running detections-as-code needs an audit trail: what changed,
+who approved it, what it looked like before. `state push --report`
+writes that record automatically -- the same JSON file works as the
+dry-run artifact attached to a change ticket for approval, and the
+`--yes` artifact recorded as what actually happened.
+
+## Commands
+
+```bash
+splunkctl state pull --dir ./snapshot                    # everything, all apps
+splunkctl state pull --dir ./snapshot --app my_app        # one app only
+splunkctl state pull --dir ./snapshot --types rules,macros # a subset of types
+
+splunkctl state diff --dir ./snapshot                     # structured drift report
+splunkctl state diff --dir ./snapshot --json | jq .
+
+splunkctl state push --dir ./snapshot                     # dry-run preview
+splunkctl state push --dir ./snapshot --yes \
+    --report change-12345.json                            # apply + evidence
+```
+
+## The pulled tree
+
+```
+snapshot/
+  manifest.json       # tool version, host, per-type object counts
+  rules.yml           # saved searches (rules_io's YAML shape)
+  parsers.yml         # props/transforms stanzas with explicit keys
+  macros.yml          # macros.conf stanzas with explicit keys
+  lookups/<name>      # one CSV per lookup table file
+  dashboards/<name>.xml  # one XML export per dashboard
+```
+
+`manifest.json` deliberately has **no timestamp** -- only `version`,
+`host`, and `types` (object counts). A wall-clock stamp would make the
+manifest, and anything diffing two pulls, non-deterministic; the
+snapshot's own version-control commit (or filesystem mtime) already
+answers "when". `--types` controls which of the five files/directories
+get written; `pull` owns and overwrites only the types it's asked to
+touch, and is otherwise read-only against the instance.
+
+**Hard constraint: keep `--app` consistent across pull/diff/push.**
+`lookups/<name>` and `dashboards/<name>.xml` are a *flat* layout --
+the file name carries no app, unlike `rules.yml`/`parsers.yml`/
+`macros.yml`, where every doc records its own `app`. If you `pull`
+unscoped (or with one `--app`) and then `diff`/`push` with a
+*different* single `--app`, a lookup or dashboard belonging to another
+app can be misattributed: it shows as `added` even though it already
+exists live, and `push` would try to *create* it under the wrong app.
+Always use the same `--app` scope across pull, diff, and push (or
+none, for all three) when lookups or dashboards are in play.
+
+## Object type capability matrix
+
+| Type | Pull (read) | Diff | Push (apply) |
+|---|---|---|---|
+| `rules` | `rules_io` export | field-level | `rules_io` import |
+| `parsers` | `parsers_io` export (explicit keys) | key-level | `parsers_io` import |
+| `macros` | explicit-key conf read | key-level | `conf_ops.set_keys` |
+| `lookups` | CSV download | content hash | CSV upload/update |
+| `dashboards` | XML export | content hash | **not supported** -- no import path |
+
+Every read/diff/apply path reuses the existing per-type machinery
+(`rules_io`, `parsers_io`, `conf_ops`, `client.upload_lookup`) -- `state`
+is pure orchestration, never a second implementation of serialization
+or apply logic.
+
+## Drift classification
+
+`state diff` reports **every** object in a type, not just deltas:
+
+- `added` -- on disk, not on the instance (`push` would create it)
+- `removed` -- on the instance, not on disk (`push` does **not**
+  delete it -- see below)
+- `modified` -- both exist and differ; rules/parsers/macros carry a
+  structured `fields: [{field, old, new}]` diff, lookups/dashboards
+  (blob-shaped) carry a `sha256` before/after instead
+- `unchanged` -- both exist and match
+
+```bash
+splunkctl state diff --dir ./snapshot --types rules --json
+```
+
+```json
+[
+  {
+    "type": "rules",
+    "name": "Failed Logins",
+    "change": "modified",
+    "fields": [{"field": "search", "old": "index=old", "new": "index=new"}]
+  }
+]
+```
+
+`diff` always exits 0 -- it is a report, not a gate.
+
+## push never deletes
+
+`push` only ever creates or updates an object that is represented on
+disk. An instance object with no on-disk counterpart is classified
+`removed` by the underlying diff, surfaced as an informational note
+(`note: rules: 2 object(s) on the instance only -- not deleted (push
+never deletes)`), and never touched -- there is no delete path in
+`state push`, by design. To actually remove something, use the
+type-specific `delete` command (`rules delete`, `lookups delete`, ...)
+directly, with its own guard.
+
+## Dashboards: pull + diff only
+
+Dashboards have no import path in the SDK fork or the CLI yet. `state
+pull`/`state diff` work normally for dashboards; `state push` reports
+drifted dashboards as apply-unsupported and skips them without
+erroring:
+
+```
+note: dashboards: 1 drifted object(s) — apply not supported (export-only, no import path)
+```
+
+If `dashboards` is the only `--types` value and nothing else drifted,
+`push` still runs cleanly (exit 0) and, with `--report`, still writes
+an artifact (`changes: []`).
+
+**Diff caveat.** `dashboards` drift is a raw-XML content hash, so
+`state diff` can show a handful of dashboards as `modified` with zero
+real edits -- Splunk's export is not always byte-identical across
+requests, and (more commonly) two apps sharing a dashboard name
+collide in the flat `dashboards/<name>.xml` layout (see the `--app`
+constraint above). This is cosmetic -- dashboards are never pushed --
+but don't treat a non-empty dashboard diff as evidence of a real
+change without checking it.
+
+## The change-ticket workflow
+
+```bash
+# 1. Snapshot the instance
+splunkctl state pull --dir ./snapshot --types rules
+
+# 2. Edit rules.yml like code -- change a search, a schedule, a threshold
+
+# 3. See exactly what changed
+splunkctl state diff --dir ./snapshot --types rules
+
+# 4. Preview the push and save the plan for ticket approval
+splunkctl state push --dir ./snapshot --types rules \
+    --report change-12345-plan.json
+
+# 5. Once approved, apply it and save the record
+splunkctl state push --dir ./snapshot --types rules --yes \
+    --report change-12345-applied.json
+```
+
+`--report` writes `{host, types, changes, applied}` on **both** runs:
+`applied: false` for the dry-run plan (what would happen -- attach
+this to the ticket for approval), `applied: true` for the `--yes` run
+(what actually happened -- the change record). `changes` is the same
+shape as `state diff`'s modified/added rows, plus `before`/`after`
+maps built from the same field diff:
+
+```json
+{
+  "host": "splunk.example.com:8089",
+  "types": ["rules"],
+  "changes": [
+    {
+      "type": "rules",
+      "name": "Failed Logins",
+      "change": "modified",
+      "before": {"search": "index=old"},
+      "after": {"search": "index=new"}
+    }
+  ],
+  "applied": true
+}
+```
+
+`changes` never includes `removed` or `unchanged` entries -- only what
+was (or would be) actually created/updated. `removed` drift and
+dashboard apply-unsupported drift are surfaced as console notes, not
+as report entries, since neither is ever applied.
+
+## Implementation notes
+
+`splunkctl/commands/state.py` is pure CLI orchestration (guard
+integration, preview text, `--report`/`--types`/`--app` handling).
+Every per-type read/diff/apply call is delegated to
+`splunkctl/commands/state_io.py` and its topic siblings
+(`state_io_confs.py` for parsers/macros, `state_io_blobs.py` for
+lookups/dashboards, `state_types.py` for the shared TypedDicts and
+drift-classification helpers) -- split across files to stay under the
+500-line budget, but `state_io` re-exports everything so
+`state_io.<name>` is the one import surface callers and tests use.
+
+---
+
+## Source: https://splunkctl.danny.vn/#/guides/es
+
+# ES notable-event triage
+
+The SOC daily loop: see what's queued, pull the full detail on one
+notable, then assign, set status/urgency/disposition, or leave a comment
+— alone or in bulk. Reading notables already works through the generic
+`search` command (`index=notable`); this group adds the incident-review
+mutation ES's `notable_update` endpoint provides, plus normalized reads
+that don't require hand-writing SPL.
+
+> **Requires Enterprise Security.** Every `es` subcommand checks for the
+> `SplunkEnterpriseSecuritySuite` app first (one cheap entity fetch, not a
+> full apps dump). Without ES installed, every subcommand exits 1 with a
+> `not_found` envelope naming the app — see **Feature detection** below.
+>
+> **Live-verified against ES: pending.** The local dev instance ships
+> Splunk Security Essentials, not Enterprise Security, so only the
+> feature-detection negative path has been verified against a real
+> instance. The read/update logic is unit-tested against a mocked REST
+> layer; verify against a real ES instance before relying on it in
+> production triage.
+
+## Commands
+
+```bash
+splunkctl es notables list                              # last 24h, up to 100
+splunkctl es notables list --since -7d --status new      # open in the last week
+splunkctl es notables list --owner unassigned             # unclaimed queue
+splunkctl es notables list --rule beacon --limit 20       # by correlation search
+splunkctl es notables get <event_id>                      # full field set
+splunkctl es notables update <event_id> --status closed \
+    --comment 'false positive, ticket CHG-123' --yes
+splunkctl es notables update <id1> <id2> <id3> \
+    --owner analyst1 --urgency high --yes                # bulk triage
+```
+
+## Feature detection
+
+`es` is a feature-detected group: it exists in `commands --json` and
+`--help` regardless of what's installed, but every subcommand's first
+move is a single entity fetch for `SplunkEnterpriseSecuritySuite`. On an
+instance without ES:
+
+```bash
+$ splunkctl --json es notables list
+{"error": {"kind": "not_found", "http_status": null, "message": "App 'SplunkEnterpriseSecuritySuite' is not installed on this instance. The 'es' command group requires Splunk Enterprise Security."}}
+$ echo $?
+1
+```
+
+`update`'s dry-run preview never triggers this check — like every guarded
+command, the preview is local-only (config + banner, no network call).
+The ES check runs once `--yes` is passed and the mutation is about to
+apply.
+
+## List filters compose server-side
+
+`--since`/`--until` become the search's time range; `--status`, `--owner`,
+and `--rule` fold into the SPL itself (`index=notable status=1
+owner="analyst1" rule_name="*beacon*"`) rather than filtering client-side
+after a full fetch — the same "filters first" contract as every other
+list surface (see SKILL.md). Output columns are normalized: `time`,
+`rule`, `security_domain`, `urgency`, `status`, `owner`, `event_id`.
+`event_id` is the notable's unique id — pass it straight to `get` or
+`update`.
+
+## Status names and integers
+
+`--status` (on both `list` and `update`) accepts either the canonical
+name or the raw integer ES uses internally:
+
+| Name | Integer |
+|---|---|
+| `unassigned` | 0 |
+| `new` | 1 |
+| `in progress` | 2 |
+| `pending` | 3 |
+| `resolved` | 4 |
+| `closed` | 5 |
+
+Custom statuses configured on an instance (via `reviewstatuses.conf`) are
+integers outside 0-5 — pass the number directly, e.g. `--status 6`.
+
+## Bulk triage
+
+`update` accepts one or more `EVENT_ID` arguments; all of them go into a
+single `notable_update` call (`ruleUIDs`), so a bulk status change or
+reassignment is one request, not N:
+
+```bash
+splunkctl es notables update <id1> <id2> <id3> --status closed \
+    --comment 'duplicate of INC-4471' --yes
+```
+
+At least one of `--status`/`--owner`/`--urgency`/`--disposition`/
+`--comment` is required — `update` with no fields is a usage error
+(exit 2), not a silent no-op.
+
+## Dry-run preview
+
+Like every mutation, `update` previews before applying:
+
+```bash
+$ splunkctl es notables update evt-1 evt-2 --status closed --comment 'fp'
+[DRY RUN] Update 2 notable(s) (profile: default @ splunk.example.com:8089)
+  event_ids: evt-1, evt-2
+  changes: status=5, comment=fp
+Pass --yes to apply.
+```
+
+## Disposition
+
+`--disposition` is passed through exactly as given — ES ships a default
+set (`disposition:1` true positive, `disposition:2` benign positive,
+`disposition:3` false positive, ...) but installations customize this
+list, so the CLI doesn't invent a name mapping. Check your instance's
+configured dispositions (Incident Review > disposition dropdown, or
+`reviewstatuses.conf`) before scripting against specific ids.
+
+## Options
+
+| Flag | Applies to | Description |
+|------|-----------|-------------|
+| `--since` | `list` | Earliest time (default `-24h`) |
+| `--until` | `list` | Latest time (default `now`) |
+| `--status` | `list`, `update` | Status name or integer (see table above) |
+| `--owner` | `list` | Filter by assigned owner |
+| `--rule` | `list` | Correlation search name substring |
+| `--limit` | `list` | Max results (default 100) |
+| `--owner` | `update` | New assignee |
+| `--urgency` | `update` | `informational`/`low`/`medium`/`high`/`critical` |
+| `--disposition` | `update` | ES disposition id, passed through as-is |
+| `--comment` | `update` | Analyst comment |
+| `--yes` | `update` | Apply the mutation (skip dry-run preview) |
+
+## Implementation notes
+
+`list`/`get` run over the existing oneshot-search infrastructure against
+`index=notable` (no SDK entity class — ES ships no REST collection for
+notables, just the raw index and the `notable_update` action endpoint).
+`update` POSTs to `/services/notable_update` through the SDK's `service.post`
+via `client.py`'s existing request plumbing — no new HTTP stack.
+
+---
+
+## Source: https://splunkctl.danny.vn/#/guides/kvstore
+
+# KV store (collections + data CRUD)
+
+Splunk's KV store backs allowlists, threat-intel feeds, and Enterprise
+Security's asset/identity tables — schema-less JSON document storage
+scoped per app. This group manages collections (`storage/collections/
+config`) and their documents (`storage/collections/data`) directly over
+the REST API — no SDK entity class exists for KV store, so every command
+here is a thin, typed wrapper around raw `GET`/`POST`/`DELETE` calls.
+
+**Live-verified status**: the local dev instance's KV store is down
+(`server kvstore` reports `status: failed`) — round-trip CRUD is
+unit-tested against a mocked REST layer only; live verification covers
+the negative path (a down KV store fails cleanly, never blank/traceback).
+Full live round-trip is **pending a healthy KV store**.
+
+## Commands
+
+```bash
+splunkctl kvstore collections                       # list collection names (app: search)
+splunkctl kvstore collections --app Splunk_Security_Essentials
+splunkctl kvstore create my_allowlist --yes          # create an empty collection
+splunkctl kvstore delete my_allowlist --yes          # delete collection + ALL its data
+
+splunkctl kvstore query my_allowlist                 # all documents
+splunkctl kvstore query my_allowlist --query '{"host": "evil.example"}'
+splunkctl kvstore query my_allowlist --limit 50 --skip 100 --sort '-_key'
+
+splunkctl kvstore insert my_allowlist --data '{"host": "evil.example"}' --yes
+splunkctl kvstore insert my_allowlist --file doc.json --yes
+splunkctl kvstore update my_allowlist <key> --data '{"host": "new.example"}' --yes
+splunkctl kvstore remove my_allowlist <key> --yes            # by _key
+splunkctl kvstore remove my_allowlist --query '{"host": "evil.example"}' --yes  # by query
+
+splunkctl kvstore export my_allowlist                # JSONL to stdout, one doc per line
+splunkctl kvstore export my_allowlist --out backup.jsonl
+splunkctl kvstore import my_allowlist --file backup.jsonl --yes   # upserts by _key
+```
+
+## Namespace
+
+Every command addresses `servicesNS/nobody/<app>/storage/collections/
+{config|data}/...` — collection ownership is always `nobody` (the KV
+store convention), scoped by app with `--app` (default `search`).
+
+## `query`: server-side only
+
+`--query` is raw JSON, passed through unmodified to the API's own
+`query` param; `--limit`/`--skip`/`--sort` map straight to the matching
+API params. There is no client-side re-filtering or re-paging — what the
+server returns is exactly what's rendered.
+
+## `insert`/`update`: exactly one document source
+
+Both take exactly one of `--data '<json>'` (inline) or `--file f.json`
+(a file holding a single JSON object) — passing both, or neither, is a
+usage error (exit 2), same as invalid JSON in either. Documents pass
+through unmodified: no field is added, renamed, or stripped.
+
+## `remove`: exactly one target
+
+`remove <collection> <key>` deletes by `_key`; `remove <collection>
+--query '<json>'` deletes every document matching the query. Exactly
+one of `KEY`/`--query` is required — supplying both, or neither, is a
+usage error (exit 2).
+
+## `export`/`import`: JSONL round-trip
+
+`export` writes one JSON document per line — `_key` is preserved on
+every line, so `import` can upsert straight back onto the same keys.
+`import --file f.jsonl` reads the same shape and POSTs via `batch_save`
+in chunks of up to 500 documents; a document whose `_key` already exists
+in the collection is upserted (overwritten) — that's `batch_save`'s own
+semantics, not something the CLI special-cases. Blank lines in the JSONL
+file are skipped; any non-blank line that isn't a single valid JSON
+object is a usage error (exit 2) — the whole import is rejected before
+any request is sent, not partially applied.
+
+## Worked example: allowlist from bulk intel
+
+```bash
+# 1. Create the collection
+splunkctl kvstore create ip_allowlist --yes
+
+# 2. Bulk-load a threat-intel export (one JSON doc per line)
+splunkctl kvstore import ip_allowlist --file ip_allowlist.jsonl --yes
+
+# 3. Query it back
+splunkctl kvstore query ip_allowlist --query '{"source": "internal"}'
+
+# 4. Use it from SPL — requires a lookup DEFINITION binding the
+#    collection to a lookup name first (transforms.conf), which
+#    'kvstore' doesn't manage; H4 (lookup definitions & automatic
+#    lookups) wires that up. Once defined:
+#    | inputlookup ip_allowlist
+```
+
+A raw collection name is **not** automatically usable via `|
+inputlookup` — Splunk's lookup command resolves a *lookup definition*
+(a `transforms.conf` stanza with `external_type = kvstore` pointing at
+the collection), not the collection name itself. Until H4 ships that
+wiring, define it manually via Splunk Web
+(**Settings → Lookups → Lookup definitions**) or `parsers`/conf editing.
+
+## Errors
+
+KV-store-down and other HTTP failures are never caught locally — they
+flow straight through the CLI's F1 error-envelope classification
+(`splunkctl.errors.classify`), so a down KV store always surfaces a
+clean `kind: "http"`, the real HTTP status (`503` observed live), and
+the server's message — never a blank result or a raw traceback:
+
+```bash
+$ splunkctl --json kvstore query my_allowlist
+{"error": {"kind": "http", "http_status": 503, "message": "... KV Store initialization failed ..."}}
+```
+
+## Implementation notes
+
+No SDK entity class — `storage/collections/config` (collection CRUD,
+form-encoded like most Splunk config endpoints) and `storage/
+collections/data` (document CRUD, JSON body + `Content-Type:
+application/json`) are both reached through small typed JSON helpers in
+`client.py` (`rest_get_json`/`rest_post_json`) layered on the SDK's own
+authenticated `service.get`/`service.post`/`service.delete` — no new
+HTTP stack.
+
+---
+
+## Source: https://splunkctl.danny.vn/#/guides/audit
+
+# Change audit & RBAC attestation
+
+Regulator-facing evidence for bank SOC operations: who changed what
+(`audit changes`) and who can do what (`audit rbac`). Both commands are
+**read-only** — no `guard`, no `--yes` needed.
+
+## Why this matters
+
+Banks carry regulator obligations for change-management evidence ("who
+changed this saved search / role / index, and when") and periodic access
+recertification ("who has which capabilities, and why"). Today an agent
+would have to hand-write `index=_audit` SPL and know that Splunk mixes
+**two incompatible event shapes** in that one index — this group
+normalizes both into one schema and joins the RBAC graph so neither
+requires bespoke SPL per engagement.
+
+## Commands
+
+```bash
+splunkctl audit changes                                   # last 24h, up to 500
+splunkctl audit changes --since -7d --until -1d            # explicit window
+splunkctl audit changes --user jdoe                        # exact-match user
+splunkctl audit changes --action edit                      # substring-match action
+splunkctl audit changes --object-type saved_search          # exact-match object type
+splunkctl audit changes --limit 2000 --json                # raise the display cap
+
+splunkctl audit rbac                                        # one row per user
+splunkctl audit rbac --format csv --out recert-2026-07.csv  # recertification export
+splunkctl audit rbac --roles-only                            # one row per role
+```
+
+## `audit changes`: normalized schema
+
+Every row has exactly six keys, in this order: `time`, `user`, `action`,
+`object`, `object_type`, `app`. Splunk's `_audit` index mixes two
+sourcetypes and this command normalizes both:
+
+| Sourcetype | Shape | Mapping |
+|---|---|---|
+| `audittrail` (legacy) | `Audit:[timestamp=..., user=..., action=..., <tail>]` plain text | `user`/`action` parsed directly; `object` only when the line carries a literal `object="..."` marker (common on capability checks like `edit_user`/`edit_roles`); `object_type` is always empty — the legacy format has no per-action type field; `app` from `app="..."` or unquoted `app=...`, when present |
+| `audittrailv2` (structured) | one JSON object per line | `user` = `actor.name`; `action` = top-level `action`; `object` = `data.name`; `object_type` = `data.type`; `app` = `data.ownership.app` or `data.attributes.app` |
+
+`time` always comes from Splunk's own indexed `_time` (not a re-parse of
+either embedded timestamp format) — it's present on every event
+regardless of shape and gives one consistent, sortable value.
+
+There is no literal `data.object`/`data.object_type` key on real
+`audittrailv2` events; `data.name`/`data.type` are the nearest
+equivalents and confirmed present for object/system-category events
+(config changes). Action/authn/check-category events (ad-hoc searches,
+logins, capability grants) carry `data.type` sometimes but rarely
+`data.name` — `object` stays empty for those, which is correct: they
+aren't changes to a named object.
+
+An event matching neither shape is **never dropped** — it comes back as
+`action: "unparsed"` with the full raw line in `object`, so evidence
+stays complete even for audit-log formats this parser doesn't yet know.
+
+## `audit changes`: SPL safety
+
+The dispatched search is always the constant `search index=_audit` —
+nothing else, ever. `--since`/`--until` go through the oneshot job's
+`earliest_time`/`latest_time` kwargs (not string-composed), and
+`--user`/`--action`/`--object-type` filter the already-normalized rows
+**client-side**, after the fetch. No flag value — however adversarial —
+reaches the SPL string. Verified live with `--debug`:
+
+```bash
+$ splunkctl --debug audit changes --user 'x" | delete' --action 'y | outputlookup evil.csv'
+...
+POST .../search/v2/jobs/ (body: {'search': 'search index=_audit', ...})
+```
+
+`--limit` (default 500) applies **after** filtering, not to the raw
+fetch — the raw fetch itself is unbounded (`count=0`) within the
+`--since`/`--until` window, so a `--user`/`--action` filter never misses
+a match just because it fell outside an arbitrary raw-fetch cutoff.
+A very wide `--since` over a large `_audit` index may fetch all events in that range before limiting, which can be slow; narrow `--since` when possible.
+`--user`/`--object-type` are case-insensitive exact match; `--action` is case-insensitive substring match.
+
+## `audit rbac`: aggregation
+
+One row per user by default: `user`, `email`, `roles` (direct roles,
+semicolon-joined), `capabilities`, `srch_indexes_allowed`. The last two
+are aggregated across the user's direct roles **and the full transitive
+closure of their imported roles** — deduplicated, sorted, and
+semicolon-joined. `--roles-only` flips to one row per role instead:
+`role`, `imported_roles` (direct only), `capabilities`,
+`srch_indexes_allowed` (both aggregated the same transitive way, rooted
+at that role).
+
+Example: role `soc_analyst` imports `power`, which imports `user`. A
+`soc_analyst` user's effective `capabilities` is the union of all three
+roles' own capabilities — this is what a role with zero capabilities of
+its own (e.g. Splunk's built-in `splunk-system-role`, which only imports
+`admin`) needs to show its real effective grant, not an empty cell.
+
+## CSV round-trip safety
+
+Multi-value fields (`roles`, `capabilities`, `srch_indexes_allowed`,
+`imported_roles`) join with `;`, never `\n` — Splunk role/capability/index
+names can't contain a semicolon, so this is a safe, lossless join that
+never produces an embedded newline inside a CSV cell. `--format csv`
+output round-trips cleanly through Python's `csv` module.
+
+## Options
+
+| Flag | Applies to | Description |
+|------|-----------|--------------|
+| `--since` | `changes` | Earliest time (default `-24h`) |
+| `--until` | `changes` | Latest time (default `now`) |
+| `--user` | `changes` | Filter by user, case-insensitive exact match |
+| `--action` | `changes` | Filter by action, case-insensitive substring match |
+| `--object-type` | `changes` | Filter by object type, case-insensitive exact match |
+| `--limit` | `changes` | Max results after client-side filtering (default 500) |
+| `--roles-only` | `rbac` | One row per role instead of per user |
+
+## Implementation notes
+
+`changes` runs over the existing oneshot-search infrastructure
+(`svc.jobs.oneshot`); the event-shape parsers live in a sibling module,
+`splunkctl/commands/audit_parse.py`, kept separate from the click
+commands since they're pure functions with their own fixture-driven test
+suite. `rbac` is SDK reads only (`svc.roles`, `svc.users`) — no oneshot
+search involved.
+
+---
+
+## Source: https://splunkctl.danny.vn/#/guides/server
+
+# Server Operations
+
+System health, license, KV store status, and topology health reads.
+
+## Messages
+
+```bash
+splunkctl server messages                              # list system messages
+splunkctl server messages --dismiss warn_disk --yes    # dismiss a message
+```
+
+## License
+
+```bash
+splunkctl server license     # license pool usage (used vs quota per pool)
+```
+
+## KV Store
+
+```bash
+splunkctl server kvstore     # status, port, version, storage engine
+```
+
+Reports an explicit status word (`ready`, `failed`, `starting`,
+`unknown`) so a down KV store is never mistaken for a healthy result.
+
+## Topology Health
+
+Three read-only commands for triage-critical infrastructure health. On a
+non-clustered instance, each reports a clean disabled/no-clients state
+and exits 0 -- not an error.
+
+### Indexer Cluster
+
+```bash
+splunkctl server cluster           # mode, peers, SF/RF met
+splunkctl server cluster --json    # machine-readable for agent triage
+```
+
+Output (when enabled): cluster overview row (mode, label,
+replication_factor_met, search_factor_met, rolling_restart,
+maintenance_mode) followed by one row per peer (label, status, site,
+search_state, replication_count, bucket_count).
+
+When disabled: single row with `mode: disabled`.
+
+Prefers `cluster/manager` (Splunk 9+); falls back to `cluster/master`
+on older instances.
+
+### Search Head Cluster
+
+```bash
+splunkctl server shcluster         # captain, members, replication
+splunkctl server shcluster --json
+```
+
+Output (when enabled): captain row (captain label, captain_id,
+dynamic_captain, elected_captain) followed by one row per member (label,
+status, site, out_of_sync).
+
+When disabled: single row with `mode: disabled`.
+
+### Deployment Server
+
+```bash
+splunkctl server deployment        # clients + last check-in
+splunkctl server deployment --json
+```
+
+Output (when clients exist): one row per client (client name, hostname,
+ip, last_phone_home, phone_home_interval).
+
+When no clients: single row with `status: no_clients, total: 0`.
+
+## Empty Result vs Infrastructure Down
+
+When a detection search returns nothing, an agent must distinguish:
+
+- **No threat** -- the search ran correctly, nothing matched.
+- **Infra degraded** -- an indexer peer is down, the cluster bundle
+  failed to replicate, a forwarder stopped checking in.
+
+Use the topology commands to triage:
+
+```bash
+splunkctl server cluster --json    # any peers Down? SF/RF not met?
+splunkctl server shcluster --json  # any members out of sync?
+splunkctl server deployment --json # any forwarders missing check-in?
+```
+
+Genuine REST errors (401, 503 for reasons other than "not enabled")
+propagate to the central error classifier (F1) and exit 1 with a
+classified error envelope.
+
+---
+
+## Source: https://splunkctl.danny.vn/#/guides/datamodels
+
+# Data models (CIM/tstats acceleration)
+
+Mature SOC detections run on accelerated CIM data models via `| tstats`
+— this group answers "which models exist," "is acceleration healthy,"
+and "trigger a rebuild when stale." No SDK entity for data models
+(unlike dashboards/lookups/HEC tokens) — every command is a thin, typed
+wrapper around the raw `datamodel/model` and `admin/summarization` REST
+collections, same pattern as `kvstore`/`server`.
+
+## Why two REST resources
+
+`datamodel/model`'s `content["acceleration"]` field is only the
+**configuration** — `enabled`, `earliest_time` (the summarization
+window), `cron_schedule`. It does **not** carry build progress. Percent
+complete, the actual summarized earliest/latest range, size, and the
+last build error live on a separate `admin/summarization` entity, one
+per accelerated model, named `tstats:DM_<app>_<model>`.
+
+This shape was confirmed against this project's own Splunk 10.4 install,
+not guessed from REST trial and error alone: the installed
+`splunk.models.summarization.Summarization` REST model class
+(`$SPLUNK_HOME/lib/python3.13/site-packages/splunk/models/summarization.py`)
+declares every `summary.*` field this group reads, and the bundled Data
+Model Manager JS (`data_model_manager.js`) builds the exact
+`tstats:DM_<app>_<model>` id when it fetches a model's acceleration
+info in the Splunk Web UI. Both ship with splunkd itself, so they
+describe exactly what this REST API version does — the same UI page an
+admin would open to check acceleration health.
+
+## Commands
+
+```bash
+splunkctl datamodels list                              # name, app, accelerated, disabled
+splunkctl datamodels list --app Splunk_SA_CIM
+splunkctl datamodels list --filter auth
+
+splunkctl datamodels get Authentication                 # detection-engineering summary
+splunkctl datamodels get Authentication --definition    # raw objects/fields/calculations JSON
+splunkctl datamodels get Authentication --app Splunk_SA_CIM
+
+splunkctl datamodels acceleration                       # every accelerated model's build status
+splunkctl datamodels acceleration Authentication         # one model (accelerated or not)
+
+splunkctl datamodels rebuild Authentication --yes        # re-summarize from scratch (guarded)
+```
+
+## `list`: cheap collection fields only
+
+Columns: `name`, `app`, `accelerated` (bool), `disabled` (bool) — all
+read straight off the collection listing, no per-model follow-up call.
+`--app` (default: all apps), plus the uniform `--limit`/`--offset`/
+`--filter` paging (F2): `--filter` forces a full fetch with client-side
+case-insensitive name matching; without it, `--limit`/`--offset` pass
+straight through to the REST call as `count`/`offset`.
+
+## `get`: detection-engineering summary, not the full blob
+
+A data model's raw definition (`content["description"]`) is a
+JSON-encoded string that can run past 250KB for a CIM model with dozens
+of objects — `get` parses it once and surfaces only what a detection
+engineer actually needs:
+
+- `name`, `app`, `displayName`, `disabled`
+- `acceleration_enabled`, `acceleration_earliest_time`,
+  `acceleration_cron_schedule` — the acceleration *config* (not status;
+  use `acceleration` for that)
+- `object_count`, `objects` (comma-joined object names)
+- `root_search` — the base object's first constraint search, i.e. what
+  raw index/sourcetype/tag the whole model actually covers
+
+Pass `--definition` to get the raw, pretty-printed objects/fields/
+calculations JSON instead — same shape as `dashboards get --definition`,
+just for a data model's object hierarchy instead of a Studio dashboard's
+visualization JSON.
+
+## `acceleration`: the money command
+
+`datamodels acceleration` (no argument) lists every model whose
+acceleration config is enabled, with its build status:
+
+- `enabled` — acceleration config state (should always be `true` here)
+- `has_summary` — whether `admin/summarization` has an entity yet (a
+  freshly-enabled model with a cron that hasn't fired yet is
+  `enabled: true, has_summary: false` — accelerated, but nothing built)
+- `is_complete` / `percent_complete` — from `summary.complete` (a 0–1
+  fraction server-side; rendered here as a 0–100 percentage, rounded to
+  1 decimal place: `round(float(complete) * 100, 1)`)
+- `size`, `earliest_summarized`, `latest_summarized` — raw
+  `summary.size`/`summary.earliest_time`/`summary.latest_time`,
+  unmodified (epoch seconds, not reformatted)
+- `last_error` — `summary.last_error` (a list server-side, one entry
+  per distributed peer) joined with `; `; empty string when clean
+
+If nothing is accelerated, this cleanly renders an empty result — never
+an error — and skips the `admin/summarization` fetch entirely (no
+accelerated models means nothing to look up).
+
+`datamodels acceleration <name>` shows one model regardless of whether
+it's accelerated: `enabled: false` (with every other field blank/`null`)
+is a valid, non-error answer to "is this model accelerated at all" — an
+agent auditing acceleration coverage across many models shouldn't have
+to special-case the read path for the ones that aren't accelerated yet.
+Only a model that doesn't exist at all is an error (`kind: "not_found"`).
+
+## `rebuild`: guarded, disable-then-re-enable
+
+There is no dedicated "rebuild" REST verb for data model acceleration.
+Splunk Web's own "Rebuild" button (confirmed from the installed Data
+Model Manager JS) works by POSTing `datamodel/model/<name>` twice:
+first `acceleration=0` (disable), then `acceleration=1` with the same
+`acceleration.earliest_time` re-sent explicitly (re-enable) — this drops
+the existing tsidx summary and re-summarizes historical data for the
+same window from scratch. `datamodels rebuild <name>` does exactly this,
+behind the standard dry-run guard:
+
+```bash
+splunkctl datamodels rebuild Authentication            # [DRY RUN] preview, no changes
+splunkctl datamodels rebuild Authentication --yes       # applies: disable, then re-enable
+```
+
+The dry-run preview names the model, its app, the preserved
+`earliest_time` window, and states plainly that this re-summarizes
+historical data from scratch — there is no partial/incremental rebuild.
+
+**Only meaningful for an already-accelerated model.** If the named
+model's acceleration config is disabled, `rebuild` exits 1 with a clear
+message *before* the dry-run/`--yes` guard even runs — passing `--yes`
+against a non-accelerated model does not print a preview and does not
+touch anything, it just fails the same way the bare dry-run would.
+
+**Known caveat (inherent to the underlying REST API, not this CLI):**
+because a rebuild is two separate POSTs, a failure between them (e.g. a
+permission or connectivity error on the second call) can leave the
+model disabled without the summary having restarted. This is exactly
+the same risk Splunk Web's own Rebuild button carries — there is no
+atomic rebuild operation to fall back to. A rebuild failure surfaces
+through the normal F1 classified envelope; re-running `datamodels get
+<name>` afterward shows whether acceleration ended up enabled again.
+
+## Errors
+
+REST failures are never caught locally — they flow straight through the
+CLI's F1 error-envelope classification (`splunkctl.errors.classify`), so
+a down or misconfigured instance always surfaces a clean `kind`/
+`http_status`/`message`, never blank output or a raw traceback:
+
+```bash
+$ splunkctl --json datamodels list
+{"error": {"kind": "http", "http_status": 503, "message": "..."}}
+```
+
+## Live-verified status
+
+`list`/`get`/`acceleration` (read paths) and `rebuild`'s dry-run preview
+and not-accelerated rejection are live-verified against the local dev
+instance. The instance ships Splunk Security Essentials (sample content
+and CIM-aware detections) but not the `Splunk_SA_CIM` add-on itself, so
+no data model on it is actually accelerated — `acceleration`'s populated
+build-status row (non-zero percent complete, a real summarized range)
+and `rebuild --yes`'s two-POST apply path are unit-tested against the
+REST shape above (verified via the installed Splunk source, not
+guessed) rather than live-verified end-to-end; live verification of a
+populated, real acceleration build is pending an instance with an
+actually-accelerated CIM model.
+
+---
+
+## Source: https://splunkctl.danny.vn/#/design/architecture
+
+# Architecture
+
+How splunkctl is built — the layers, the data flow, and the design decisions.
+
+## Layers
+
+```mermaid
+flowchart TD
+  CLI["<b>CLI layer</b> · Click<br/>main.py + commands/*.py<br/>Global flags, command groups, subcommands"]
+  SVC["<b>Service layer</b><br/>config.py · client.py · output.py · guard.py<br/>Auth, formatting, mutation guard, Web UI workarounds"]
+  SDK["<b>SDK layer</b> · splunklib<br/>forked splunk-sdk-python<br/>REST bindings + Dashboard, LookupTableFile, HECToken"]
+  API["<b>Splunk Enterprise</b><br/>REST API :8089 · Web UI :8000"]
+  CLI --> SVC --> SDK --> API
+```
+
+## Data flow
+
+```mermaid
+flowchart TD
+  A["User / Agent"] --> B["splunkctl CLI (Click)\nparse flags, resolve format"]
+  B --> C["config.py\n~/.splunkctl/config.yaml"]
+  C --> D["client.py\nsplunklib.client.connect()"]
+  D --> E{"guard.py"}
+  E -- "--yes" --> F["Apply mutation"]
+  E -- "dry-run" --> G["[DRY RUN] preview"]
+  F --> H["output.py\ntable / JSON / CSV / JSONL → stdout"]
+  G --> H
+```
+
+## Auth resolution
+
+Priority (highest first):
+
+1. CLI flags (`--host`, `--port`, `--token`)
+2. Environment variables (`SPLUNK_HOST`, `SPLUNK_PORT`, `SPLUNK_TOKEN`,
+   `SPLUNK_USER`, `SPLUNK_PASS`)
+3. Config file (`--config <path>` or `~/.splunkctl/config.yaml`)
+
+Auth is **lazy** — credentials resolve on first API call. Help, version,
+config, and offline commands never trigger auth.
+
+## Remote-first design
+
+The CLI runs on the engineer's laptop and operates a remote Splunk
+instance. It never assumes filesystem access to the Splunk server. All
+operations go through:
+
+- **REST API** (port 8089) — the primary interface for all operations
+- **Web UI** (port 8000) — used only where the REST API has gaps
+
+## Web UI workarounds
+
+The Splunk REST API cannot handle certain file uploads. For these, the
+CLI uses the Web UI form handlers (the same endpoints the browser uses):
+
+| Operation | Why REST fails | Web UI endpoint |
+|---|---|---|
+| Lookup upload | `eai:data` requires server-side path | `POST /manager/{app}/data/lookup-table-files/_new` |
+| App install | REST expects server-side file path | `POST /manager/appinstall/_upload` |
+
+The `_WebSession` class in `client.py` handles login, CSRF tokens, and
+multipart form-data encoding for these uploads.
+
+Data upload (`search upload`) uses `POST /services/receivers/simple`
+which works over REST — no Web UI needed.
+
+## SDK fork
+
+The [forked SDK](https://github.com/dannyota/splunk-sdk-python/tree/splunkctl)
+adds entity classes missing from upstream:
+
+| Entity | Collection | Service property |
+|---|---|---|
+| `Dashboard` | `Dashboards` | `service.dashboards` |
+| `LookupTableFile` | `LookupTableFiles` | `service.lookup_table_files` |
+| `HECToken` | `HECTokens` | `service.hec_tokens` |
+
+Each follows the SDK's existing `Entity`/`Collection` patterns. For
+surfaces not worth a full SDK class, the generic `confs` API
+(`client.confs["props"]`) works as an escape hatch.
+
+## Design principles
+
+1. **Dry-run by default.** Every mutation previews before applying.
+2. **Dual output.** TTY gets tables, pipes get JSON. Always overridable.
+3. **Lazy everything.** Auth, SDK connection, config loading — all deferred
+   until needed.
+4. **One file per command group.** Each `commands/*.py` is self-contained.
+5. **SDK-first.** Use the SDK for everything it supports; Web UI workaround
+   only for documented gaps.
+6. **Remote-first.** Never use local filesystem for server operations.
+7. **Agent-friendly.** Machine-readable output, self-discovery, embedded skill.
+
+---
+
+## Source: https://splunkctl.danny.vn/#/design/catalog
+
+# Catalog & status
+
+The source of truth for **what exists and how mature it is** — one status per
+command group, updated in the same commit that moves it forward.
+
+**Status legend**
+
+| | Status | Meaning |
+|:-:|---|---|
+| - | **planned** | designed, code not started |
+| ✅ | **built** | functional, tested |
+
+## Core infrastructure
+
+| Module | Status | Notes |
+|---|---|---|
+| `main.py` | ✅ built | Click entry point, global flags |
+| `config.py` | ✅ built | Profiles (schema v2) + legacy fallback, env overlay, redact |
+| `client.py` | ✅ built | SDK wrapper, lazy auth, Web UI session |
+| `output.py` | ✅ built | Dual output (table/JSON/CSV/JSONL), empty-list contract |
+| `guard.py` | ✅ built | Mutation guard (dry-run/--yes), `@guarded` markers, profile/host banner |
+
+## Command groups
+
+All list surfaces accept uniform `--limit`/`--offset`/`--filter` options
+(filter first, then paging; defaults fetch everything) — see SKILL.md.
+
+| Group | Status | Subcommands |
+|---|---|---|
+| `config` | ✅ built | init (--profile), show (--profile), use, test — multi-instance profiles |
+| `info` | ✅ built | (default) |
+| `search` | ✅ built | run (--detach), export, oneshot, jobs, job (--offset/--count/--events/--status-only), cancel, upload |
+| `rules` | ✅ built | list (--filter, --app, --owner), get (--app, --owner), create (--email-to/--email-subject/--webhook-url conflict with --set), update (same), delete, enable, disable, share, history |
+| `rules import/export` | ✅ built | YAML round-trip with alert semantics, dry-run diff |
+| `alerts` | ✅ built | list, get, actions, suppress, unsuppress |
+| `dashboards` | ✅ built | list (type column), get (--definition), create (--type classic/studio/auto, --sharing), update (diff preview), delete, export (--definition, --all --dir), share |
+| `indexes` | ✅ built | list, get, create, update, delete, clean, reload |
+| `inputs` | ✅ built | list, get, create, update, delete, enable, disable |
+| `lookups` | ✅ built | list, get, upload, update, download, delete, define (--file/--collection), auto (LOOKUP-* wiring), definitions |
+| `hec` | ✅ built | list, get, create (--set), delete, enable, disable, settings (--enable/--disable), send |
+| `parsers` | ✅ built | sourcetypes, get (--key), set, unset, create, update, delete, reload |
+| `parsers import/export` | ✅ built | YAML round-trip for props/transforms stanzas |
+| `conf` | ✅ built | files (--app), list (--app), get (--key), set (diff preview), unset, reload — generic stanza editor for any conf file (macros/eventtypes/tags/authorize/...), no blocklist; shares its stanza get/set/unset/reload core with `parsers` via `conf_ops.py` |
+| `macros` | ✅ built | list (--app, F2 paging/filter, arg-form stanza `name(n)`), get (--app, resolves bare name to its arg-form), set (--definition, --args, diff preview) — thin `conf_ops` wrapper over `macros.conf`; only mutation in this group |
+| `eventtypes` | ✅ built | list (--app, F2 paging/filter), get (--app) — read-only `conf_ops` wrapper over `eventtypes.conf` |
+| `tags` | ✅ built | list (--app, F2 paging/filter, enabled-tags-only summary), get (--app, full enabled/disabled breakdown) — read-only `conf_ops` wrapper over `tags.conf`'s `field=value` stanza shape |
+| `datamodels` | ✅ built | list (--app, F2 paging/filter), get (--app, --definition), acceleration (`[name]`, build status: percent complete/summarized range/size/last error), rebuild (guarded, disable-then-re-enable) — no SDK entity, raw REST over `datamodel/model` + `admin/summarization`; live-verified for list/get/acceleration and rebuild's dry-run/not-accelerated paths, `rebuild --yes`/populated acceleration status unit-tested only (no CIM data model installed on the local dev instance) |
+| `apps` | ✅ built | list, get, install, uninstall, update, reload |
+| `users` | ✅ built | list, get, create, update (--password), delete |
+| `users roles` | ✅ built | list, get, create, update, delete |
+| `server` | ✅ built | messages (--dismiss), license, kvstore, cluster (indexer cluster health: mode/peers/SF-RF, manager→master fallback), shcluster (SH cluster: captain/members/replication), deployment (deployment server clients/check-in) — topology reads are read-only with graceful not-enabled handling (exit 0 on non-clustered instances); live-verified not-enabled paths, populated rendering unit-tested |
+| `es` | ✅ built | notables list (--since/--until/--status/--owner/--rule/--limit), get, update (bulk triage via `notable_update`) — feature-detected on `SplunkEnterpriseSecuritySuite`; live-verified against ES: pending (local dev instance has SSE, not ES) |
+| `audit` | ✅ built | changes (--since/--until/--user/--action/--object-type/--limit, normalizes both `_audit` event shapes, zero SPL composition), rbac (--roles-only, transitive capability/index aggregation) — read-only, live-verified |
+| `kvstore` | ✅ built | collections (--app), create, delete, query (--query/--limit/--skip/--sort), insert/update/remove (--data/--file/--query), export/import (JSONL, batch_save chunked at 500) — raw REST (no SDK entity), F1-classified errors; live round-trip pending healthy KV store (local dev instance's KV store is down; negative path live-verified) |
+| `state` | ✅ built | pull (--dir/--app/--types), diff (--dir/--app/--types, structured drift, exit 0 always), push (guarded, --dir/--app/--types/--report) — unified config-as-code across rules/parsers/macros/lookups/dashboards, orchestrating `rules_io`/`parsers_io`/`conf_ops`/`client.upload_lookup` (no re-implemented serialization/apply); dashboards is pull+diff only (no import path); push never deletes (`removed` drift is reported, never applied); `--report` writes the before→after change-ticket artifact on both dry-run (`applied:false`) and `--yes` (`applied:true`); live-verified full pull→edit→diff→push→report cycle |
+| `doctor` | ✅ built | Connection/auth/health/permissions/skill check, --strict, remediation hints |
+| `commands` | ✅ built | Machine-readable JSON tree with guard markers, global options |
+| `skill` | ✅ built | print, install |
+
+## Agent integration
+
+| Feature | Status | Notes |
+|---|---|---|
+| `SKILL.md` | ✅ built | Full agent operating guide |
+| `commands --json` | ✅ built | Guard markers, global options, note field |
+| `skill install` | ✅ built | Write to `~/.claude/skills/` |
+| `doctor --strict` | ✅ built | CI-friendly health gate |
+| JSON error envelope | ✅ built | `--json`/`--format json` errors as one `jq`-able stderr line: kind + http_status + message |
+| Multi-instance profiles | ✅ built | `profiles:`/`current:` config schema v2, `--profile` global flag, guard banner (`profile`/`env`/`flags` source) on every dry-run and `--yes` confirmation, no network I/O |
+
+## SDK fork status
+
+Gaps to fill in `dannyota/splunk-sdk-python`:
+
+| Gap | Status | Target |
+|---|---|---|
+| Dashboards | ✅ built | `Dashboard`/`Dashboards` on `splunkctl` branch |
+| Lookup tables | ✅ built | `LookupTableFile`/`LookupTableFiles` on `splunkctl` branch |
+| HEC tokens | ✅ built | `HECToken`/`HECTokens` on `splunkctl` branch |
+| Alert actions | - planned | Extend `SavedSearch` |
+

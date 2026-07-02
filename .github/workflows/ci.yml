@@ -53,3 +53,4 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - run: bash scripts/check-lengths.sh
+      - run: bash scripts/gen-seo.sh --check

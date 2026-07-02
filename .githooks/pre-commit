@@ -69,4 +69,16 @@ if [ -x scripts/check-lengths.sh ]; then
     exit 1
   fi
 fi
+
+# SEO/GEO asset freshness (sitemap.xml, llms.txt, llms-full.txt).
+if [ -x scripts/gen-seo.sh ]; then
+  if ! out="$(bash scripts/gen-seo.sh --check 2>&1)"; then
+    {
+      echo "commit blocked by stale SEO assets (scripts/gen-seo.sh --check):"
+      printf '%s\n' "$out" | grep -E 'MISSING|STALE|FAIL'
+      echo "Regenerate: bash scripts/gen-seo.sh"
+    } >&2
+    exit 1
+  fi
+fi
 exit 0
