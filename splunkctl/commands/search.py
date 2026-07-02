@@ -77,6 +77,7 @@ def search_group() -> None:
 @click.option("--latest", default=None, help="Latest time (e.g. now).")
 @click.option("--limit", default=100, type=int, help="Max results (default 100).")
 @click.option("--app", default=None, help="Splunk app context.")
+@click.option("--detach", is_flag=True, help="Submit job and exit without waiting.")
 @click.pass_context
 def run_search(
     ctx: click.Context,
@@ -85,6 +86,8 @@ def run_search(
     latest: str | None,
     limit: int,
     app: str | None,
+    *,
+    detach: bool,
 ) -> None:
     """Run a search synchronously and print results."""
     client = get_client(ctx)
@@ -93,7 +96,6 @@ def run_search(
         svc.namespace["app"] = app
     query = _normalize_spl(spl)
 
-    timeout: int = ctx.obj.get("timeout", 30)
     kwargs: dict[str, Any] = {
         "exec_mode": "normal",
         **_time_kwargs(earliest, latest),
@@ -102,6 +104,11 @@ def run_search(
     output.info(f"Running: {query}")
     job: Any = svc.jobs.create(query, **kwargs)
 
+    if detach:
+        output.render(ctx, {"sid": job.sid, "status": "running"})
+        return
+
+    timeout: int = ctx.obj.get("timeout", 30)
     deadline = time.monotonic() + timeout
     while not job.is_done():
         if time.monotonic() > deadline:
@@ -113,7 +120,13 @@ def run_search(
         job.refresh()
 
     rows = _read_results(job.results(output_mode="json", count=limit))
+    total = int(job.content.get("resultCount", len(rows)))
     output.render(ctx, rows)
+    if total > len(rows):
+        output.info(
+            f"Showing {len(rows)} of {total} results"
+            f" (sid={job.sid}; use: search job {job.sid} --offset {len(rows)})"
+        )
 
 
 @search_group.command("export")
@@ -197,12 +210,13 @@ def list_jobs(ctx: click.Context) -> None:
                 dur = f"{float(dur):.3f}"
             except (ValueError, TypeError):
                 pass
+        spl = str(content.get("search", ""))
         rows.append(
             {
                 "sid": job.sid,
                 "status": content.get("dispatchState", ""),
-                "earliest": content.get("earliestTime", ""),
-                "latest": content.get("latestTime", ""),
+                "owner": content.get("author", ""),
+                "spl": spl[:60] + ("…" if len(spl) > 60 else ""),
                 "event_count": content.get("eventCount", 0),
                 "run_duration": dur,
             }
@@ -212,8 +226,26 @@ def list_jobs(ctx: click.Context) -> None:
 
 @search_group.command("job")
 @click.argument("sid")
+@click.option("--offset", default=0, type=int, help="Result offset for paging.")
+@click.option(
+    "--count", "result_count", default=0, type=int, help="Max results (0=all).",
+)
+@click.option(
+    "--events", "show_events", is_flag=True, help="Fetch raw events.",
+)
+@click.option(
+    "--status-only", is_flag=True, help="Show status without results.",
+)
 @click.pass_context
-def get_job(ctx: click.Context, sid: str) -> None:
+def get_job(
+    ctx: click.Context,
+    sid: str,
+    offset: int,
+    result_count: int,
+    *,
+    show_events: bool,
+    status_only: bool,
+) -> None:
     """Get status and results for a specific job."""
     client = get_client(ctx)
     svc = client.service
@@ -240,13 +272,21 @@ def get_job(ctx: click.Context, sid: str) -> None:
         "is_done": done,
     }
 
-    if done:
-        rows = _read_results(job.results(output_mode="json"))
-        if rows:
-            output.info(f"Job {sid}: DONE - {len(rows)} result(s)")
-            output.render(ctx, rows)
-            return
-    output.render(ctx, status)
+    if status_only or not done:
+        output.render(ctx, status)
+        return
+
+    fetch_kw: dict[str, Any] = {"output_mode": "json"}
+    if offset:
+        fetch_kw["offset"] = offset
+    if result_count:
+        fetch_kw["count"] = result_count
+
+    stream = job.events(**fetch_kw) if show_events else job.results(**fetch_kw)
+    rows = _read_results(stream)
+    total = int(content.get("resultCount", 0))
+    output.info(f"Job {sid}: DONE -- {len(rows)} of {total}")
+    output.render(ctx, rows)
 
 
 @search_group.command("cancel")

@@ -1,9 +1,13 @@
+import json
 from unittest.mock import MagicMock, patch
 
 from click.testing import CliRunner
 
 from splunkctl.commands.search import _normalize_spl
 from splunkctl.main import cli
+
+_PATCH = "splunkctl.commands.search.get_client"
+_READER = "splunkctl.commands.search.JSONResultsReader"
 
 
 def test_normalize_spl_prepends_search() -> None:
@@ -302,3 +306,147 @@ def test_upload_default_source(
     assert result.exit_code == 0
     call_kw = mock_svc.post.call_args
     assert call_kw[1]["source"] == "firewall.log"
+
+
+@patch(_READER)
+@patch(_PATCH)
+def test_run_detach_renders_sid_no_poll(
+    mock_gc: MagicMock, mock_reader: MagicMock
+) -> None:
+    mock_job = MagicMock()
+    mock_job.sid = "999.1"
+    mock_svc = MagicMock()
+    mock_svc.jobs.create.return_value = mock_job
+    mock_gc.return_value.service = mock_svc
+
+    result = CliRunner().invoke(
+        cli, ["--json", "search", "run", "--detach", "index=main"]
+    )
+    assert result.exit_code == 0
+    assert '"999.1"' in result.output
+    assert '"running"' in result.output
+    mock_job.is_done.assert_not_called()
+
+
+@patch(_READER)
+@patch(_PATCH)
+def test_run_truncation_warning(
+    mock_gc: MagicMock, mock_reader: MagicMock
+) -> None:
+    mock_job = MagicMock()
+    mock_job.sid = "888.1"
+    mock_job.is_done.return_value = True
+    mock_job.results.return_value = "stream"
+    mock_job.content = {"resultCount": "5000"}
+    mock_svc = MagicMock()
+    mock_svc.jobs.create.return_value = mock_job
+    mock_gc.return_value.service = mock_svc
+
+    mock_reader.return_value = [{"a": "1"}]
+
+    result = CliRunner().invoke(
+        cli, ["--json", "search", "run", "--limit", "1", "index=main"]
+    )
+    assert result.exit_code == 0
+    assert "Showing 1 of 5000" in result.stderr
+    assert "888.1" in result.stderr
+
+
+@patch(_READER)
+@patch(_PATCH)
+def test_job_paging_kwargs(
+    mock_gc: MagicMock, mock_reader: MagicMock
+) -> None:
+    mock_job = MagicMock()
+    mock_job.sid = "777.1"
+    mock_job.is_done.return_value = True
+    mock_job.content = {
+        "dispatchState": "DONE",
+        "resultCount": "100",
+        "eventCount": "100",
+    }
+    mock_job.results.return_value = "stream"
+    mock_svc = MagicMock()
+    mock_svc.jobs.__getitem__ = MagicMock(return_value=mock_job)
+    mock_gc.return_value.service = mock_svc
+    mock_reader.return_value = [{"x": "1"}]
+
+    result = CliRunner().invoke(
+        cli,
+        ["--json", "search", "job", "777.1", "--offset", "10", "--count", "5"],
+    )
+    assert result.exit_code == 0
+    kw = mock_job.results.call_args.kwargs
+    assert kw["offset"] == 10
+    assert kw["count"] == 5
+
+
+@patch(_READER)
+@patch(_PATCH)
+def test_job_events_flag(
+    mock_gc: MagicMock, mock_reader: MagicMock
+) -> None:
+    mock_job = MagicMock()
+    mock_job.sid = "666.1"
+    mock_job.is_done.return_value = True
+    mock_job.content = {"dispatchState": "DONE", "resultCount": "10"}
+    mock_job.events.return_value = "estream"
+    mock_svc = MagicMock()
+    mock_svc.jobs.__getitem__ = MagicMock(return_value=mock_job)
+    mock_gc.return_value.service = mock_svc
+    mock_reader.return_value = [{"_raw": "evt"}]
+
+    result = CliRunner().invoke(
+        cli, ["--json", "search", "job", "666.1", "--events"]
+    )
+    assert result.exit_code == 0
+    mock_job.events.assert_called_once()
+    mock_job.results.assert_not_called()
+
+
+@patch(_READER)
+@patch(_PATCH)
+def test_job_status_only(
+    mock_gc: MagicMock, mock_reader: MagicMock
+) -> None:
+    mock_job = MagicMock()
+    mock_job.sid = "555.1"
+    mock_job.is_done.return_value = True
+    mock_job.content = {
+        "dispatchState": "DONE",
+        "resultCount": "50",
+        "eventCount": "50",
+    }
+    mock_svc = MagicMock()
+    mock_svc.jobs.__getitem__ = MagicMock(return_value=mock_job)
+    mock_gc.return_value.service = mock_svc
+
+    result = CliRunner().invoke(
+        cli, ["--json", "search", "job", "555.1", "--status-only"]
+    )
+    assert result.exit_code == 0
+    assert '"DONE"' in result.output
+    assert "is_done" in result.output
+    mock_job.results.assert_not_called()
+
+
+@patch(_PATCH)
+def test_jobs_includes_owner_and_spl(mock_gc: MagicMock) -> None:
+    mock_job = MagicMock()
+    mock_job.sid = "444.1"
+    mock_job.content = {
+        "dispatchState": "DONE",
+        "author": "admin",
+        "search": "search index=main | stats count",
+        "eventCount": "10",
+        "runDuration": "0.5",
+    }
+    mock_svc = MagicMock()
+    mock_svc.jobs.__iter__ = MagicMock(return_value=iter([mock_job]))
+    mock_gc.return_value.service = mock_svc
+
+    result = CliRunner().invoke(cli, ["--json", "search", "jobs"])
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data[0]["owner"] == "admin"
+    assert "stats count" in data[0]["spl"]
