@@ -9,11 +9,16 @@ import click
 from splunkctl import guard, output
 from splunkctl.client import get_client
 from splunkctl.commands.common import parse_set
+from splunkctl.commands.parsers_io import export_parsers, import_parsers
 
 
 @click.group("parsers")
 def parsers_group() -> None:
     """Manage source types and field extractions."""
+
+
+parsers_group.add_command(export_parsers)
+parsers_group.add_command(import_parsers)
 
 
 @parsers_group.command("set")
