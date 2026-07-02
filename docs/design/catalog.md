@@ -45,6 +45,7 @@ All list surfaces accept uniform `--limit`/`--offset`/`--filter` options
 | `users roles` | ✅ built | list, get, create, update, delete |
 | `server` | ✅ built | messages (--dismiss), license, kvstore |
 | `es` | ✅ built | notables list (--since/--until/--status/--owner/--rule/--limit), get, update (bulk triage via `notable_update`) — feature-detected on `SplunkEnterpriseSecuritySuite`; live-verified against ES: pending (local dev instance has SSE, not ES) |
+| `audit` | ✅ built | changes (--since/--until/--user/--action/--object-type/--limit, normalizes both `_audit` event shapes, zero SPL composition), rbac (--roles-only, transitive capability/index aggregation) — read-only, live-verified |
 | `doctor` | ✅ built | Connection/auth/health/permissions/skill check, --strict, remediation hints |
 | `commands` | ✅ built | Machine-readable JSON tree with guard markers, global options |
 | `skill` | ✅ built | print, install |

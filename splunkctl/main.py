@@ -10,6 +10,7 @@ from splunkctl import config as cfg_mod
 from splunkctl import errors as err_mod
 from splunkctl.commands.alerts import alerts_group
 from splunkctl.commands.apps import apps_group
+from splunkctl.commands.audit import audit_group
 from splunkctl.commands.commands_meta import commands_meta
 from splunkctl.commands.config_cmd import config_group
 from splunkctl.commands.dashboards import dashboards_group
@@ -173,6 +174,7 @@ def cli(
 
 cli.add_command(alerts_group)
 cli.add_command(apps_group)
+cli.add_command(audit_group)
 cli.add_command(commands_meta)
 cli.add_command(config_group)
 cli.add_command(dashboards_group)

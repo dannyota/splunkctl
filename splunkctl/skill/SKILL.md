@@ -270,6 +270,34 @@ statuses). `--disposition` passes through as given (e.g. `disposition:1`)
 name map. `update` requires at least one of `--status`/`--owner`/
 `--urgency`/`--disposition`/`--comment`; none is a usage error (exit 2).
 
+### Audit (compliance & RBAC attestation)
+
+Read-only, no `guard`. `changes` wraps `index=_audit`, which mixes two
+incompatible event shapes (legacy `Audit:[timestamp=...]` text and
+structured JSON), and normalizes both into one six-key schema: `time`,
+`user`, `action`, `object`, `object_type`, `app`. An event matching
+neither shape is never dropped — it comes back as `action: "unparsed"`
+with the raw line in `object`.
+
+```bash
+splunkctl audit changes                                # last 24h, up to 500
+splunkctl audit changes --since -7d --user jdoe         # exact-match user
+splunkctl audit changes --action edit --json            # substring-match action
+splunkctl audit changes --object-type saved_search      # exact-match object type
+splunkctl audit rbac                                    # users x roles x caps x indexes
+splunkctl audit rbac --format csv --out recert.csv      # recertification export
+splunkctl audit rbac --roles-only                       # one row per role instead
+```
+
+SECURITY: `changes`'s dispatched SPL is always the constant
+`search index=_audit` — `--since`/`--until` go through the search job's
+time-range kwargs, and `--user`/`--action`/`--object-type` filter the
+normalized rows client-side. No flag value ever reaches the SPL string,
+even adversarial ones. `rbac`'s `capabilities`/`srch_indexes_allowed`
+columns aggregate across each principal's direct roles AND the full
+transitive closure of imported roles (dedup, sort, `;`-joined — never
+`\n`, so CSV stays clean).
+
 ### Dashboards
 
 ```bash
@@ -592,6 +620,23 @@ splunkctl indexes list --json \
 ```bash
 splunkctl users list --json | jq '.[] | {name, roles, email}'
 splunkctl users roles --json | jq '.[] | {name, capabilities}'
+```
+
+### Periodic access recertification (RBAC attestation)
+
+```bash
+# Export the full users x roles x capabilities x index-restrictions view
+# for a compliance sign-off, one row per user, transitively aggregated:
+splunkctl audit rbac --format csv --out recert-$(date +%Y%m).csv
+
+# Same, role-centric — one row per role, for reviewing a role definition
+# rather than who holds it:
+splunkctl audit rbac --roles-only --json | jq '.[] | select(.capabilities | contains("admin_all_objects"))'
+
+# Pair with a change-audit slice over the same window, for "did anyone
+# touch a role/user between recertifications":
+splunkctl audit changes --since -30d --action edit_roles --json
+splunkctl audit changes --since -30d --object-type account --json
 ```
 
 ### Discover data sources
