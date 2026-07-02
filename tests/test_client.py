@@ -181,3 +181,19 @@ def test_install_app_posts_state(mock_session_cls: MagicMock, tmp_path: Path) ->
     assert post_call.args[1].endswith("/manager/appinstall/_upload")
     assert post_call.kwargs["data"]["state"] == "abc123"
     assert "appfile" in post_call.kwargs["files"]
+
+
+def test_set_acl_defaults_owner_from_entity() -> None:
+    entity = MagicMock()
+    entity.access = {"owner": "alice", "sharing": "user"}
+    c = SplunkClient(host="h")
+    c.set_acl(entity, sharing="app")
+    entity.acl_update.assert_called_once_with(sharing="app", owner="alice")
+
+
+def test_set_acl_explicit_owner() -> None:
+    entity = MagicMock()
+    entity.access = {}
+    c = SplunkClient(host="h")
+    c.set_acl(entity, sharing="global", owner="nobody")
+    entity.acl_update.assert_called_once_with(sharing="global", owner="nobody")

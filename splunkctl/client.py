@@ -136,6 +136,17 @@ class SplunkClient:
         """Install a .spl/.tar.gz app package via the Splunk Web UI."""
         self._ensure_web_session().install_app(file_path, force=force)
 
+    def set_acl(self, entity: Any, *, sharing: str, owner: str | None = None) -> None:
+        """Change an entity's sharing level via its ACL endpoint.
+
+        Args:
+            entity: Any SDK entity (saved search, dashboard, conf stanza...).
+            sharing: One of user, app, global.
+            owner: Defaults to the entity's current owner, else "nobody".
+        """
+        acl: dict[str, Any] = dict(entity.access)
+        entity.acl_update(sharing=sharing, owner=owner or acl.get("owner", "nobody"))
+
 
 class _WebSession:
     """Authenticated Splunk Web session for form-handler operations.
