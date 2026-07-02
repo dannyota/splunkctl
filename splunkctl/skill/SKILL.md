@@ -75,7 +75,12 @@ Every list surface (`rules list`, `alerts list`, `dashboards list`,
 
 - **Defaults are complete.** Without flags, every list fetches the entire
   collection — there is no hidden page size. An unflagged `rules list
-  --app -` or `users list` is a full inventory.
+  --app -` or `users list` is a full inventory. Exception: `inputs list` uses
+  the SDK's union Inputs collection, which pages each kind with a 30-per-kind
+  default limit — for environments with >30 inputs of a single kind, the list
+  may be incomplete. To verify completeness for a specific kind, use
+  `splunkctl search oneshot '| rest /services/data/inputs/<kind>'` (e.g.,
+  `'| rest /services/data/inputs/monitor'`).
 - **Order**: `--filter` narrows first; `--limit`/`--offset` then page the
   filtered set.
 - `--filter` matches the name column (`search jobs` matches the sid;

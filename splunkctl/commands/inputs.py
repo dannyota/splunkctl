@@ -54,7 +54,11 @@ def list_inputs(
     """List data inputs.
 
     --filter/--limit/--offset apply client-side, after the --kind filter
-    (the SDK inputs collection is a union across input kinds).
+    (the SDK inputs collection is a union across input kinds). Note: the union
+    collection pages each kind with a 30-per-kind default limit, so environments
+    with >30 inputs of a single kind may return incomplete results. To verify
+    completeness for a specific kind, use: splunkctl search oneshot
+    '| rest /services/data/inputs/<kind>' (e.g., /services/data/inputs/monitor).
     """
     client = get_client(ctx)
     rows = [_input_row(i) for i in client.service.inputs.list()]
