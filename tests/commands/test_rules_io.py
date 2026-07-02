@@ -1,5 +1,6 @@
 """Tests for detection-as-code import/export."""
 
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import yaml
@@ -218,3 +219,113 @@ def test_import_invalid_yaml(
         ["--yes", "rules", "import", "--path", str(rules_file)],
     )
     assert result.exit_code != 0
+
+
+@patch(_PATCH)
+def test_export_includes_thresholds(mock_gc: MagicMock, tmp_path: Path) -> None:
+    ss = _mock_ss("det_thresh", cron="*/5 * * * *")
+    ss.content.update(
+        {
+            "alert_type": "number of events",
+            "alert_comparator": "greater than",
+            "alert_threshold": "5",
+            "actions": "email",
+            "action.email.to": "soc@example.com",
+            "action.email.sendresults": "1",
+        }
+    )
+    mock_gc.return_value.service.saved_searches.list.return_value = [ss]
+
+    out = tmp_path / "rules.yml"
+    result = CliRunner().invoke(cli, ["rules", "export", "--path", str(out)])
+    assert result.exit_code == 0
+    doc = yaml.safe_load(out.read_text())[0]
+    assert doc["alert_comparator"] == "greater than"
+    assert doc["alert_threshold"] == "5"
+    assert doc["action.email.to"] == "soc@example.com"
+
+
+@patch(_PATCH)
+def test_import_passes_unknown_fields_through(
+    mock_gc: MagicMock, tmp_path: Path
+) -> None:
+    yml = tmp_path / "rules.yml"
+    yml.write_text(
+        yaml.dump(
+            [
+                {
+                    "name": "new_rule",
+                    "search": "index=x",
+                    "alert_comparator": "greater than",
+                    "alert_threshold": "5",
+                    "alert_type": "number of events",
+                    "action.email.to": "soc@example.com",
+                }
+            ]
+        )
+    )
+    svc = MagicMock()
+    svc.saved_searches.__getitem__.side_effect = KeyError("new_rule")
+    mock_gc.return_value.service = svc
+
+    result = CliRunner().invoke(cli, ["--yes", "rules", "import", "--path", str(yml)])
+    assert result.exit_code == 0, result.output
+    _, kwargs = svc.saved_searches.create.call_args
+    assert kwargs["alert_comparator"] == "greater than"
+    assert kwargs["alert_threshold"] == "5"
+    assert kwargs["action.email.to"] == "soc@example.com"
+
+
+@patch(_PATCH)
+def test_import_unchanged_skips_update(mock_gc: MagicMock, tmp_path: Path) -> None:
+    ss = _mock_ss("same_rule", "index=x")
+    yml = tmp_path / "rules.yml"
+    yml.write_text(yaml.dump([{"name": "same_rule", "search": "index=x"}]))
+    svc = MagicMock()
+    svc.saved_searches.__getitem__.return_value = ss
+    mock_gc.return_value.service = svc
+
+    result = CliRunner().invoke(cli, ["--yes", "rules", "import", "--path", str(yml)])
+    assert result.exit_code == 0
+    assert "1 unchanged" in result.stderr
+    ss.update.assert_not_called()
+
+
+@patch(_PATCH)
+def test_import_named_skip_exits_nonzero(mock_gc: MagicMock, tmp_path: Path) -> None:
+    yml = tmp_path / "rules.yml"
+    yml.write_text(
+        yaml.dump(
+            [
+                {"name": "broken_rule"},
+                {"name": "good_rule", "search": "index=x"},
+            ]
+        )
+    )
+    svc = MagicMock()
+    svc.saved_searches.__getitem__.side_effect = KeyError("nope")
+    mock_gc.return_value.service = svc
+
+    result = CliRunner().invoke(cli, ["--yes", "rules", "import", "--path", str(yml)])
+    assert result.exit_code == 1
+    assert "broken_rule" in result.stderr
+    assert "no search field" in result.stderr
+
+
+@patch(_PATCH)
+def test_import_dry_run_shows_field_diff(mock_gc: MagicMock, tmp_path: Path) -> None:
+    ss = _mock_ss("det1", "index=old")
+    yml = tmp_path / "rules.yml"
+    yml.write_text(
+        yaml.dump([{"name": "det1", "search": "index=new", "alert_threshold": "9"}])
+    )
+    svc = MagicMock()
+    svc.saved_searches.__getitem__.return_value = ss
+    mock_gc.return_value.service = svc
+
+    result = CliRunner().invoke(cli, ["rules", "import", "--path", str(yml)])
+    assert result.exit_code == 0
+    assert "update: det1" in result.stderr
+    assert "index=old -> index=new" in result.stderr
+    assert "alert_threshold" in result.stderr
+    ss.update.assert_not_called()
