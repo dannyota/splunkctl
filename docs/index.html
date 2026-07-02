@@ -35,8 +35,9 @@
     "operatingSystem": "Linux, macOS, Windows",
     "programmingLanguage": "Python",
     "offers": { "@type": "Offer", "price": "0" },
-    "author": { "@type": "Person", "name": "dannyota" },
+    "author": { "@type": "Person", "name": "Danny", "url": "https://danny.vn" },
     "url": "https://splunkctl.danny.vn",
+    "codeRepository": "https://github.com/dannyota/splunkctl",
     "downloadUrl": "https://github.com/dannyota/splunkctl",
     "softwareRequirements": "Python 3.13+",
     "license": "https://www.apache.org/licenses/LICENSE-2.0"
@@ -497,8 +498,17 @@
         });
       });
     }
+    function updateTitle(hook) {
+      hook.doneEach(function () {
+        var h1 = document.querySelector('.markdown-section h1');
+        var base = 'splunkctl';
+        document.title = h1
+          ? h1.textContent.trim() + ' — ' + base
+          : base + ' — operate Splunk Enterprise as code';
+      });
+    }
     window.$docsify = window.$docsify || {};
-    window.$docsify.plugins = (window.$docsify.plugins || []).concat(initMermaid, initTocState, initHomeActive);
+    window.$docsify.plugins = (window.$docsify.plugins || []).concat(initMermaid, initTocState, initHomeActive, updateTitle);
   </script>
   <script>
     function sysDark() {
