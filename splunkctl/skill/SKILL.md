@@ -56,6 +56,7 @@ Token auth: set `SPLUNK_TOKEN` for service-account access without a password.
 ```bash
 splunkctl doctor                         # check connection, auth, health, permissions
 splunkctl doctor --json                  # machine-readable output
+splunkctl doctor --strict                # treat warnings as failures (exit 1)
 ```
 
 ### Search
@@ -63,11 +64,14 @@ splunkctl doctor --json                  # machine-readable output
 ```bash
 splunkctl search run 'index=main error | head 10'
 splunkctl search run 'index=main' --earliest -24h --latest now --limit 50
-splunkctl search run 'index=main' --earliest -7d --app search
+splunkctl search run 'index=main' --detach           # start job, return SID, don't wait
 splunkctl search export 'index=main | stats count by sourcetype'
 splunkctl search oneshot '| makeresults count=5 | eval x=random()'
-splunkctl search jobs                    # list recent jobs
-splunkctl search job <sid>               # get job status/results
+splunkctl search jobs                    # list recent jobs (with owner, SPL preview)
+splunkctl search job <sid>               # get job results
+splunkctl search job <sid> --offset 100 --count 50   # paged results
+splunkctl search job <sid> --events      # raw events instead of results
+splunkctl search job <sid> --status-only # job status without results
 splunkctl search cancel <sid> --yes      # cancel a running job
 splunkctl search upload --path threats.csv --index threat_intel --yes
 ```
@@ -88,7 +92,9 @@ splunkctl rules update 'My Rule' --enabled --yes
 splunkctl rules delete 'My Rule' --yes
 splunkctl rules enable 'My Rule' --yes
 splunkctl rules disable 'My Rule' --yes
+splunkctl rules share 'My Rule' --sharing app --yes
 splunkctl rules history 'My Rule'
+splunkctl rules list --filter 'disabled=1'   # filter by key=value
 splunkctl rules export --path detections.yml
 splunkctl rules export --path detections.yml --name 'My Rule'
 splunkctl rules import --path detections.yml --yes
@@ -102,18 +108,25 @@ splunkctl alerts list
 splunkctl alerts get 'Alert Name'
 splunkctl alerts actions               # list alert action types
 splunkctl alerts suppress 'Alert Name' --duration 7200 --yes
+splunkctl alerts unsuppress 'Alert Name' --yes
 ```
 
 ### Dashboards
 
 ```bash
-splunkctl dashboards list
+splunkctl dashboards list                # includes type column (classic/studio)
 splunkctl dashboards list --app search
 splunkctl dashboards get my_dashboard
-splunkctl dashboards create --name new_dash --file dash.xml --app search --yes
-splunkctl dashboards update my_dash --file updated.xml --app search --yes
-splunkctl dashboards delete my_dash --app search --yes
+splunkctl dashboards get my_dashboard --definition  # Studio JSON only
+splunkctl dashboards create --name new_dash --file dash.xml --yes
+splunkctl dashboards create --name studio_dash --file viz.json --type studio --yes
+splunkctl dashboards create --name dash --file d.xml --sharing app --yes
+splunkctl dashboards update my_dash --file updated.xml --yes   # shows diff preview
+splunkctl dashboards delete my_dash --yes
 splunkctl dashboards export my_dash --out dash.xml
+splunkctl dashboards export my_dash --definition     # Studio JSON definition
+splunkctl dashboards export --all --dir ./dashboards # bulk export all
+splunkctl dashboards share my_dash --sharing app --yes
 ```
 
 ### Indexes
@@ -165,11 +178,14 @@ splunkctl lookups delete my_lookup.csv --app search --yes
 splunkctl hec list                      # list all HEC tokens
 splunkctl hec get my_token              # get token details
 splunkctl hec create --name my_token --index main --yes
-splunkctl hec create --name my_token --index main \
-    --indexes 'main,_internal' --sourcetype json --yes
+splunkctl hec create --name my_token --index main --set useACK=1 --yes
 splunkctl hec delete my_token --yes
 splunkctl hec enable my_token --yes
 splunkctl hec disable my_token --yes
+splunkctl hec settings                  # show global HEC state (port, SSL)
+splunkctl hec settings --enable --yes   # enable global HEC
+splunkctl hec settings --disable --yes  # disable global HEC
+splunkctl hec send my_token 'test event data' --yes  # send event via HEC
 ```
 
 ### Parsers (sourcetypes & extractions)
@@ -177,12 +193,16 @@ splunkctl hec disable my_token --yes
 ```bash
 splunkctl parsers sourcetypes           # list all sourcetypes
 splunkctl parsers get syslog            # get sourcetype config
+splunkctl parsers get syslog --key TIME_FORMAT  # get one key
 splunkctl parsers extractions           # list field extractions
+splunkctl parsers set syslog TIME_FORMAT '%Y-%m-%d' --yes  # set config key
+splunkctl parsers unset syslog TIME_FORMAT --yes           # remove key
 splunkctl parsers create --sourcetype mysource --category Custom --yes
-splunkctl parsers create --sourcetype mysource \
-    --category Custom --transforms my_extraction --yes
 splunkctl parsers update mysource --category Operating_System --yes
 splunkctl parsers delete mysource --yes
+splunkctl parsers reload --yes
+splunkctl parsers export --path parsers.yml          # export props/transforms
+splunkctl parsers import --path parsers.yml --yes    # import from YAML
 ```
 
 ### Apps
@@ -206,11 +226,26 @@ instance via the Web UI (no server filesystem access needed).
 ```bash
 splunkctl users list
 splunkctl users get admin
-splunkctl users roles                   # list all roles
 splunkctl users create --name newuser --password 'pass' \
     --roles user --email user@example.com --yes
 splunkctl users update newuser --roles 'user,power' --yes
+splunkctl users update newuser --password 'newpass' --yes
 splunkctl users delete newuser --yes
+splunkctl users roles                   # list all roles
+splunkctl users roles get admin         # role details
+splunkctl users roles create --name myrole --imported-roles user \
+    --capabilities 'search,list_inputs' --yes
+splunkctl users roles update myrole --search-filter 'index=main' --yes
+splunkctl users roles delete myrole --yes
+```
+
+### Server
+
+```bash
+splunkctl server messages               # list system messages
+splunkctl server messages --dismiss warn_disk --yes  # dismiss a message
+splunkctl server license                # license pool usage
+splunkctl server kvstore                # KV store status
 ```
 
 ### Config
@@ -284,6 +319,16 @@ splunkctl rules import --path detections.yml
 splunkctl rules import --path detections.yml --yes
 # Import without updating existing rules
 splunkctl rules import --path detections.yml --no-update --yes
+```
+
+### Parsers-as-code
+
+```bash
+# Export props/transforms for version control
+splunkctl parsers export --path parsers.yml
+# Import into another instance (dry-run shows diff)
+splunkctl parsers import --path parsers.yml
+splunkctl parsers import --path parsers.yml --yes
 ```
 
 ### Upload data from laptop

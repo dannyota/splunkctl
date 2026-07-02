@@ -8,49 +8,51 @@ command group, updated in the same commit that moves it forward.
 | | Status | Meaning |
 |:-:|---|---|
 | - | **planned** | designed, code not started |
-| 🔨 | **scaffolded** | stub file exists, no logic |
 | ✅ | **built** | functional, tested |
 
 ## Core infrastructure
-
-These are shared modules used by all command groups.
 
 | Module | Status | Notes |
 |---|---|---|
 | `main.py` | ✅ built | Click entry point, global flags |
 | `config.py` | ✅ built | Config file management, env overlay, redact |
-| `client.py` | ✅ built | SDK wrapper, lazy auth |
-| `output.py` | ✅ built | Dual output (table/JSON/CSV/JSONL) |
-| `guard.py` | ✅ built | Mutation guard (dry-run/--yes) |
+| `client.py` | ✅ built | SDK wrapper, lazy auth, Web UI session |
+| `output.py` | ✅ built | Dual output (table/JSON/CSV/JSONL), empty-list contract |
+| `guard.py` | ✅ built | Mutation guard (dry-run/--yes), `@guarded` markers |
 
 ## Command groups
 
-| Group | Status | SDK | Notes |
-|---|---|---|---|
-| `config` | ✅ built | N/A | init, show, test |
-| `info` | ✅ built | `splunklib.client.info` | Server info |
-| `search` | ✅ built | `splunklib.client.Jobs` | run, export, oneshot, jobs, job, cancel |
-| `rules` | ✅ built | `splunklib.client.SavedSearches` | list, get, create, update, delete, enable, disable, history |
-| `alerts` | ✅ built | `splunklib.client.FiredAlerts` | list, get, actions, suppress |
-| `dashboards` | ✅ built | `splunklib.client.Dashboards` | list, get, create, update, delete, export |
-| `indexes` | ✅ built | `splunklib.client.Indexes` | list, get, create, update, delete, clean, reload |
-| `inputs` | ✅ built | `splunklib.client.Inputs` | list, get, create, update, delete, enable, disable |
-| `lookups` | ✅ built | `splunklib.client.LookupTableFiles` | list, get, upload, update, download, delete |
-| `hec` | ✅ built | `splunklib.client.HECTokens` | list, get, create, delete, enable, disable |
-| `parsers` | ✅ built | `splunklib.client.Confs` | sourcetypes, get, extractions, create, update, delete |
-| `apps` | ✅ built | `splunklib.client.Apps` | list, get, install, uninstall, update, reload |
-| `users` | ✅ built | `splunklib.client.Users` | list, get, roles, create, update, delete |
-| `doctor` | ✅ built | N/A | Connection, auth, health, permissions check |
-| `commands` | ✅ built | N/A | Self-discovery (`--json`) |
-| `skill` | ✅ built | N/A | Print/install SKILL.md |
+| Group | Status | Subcommands |
+|---|---|---|
+| `config` | ✅ built | init, show, test |
+| `info` | ✅ built | (default) |
+| `search` | ✅ built | run (--detach), export, oneshot, jobs, job (--offset/--count/--events/--status-only), cancel, upload |
+| `rules` | ✅ built | list (--filter), get, create, update, delete, enable, disable, share, history |
+| `rules import/export` | ✅ built | YAML round-trip with alert semantics, dry-run diff |
+| `alerts` | ✅ built | list, get, actions, suppress, unsuppress |
+| `dashboards` | ✅ built | list (type column), get (--definition), create (--type classic/studio/auto, --sharing), update (diff preview), delete, export (--definition, --all --dir), share |
+| `indexes` | ✅ built | list, get, create, update, delete, clean, reload |
+| `inputs` | ✅ built | list, get, create, update, delete, enable, disable |
+| `lookups` | ✅ built | list, get, upload, update, download, delete |
+| `hec` | ✅ built | list, get, create (--set), delete, enable, disable, settings (--enable/--disable), send |
+| `parsers` | ✅ built | sourcetypes, get (--key), set, unset, create, update, delete, reload |
+| `parsers import/export` | ✅ built | YAML round-trip for props/transforms stanzas |
+| `apps` | ✅ built | list, get, install, uninstall, update, reload |
+| `users` | ✅ built | list, get, create, update (--password), delete |
+| `users roles` | ✅ built | list, get, create, update, delete |
+| `server` | ✅ built | messages (--dismiss), license, kvstore |
+| `doctor` | ✅ built | Connection/auth/health/permissions/skill check, --strict, remediation hints |
+| `commands` | ✅ built | Machine-readable JSON tree with guard markers, global options |
+| `skill` | ✅ built | print, install |
 
 ## Agent integration
 
 | Feature | Status | Notes |
 |---|---|---|
 | `SKILL.md` | ✅ built | Full agent operating guide |
-| `commands --json` | ✅ built | Machine-readable command tree |
+| `commands --json` | ✅ built | Guard markers, global options, note field |
 | `skill install` | ✅ built | Write to `~/.claude/skills/` |
+| `doctor --strict` | ✅ built | CI-friendly health gate |
 
 ## SDK fork status
 
