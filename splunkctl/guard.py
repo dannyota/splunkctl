@@ -1,21 +1,62 @@
 """Mutation guard — dry-run preview, --yes to apply."""
 
+from pathlib import Path
 from typing import Any
 
 import click
+
+from splunkctl import config as cfg_mod
+
+
+def banner(ctx: click.Context, *, overrides: dict[str, Any] | None = None) -> str:
+    """Build the ``(source: name @ host:port)`` guard banner.
+
+    Reads only local config (file + env) via :func:`splunkctl.config.resolve`
+    — never constructs a ``SplunkClient`` or performs auth. Safe to call
+    before every mutation preview and ``--yes`` confirmation, so help/offline
+    commands and dry-run previews alike stay lazy-auth compliant.
+
+    Args:
+        ctx: Click context carrying ``config``/``profile`` global flags.
+        overrides: CLI-flag-provided connection fields, if any (mirrors
+            :class:`splunkctl.client.SplunkClient`'s override layer).
+
+    Raises:
+        splunkctl.config.ProfileNotFoundError: the selected profile does
+            not exist.
+    """
+    obj: dict[str, Any] = ctx.obj or {}
+    config_path = Path(obj["config"]) if obj.get("config") else None
+    resolved = cfg_mod.resolve(
+        config_path, profile=obj.get("profile"), overrides=overrides
+    )
+    cfg = resolved["cfg"]
+    host = cfg.get("host", "localhost")
+    port = cfg.get("port", 8089)
+    label = (
+        f"profile: {resolved['profile']}"
+        if resolved["source"] == "profile"
+        else resolved["source"]
+    )
+    return f"({label} @ {host}:{port})"
 
 
 def check(ctx: click.Context, action: str, *, details: str = "") -> bool:
     """Return True if the mutation should proceed.
 
     Dry-run (default) prints a preview to stderr and returns False.
-    Pass ``--yes`` to apply.
+    Pass ``--yes`` to apply. Both the preview and the ``--yes``
+    confirmation carry the active profile/host banner, so an agent can
+    never mistake which instance it's about to mutate (e.g. UAT vs prod).
     """
     obj: dict[str, Any] = ctx.obj or {}
+    tag = banner(ctx)
+
     if not obj.get("dry_run", True):
+        click.echo(f"Applying: {action} {tag}", err=True)
         return True
 
-    click.echo(f"[DRY RUN] {action}", err=True)
+    click.echo(f"[DRY RUN] {action} {tag}", err=True)
     if details:
         click.echo(details, err=True)
     click.echo("Pass --yes to apply.", err=True)

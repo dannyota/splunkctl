@@ -5,6 +5,7 @@ import json
 import click
 from click.testing import CliRunner
 
+from splunkctl.config import ProfileNotFoundError
 from splunkctl.main import _CLI
 
 
@@ -123,3 +124,12 @@ def test_unclassified_exception_still_propagates() -> None:
     assert result.exit_code != 0
     assert result.exception is not None
     assert "error" not in (result.stderr or "")
+
+
+def test_profile_not_found_maps_to_not_found() -> None:
+    """A bad --profile (any command, not just `config use`) gets the F1 envelope."""
+    exit_code, err = _invoke_and_get_envelope(ProfileNotFoundError("uat"))
+    assert exit_code == 1
+    assert err["kind"] == "not_found"
+    assert err["http_status"] is None
+    assert "uat" in str(err["message"])

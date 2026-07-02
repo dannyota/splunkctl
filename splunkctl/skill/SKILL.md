@@ -35,6 +35,54 @@ Credentials resolve in order: CLI flags > env vars > config file
 
 Token auth: set `SPLUNK_TOKEN` for service-account access without a password.
 
+### Profiles (multi-instance: dev/UAT/prod)
+
+The config file supports named profiles — one `~/.splunkctl/config.yaml`
+covering several Splunk instances instead of juggling `-c` paths:
+
+```yaml
+profiles:
+  dev:
+    host: dev.splunk.internal
+    username: admin
+    password: devpass
+  uat:
+    host: uat.splunk.internal
+    token: "..."
+current: uat            # active profile when nothing else is specified
+```
+
+```bash
+splunkctl config use uat                # switch the active profile
+splunkctl config show                   # active profile (redacted) + other names
+splunkctl config show --profile prod    # show a specific profile without switching
+splunkctl --profile prod rules list     # override for one invocation only
+```
+
+Selection precedence: `--profile <name>` global flag > `current:` pointer >
+`default`. `config use` only rewrites `current` — it never tests
+connectivity (lazy auth is preserved). A plain single-instance config file
+(flat `host`/`port`/... at the root, no `profiles:` key) keeps working
+unchanged forever — it's treated as an implicit profile named `default`.
+`config init` (bare) always writes that flat shape; `config init --profile
+<name>` creates/updates a named profile instead (upgrading a legacy file
+in place, folding its old values into `profiles.default`, then run `config
+use <name>` to make the new profile active).
+
+**Bank-safety guard banner.** Every dry-run preview and every `--yes`
+confirmation prints where the mutation is headed —
+`(profile: <name> @ <host>:<port>)` when a config-file profile supplies
+credentials, `(env @ <host>:<port>)` / `(flags @ <host>:<port>)` when env
+vars or CLI flags override them — so an agent driving multiple instances
+can never mistake UAT for prod:
+
+```
+[DRY RUN] Disable saved search 'X' (profile: uat @ uat.splunk.internal:8089)
+```
+
+Building this banner only reads local config/env — it never opens a
+connection, preserving lazy auth even for a blocked dry-run.
+
 ## Global flags
 
 | Flag | Purpose |
@@ -46,6 +94,7 @@ Token auth: set `SPLUNK_TOKEN` for service-account access without a password.
 | `-y, --yes` | Apply mutations (skip dry-run) |
 | `--timeout N` | Request timeout in seconds (default 30) |
 | `-c, --config path` | Config file path override |
+| `--profile name` | Named profile to use (overrides the file's `current:`) |
 | `--debug` | HTTP request/response logging |
 
 **Dry-run by default.** Every mutation previews what would change. Only
@@ -332,11 +381,17 @@ can't be mistaken for a healthy empty result.
 ### Config
 
 ```bash
-splunkctl config init                   # interactive setup
+splunkctl config init                   # interactive setup (writes the flat/default file)
 splunkctl config init --host h --port 8089 --username u --password p
-splunkctl config show                   # display config (redacted)
+splunkctl config init --profile uat --host h --username u --password p  # named profile
+splunkctl config use uat                # switch the active profile (no connectivity test)
+splunkctl config show                   # active profile, redacted, + other profile names
+splunkctl config show --profile prod    # show one profile without switching
 splunkctl config test                   # verify connectivity
 ```
+
+See **Profiles** under Auth for the multi-instance (dev/UAT/prod) model and
+the guard-banner safety contract.
 
 ### Info & version
 

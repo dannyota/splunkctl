@@ -123,7 +123,10 @@ def test_install_force(mock_gc: MagicMock, tmp_path: MagicMock) -> None:
     )
     assert result.exit_code == 0
     assert "Installed" in result.output
-    assert "force overwrite" not in result.output
+    # The --yes confirmation banner (bank-safety: profile/host on every
+    # mutation) carries the force-overwrite detail; the final result line
+    # doesn't repeat it.
+    assert "force overwrite" in result.stderr
 
 
 @patch("splunkctl.commands.apps.get_client")

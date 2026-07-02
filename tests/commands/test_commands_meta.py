@@ -150,6 +150,14 @@ def test_commands_global_options() -> None:
     assert "yes" in names
 
 
+def test_commands_global_options_includes_profile() -> None:
+    """--profile is picked up automatically via Click introspection."""
+    result = CliRunner().invoke(cli, ["commands"])
+    data = json.loads(result.output)
+    profile_opt = next(o for o in data["global_options"] if o["name"] == "profile")
+    assert "--profile" in profile_opt["flags"]
+
+
 def test_commands_note_field() -> None:
     result = CliRunner().invoke(cli, ["commands"])
     data = json.loads(result.output)

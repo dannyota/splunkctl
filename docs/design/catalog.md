@@ -15,10 +15,10 @@ command group, updated in the same commit that moves it forward.
 | Module | Status | Notes |
 |---|---|---|
 | `main.py` | ✅ built | Click entry point, global flags |
-| `config.py` | ✅ built | Config file management, env overlay, redact |
+| `config.py` | ✅ built | Profiles (schema v2) + legacy fallback, env overlay, redact |
 | `client.py` | ✅ built | SDK wrapper, lazy auth, Web UI session |
 | `output.py` | ✅ built | Dual output (table/JSON/CSV/JSONL), empty-list contract |
-| `guard.py` | ✅ built | Mutation guard (dry-run/--yes), `@guarded` markers |
+| `guard.py` | ✅ built | Mutation guard (dry-run/--yes), `@guarded` markers, profile/host banner |
 
 ## Command groups
 
@@ -27,7 +27,7 @@ All list surfaces accept uniform `--limit`/`--offset`/`--filter` options
 
 | Group | Status | Subcommands |
 |---|---|---|
-| `config` | ✅ built | init, show, test |
+| `config` | ✅ built | init (--profile), show (--profile), use, test — multi-instance profiles |
 | `info` | ✅ built | (default) |
 | `search` | ✅ built | run (--detach), export, oneshot, jobs, job (--offset/--count/--events/--status-only), cancel, upload |
 | `rules` | ✅ built | list (--filter, --app, --owner), get (--app, --owner), create, update, delete, enable, disable, share, history |
@@ -57,6 +57,7 @@ All list surfaces accept uniform `--limit`/`--offset`/`--filter` options
 | `skill install` | ✅ built | Write to `~/.claude/skills/` |
 | `doctor --strict` | ✅ built | CI-friendly health gate |
 | JSON error envelope | ✅ built | `--json`/`--format json` errors as one `jq`-able stderr line: kind + http_status + message |
+| Multi-instance profiles | ✅ built | `profiles:`/`current:` config schema v2, `--profile` global flag, guard banner (`profile`/`env`/`flags` source) on every dry-run and `--yes` confirmation, no network I/O |
 
 ## SDK fork status
 

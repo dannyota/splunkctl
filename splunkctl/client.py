@@ -29,6 +29,7 @@ class SplunkClient:
         self,
         *,
         config_path: Path | None = None,
+        profile: str | None = None,
         host: str | None = None,
         port: int | None = None,
         username: str | None = None,
@@ -42,6 +43,7 @@ class SplunkClient:
         debug: bool = False,
     ) -> None:
         self._config_path = config_path
+        self._profile = profile
         self._overrides: dict[str, Any] = {
             k: v
             for k, v in {
@@ -72,7 +74,7 @@ class SplunkClient:
                 logging.basicConfig(level=logging.DEBUG)
                 logging.getLogger("splunklib").setLevel(logging.DEBUG)
 
-            cfg = cfg_mod.load(self._config_path)
+            cfg = cfg_mod.load(self._config_path, profile=self._profile)
             cfg.update(self._overrides)
 
             connect_args: dict[str, Any] = {
@@ -104,7 +106,7 @@ class SplunkClient:
 
     def _ensure_web_session(self) -> _WebSession:
         if self._web_session is None:
-            cfg = cfg_mod.load(self._config_path)
+            cfg = cfg_mod.load(self._config_path, profile=self._profile)
             cfg.update(self._overrides)
             self._web_session = _WebSession(
                 self.service,
@@ -328,6 +330,7 @@ def get_client(ctx: click.Context) -> SplunkClient:
     obj: dict[str, Any] = ctx.ensure_object(dict)
     return SplunkClient(
         config_path=Path(obj["config"]) if obj.get("config") else None,
+        profile=obj.get("profile"),
         timeout=obj.get("timeout", 30),
         debug=obj.get("debug", False),
     )

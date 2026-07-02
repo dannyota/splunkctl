@@ -6,6 +6,7 @@ from typing import Any
 import click
 
 from splunkctl import __version__, output
+from splunkctl import config as cfg_mod
 from splunkctl.commands.alerts import alerts_group
 from splunkctl.commands.apps import apps_group
 from splunkctl.commands.commands_meta import commands_meta
@@ -66,6 +67,7 @@ class _CLI(click.Group):
             "-o",
             "--config",
             "-c",
+            "--profile",
         }
     )
 
@@ -116,6 +118,9 @@ class _CLI(click.Group):
         try:
             return super().invoke(ctx)
         except Exception as exc:
+            if isinstance(exc, cfg_mod.ProfileNotFoundError):
+                output.error(f"Profile not found: {exc.name}", kind="not_found")
+                sys.exit(1)
             name = type(exc).__name__
             if name == "HTTPError":
                 status: int | None = getattr(exc, "status", None)
@@ -169,6 +174,11 @@ class _CLI(click.Group):
     default=None,
     help="Config file path.",
 )
+@click.option(
+    "--profile",
+    default=None,
+    help="Named config profile to use (overrides the file's 'current' pointer).",
+)
 @click.option("--debug", is_flag=True, help="HTTP request/response logging.")
 @click.option("--timeout", type=int, default=30, help="Request timeout in seconds.")
 @click.pass_context
@@ -181,6 +191,7 @@ def cli(
     out: str | None,
     yes: bool,
     config: str | None,
+    profile: str | None,
     debug: bool,
     timeout: int,
 ) -> None:
@@ -192,6 +203,7 @@ def cli(
     ctx.obj["out"] = out
     ctx.obj["dry_run"] = not yes
     ctx.obj["config"] = config
+    ctx.obj["profile"] = profile
     ctx.obj["debug"] = debug
     ctx.obj["timeout"] = timeout
 

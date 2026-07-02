@@ -58,3 +58,25 @@ def test_trailing_json_still_hoists(mock_gc: MagicMock) -> None:
     result = CliRunner().invoke(cli, ["indexes", "list", "--json"])
     assert result.exit_code == 0
     assert json.loads(result.output)[0]["name"] == "main"
+
+
+@patch("splunkctl.commands.indexes.get_client")
+def test_trailing_profile_hoists_and_reaches_get_client(mock_gc: MagicMock) -> None:
+    mock_gc.return_value.service.indexes.list.return_value = [_mock_index()]
+    result = CliRunner().invoke(cli, ["indexes", "list", "--profile", "uat", "--json"])
+    assert result.exit_code == 0, result.output
+    ctx_obj = mock_gc.call_args.args[0].obj
+    assert ctx_obj["profile"] == "uat"
+
+
+def test_config_show_profile_flag_after_subcommand(tmp_path: Path) -> None:
+    """--profile hoists correctly even placed after `config show`."""
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text("profiles:\n  uat:\n    host: uat-host\n")
+    result = CliRunner().invoke(
+        cli, ["--config", str(cfg), "config", "show", "--profile", "uat", "--json"]
+    )
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.output)[0]
+    assert data["profile"] == "uat"
+    assert data["host"] == "uat-host"
