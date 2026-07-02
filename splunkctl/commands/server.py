@@ -38,7 +38,7 @@ def messages(ctx: click.Context, dismiss: str | None) -> None:
         try:
             msg = svc.messages[dismiss]
         except KeyError:
-            output.error(f"Message '{dismiss}' not found.")
+            output.error(f"Message '{dismiss}' not found.", kind="not_found")
             ctx.exit(1)
             return
         msg.delete()

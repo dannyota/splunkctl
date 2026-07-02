@@ -1,5 +1,6 @@
 """Tests for detection-as-code import/export."""
 
+import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -87,6 +88,26 @@ def test_export_specific_rule(
     docs = yaml.safe_load(out.read_text())
     assert len(docs) == 1
     assert docs[0]["name"] == "my_rule"
+
+
+@patch(_PATCH)
+def test_export_named_rule_not_found_json_envelope(
+    mock_gc: MagicMock,
+    tmp_path: Path,
+) -> None:
+    svc = MagicMock()
+    svc.saved_searches.__getitem__.side_effect = KeyError("nope")
+    mock_gc.return_value.service = svc
+
+    out = tmp_path / "one.yml"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["--json", "rules", "export", "--path", str(out), "--name", "missing"],
+    )
+    assert result.exit_code == 1
+    payload = json.loads(result.stderr)
+    assert payload["error"]["kind"] == "not_found"
 
 
 @patch(_PATCH)

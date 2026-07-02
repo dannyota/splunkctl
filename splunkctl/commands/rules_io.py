@@ -133,7 +133,7 @@ def export_rules(
             try:
                 rules.append(svc.saved_searches[n])
             except KeyError:
-                output.error(f"Saved search not found: {n}")
+                output.error(f"Saved search not found: {n}", kind="not_found")
                 ctx.exit(1)
                 return
     else:

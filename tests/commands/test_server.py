@@ -44,6 +44,22 @@ def test_messages_dismiss(mock_gc: MagicMock) -> None:
 
 
 @patch(_PATCH)
+def test_messages_dismiss_not_found_json_envelope(mock_gc: MagicMock) -> None:
+    svc = mock_gc.return_value.service
+    svc.messages.__getitem__.side_effect = KeyError("nope")
+
+    result = CliRunner().invoke(
+        cli,
+        ["--yes", "--json", "server", "messages", "--dismiss", "nope"],
+    )
+    assert result.exit_code == 1
+    # stderr carries the guard's "Applying: ..." banner ahead of the envelope
+    last_line = result.stderr.strip().splitlines()[-1]
+    payload = json.loads(last_line)
+    assert payload["error"]["kind"] == "not_found"
+
+
+@patch(_PATCH)
 def test_license_pools(mock_gc: MagicMock) -> None:
     svc = mock_gc.return_value.service
     resp = MagicMock()
