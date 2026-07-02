@@ -29,8 +29,10 @@ splunkctl rules history <name>            # run history
 
 `list`/`get` default to the current namespace, which does not include
 saved searches private to a specific app (for example, rules shipped by
-an add-on like Splunk_Security_Essentials). Pass `--app`/`--owner` to
-scope into that namespace:
+an add-on like Splunk_Security_Essentials). Pass `--app` to scope into
+that namespace — the owner is automatically wildcarded, so app-private
+rules owned by any user are included. Add `--owner` only to narrow the
+scope to a single user's rules:
 
 ```bash
 splunkctl rules list --app Splunk_Security_Essentials

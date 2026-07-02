@@ -36,7 +36,8 @@ def _resolve_rule(
     scope_kwargs: dict[str, str] = {}
     if app is not None:
         scope_kwargs["app"] = app
-    if owner is not None:
+        scope_kwargs["owner"] = owner if owner is not None else "-"
+    elif owner is not None:
         scope_kwargs["owner"] = owner
     matches = svc.saved_searches.list(
         search=f"name={_quoted(name)}", count=10, **scope_kwargs
@@ -156,7 +157,8 @@ def list_rules(
     kwargs: dict[str, str] = {}
     if app is not None:
         kwargs["app"] = app
-    if owner is not None:
+        kwargs["owner"] = owner if owner is not None else "-"
+    elif owner is not None:
         kwargs["owner"] = owner
     items = client.service.saved_searches.list(**kwargs)
     if name_filter:

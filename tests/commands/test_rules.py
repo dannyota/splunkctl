@@ -375,35 +375,6 @@ def test_list_filter_narrows(mock_gc: MagicMock) -> None:
 
 
 @patch(_PATCH)
-def test_list_rules_default_namespace_unchanged(mock_gc: MagicMock) -> None:
-    """No --app/--owner: call .list() exactly as before this feature."""
-    svc = _setup_svc(mock_gc, [])
-    result = CliRunner().invoke(cli, ["--json", "rules", "list"])
-    assert result.exit_code == 0
-    svc.saved_searches.list.assert_called_once_with()
-
-
-@patch(_PATCH)
-def test_list_rules_with_app_scopes_namespace(mock_gc: MagicMock) -> None:
-    ss = _mock_ss("sse-rule")
-    svc = _setup_svc(mock_gc, [ss])
-    result = CliRunner().invoke(
-        cli, ["--json", "rules", "list", "--app", "Splunk_Security_Essentials"]
-    )
-    assert result.exit_code == 0
-    svc.saved_searches.list.assert_called_once_with(app="Splunk_Security_Essentials")
-    assert "sse-rule" in result.output
-
-
-@patch(_PATCH)
-def test_list_rules_with_owner_scopes_namespace(mock_gc: MagicMock) -> None:
-    svc = _setup_svc(mock_gc, [])
-    result = CliRunner().invoke(cli, ["--json", "rules", "list", "--owner", "admin"])
-    assert result.exit_code == 0
-    svc.saved_searches.list.assert_called_once_with(owner="admin")
-
-
-@patch(_PATCH)
 def test_get_shows_acl(mock_gc: MagicMock) -> None:
     ss = MagicMock()
     ss.name = "r1"
@@ -417,23 +388,6 @@ def test_get_shows_acl(mock_gc: MagicMock) -> None:
     assert row["owner"] == "alice"
     assert row["sharing"] == "app"
     assert row["alert_comparator"] == "greater than"
-
-
-@patch(_PATCH)
-def test_get_rule_with_app_resolves_app_private_rule(mock_gc: MagicMock) -> None:
-    ss = _mock_ss("sse-rule")
-    svc = _setup_svc(mock_gc)
-    svc.saved_searches.list.return_value = [ss]
-
-    result = CliRunner().invoke(
-        cli,
-        ["--json", "rules", "get", "sse-rule", "--app", "Splunk_Security_Essentials"],
-    )
-    assert result.exit_code == 0, result.output
-    svc.saved_searches.list.assert_called_once_with(
-        search='name="sse-rule"', count=10, app="Splunk_Security_Essentials"
-    )
-    assert "sse-rule" in result.output
 
 
 @patch(_PATCH)

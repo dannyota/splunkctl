@@ -119,8 +119,11 @@ splunkctl rules import --path detections.yml --no-update --yes
 `list`/`get` default to the current namespace, which misses saved
 searches private to another app — e.g. detections shipped inside
 Splunk_Security_Essentials are invisible to a plain `rules list`. Always
-pass `--app` (and `--owner` if needed) when auditing detection coverage,
-or the audit has a blind spot. `get` also surfaces every enabled action's
+pass `--app` when auditing detection coverage: it automatically
+wildcards the owner (`owner="-"`) so app-private rules owned by any user
+are included, not just the caller's own. Add `--owner` only to narrow
+the audit to a single user's rules — omitting `--app` entirely still
+leaves a blind spot. `get` also surfaces every enabled action's
 non-empty `action.<name>.*` params (e.g. `action.notable.param.severity`,
 `action.risk.param._risk_score`) inline — no export needed just to see
 what a correlation search's actions are configured to do.
