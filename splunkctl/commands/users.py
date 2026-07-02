@@ -6,6 +6,7 @@ import click
 
 from splunkctl import guard, output
 from splunkctl.client import get_client
+from splunkctl.commands.common import parse_set
 
 _MAX_CAPS = 5
 
@@ -105,15 +106,192 @@ def get_user(ctx: click.Context, name: str) -> None:
     output.render(ctx, _user_detail(user, truncate=output.is_table(ctx)))
 
 
-@users_group.command("roles")
+# --- roles sub-group ---
+
+
+@users_group.group("roles", invoke_without_command=True)
 @click.pass_context
-def list_roles(ctx: click.Context) -> None:
-    """List all roles."""
+def roles_group(ctx: click.Context) -> None:
+    """Manage roles (bare invocation lists all roles)."""
+    if ctx.invoked_subcommand is None:
+        client = get_client(ctx)
+        roles = client.service.roles.list()
+        truncate = output.is_table(ctx)
+        rows = [_role_row(r, truncate=truncate) for r in roles]
+        output.render(ctx, rows, empty="No roles found.")
+
+
+@roles_group.command("get")
+@click.argument("name")
+@click.pass_context
+def get_role(ctx: click.Context, name: str) -> None:
+    """Get full role details."""
     client = get_client(ctx)
-    roles = client.service.roles.list()
-    truncate = output.is_table(ctx)
-    rows = [_role_row(r, truncate=truncate) for r in roles]
-    output.render(ctx, rows, empty="No roles found.")
+    try:
+        role = client.service.roles[name]
+    except KeyError:
+        output.error(f"Role '{name}' not found.")
+        ctx.exit(1)
+        return
+    c: dict[str, Any] = role.content
+    imported = c.get("imported_roles", [])
+    if isinstance(imported, str):
+        imported = [imported]
+    row: dict[str, Any] = {
+        "name": role.name,
+        "imported_roles": ", ".join(imported),
+        "capabilities": _caps_str(c.get("capabilities", []), truncate=False),
+        "defaultApp": c.get("defaultApp", ""),
+        "srchIndexesAllowed": _format_list(c.get("srchIndexesAllowed", [])),
+        "srchFilter": c.get("srchFilter", ""),
+    }
+    output.render(ctx, row)
+
+
+@roles_group.command("create")
+@click.argument("name")
+@click.option(
+    "--capabilities",
+    default=None,
+    help="Comma-separated capabilities.",
+)
+@click.option(
+    "--imported-roles",
+    default=None,
+    help="Comma-separated imported roles.",
+)
+@click.option(
+    "--search-indexes",
+    default=None,
+    help="Comma-separated allowed indexes.",
+)
+@click.option("--search-filter", default=None, help="Search filter.")
+@click.option("--default-app", default=None, help="Default app.")
+@click.option("--set", "set_pairs", multiple=True, help="KEY=VALUE extra fields.")
+@click.pass_context
+def create_role(
+    ctx: click.Context,
+    name: str,
+    capabilities: str | None,
+    imported_roles: str | None,
+    search_indexes: str | None,
+    search_filter: str | None,
+    default_app: str | None,
+    set_pairs: tuple[str, ...],
+) -> None:
+    """Create a new role."""
+    kwargs: dict[str, Any] = {}
+    if set_pairs:
+        kwargs.update(parse_set(set_pairs))
+    if capabilities:
+        kwargs["capabilities"] = [c.strip() for c in capabilities.split(",")]
+    if imported_roles:
+        kwargs["imported_roles"] = [r.strip() for r in imported_roles.split(",")]
+    if search_indexes:
+        kwargs["srchIndexesAllowed"] = [i.strip() for i in search_indexes.split(",")]
+    if search_filter:
+        kwargs["srchFilter"] = search_filter
+    if default_app:
+        kwargs["defaultApp"] = default_app
+    details = f"  role: {name}"
+    for k, v in kwargs.items():
+        details += f"\n  {k}: {v}"
+    if not guard.check(ctx, f"Create role '{name}'", details=details):
+        return
+    client = get_client(ctx)
+    try:
+        client.service.roles.create(name, **kwargs)
+    except Exception as exc:
+        output.error(f"Create failed: {exc}")
+        ctx.exit(1)
+        return
+    output.info(f"Role '{name}' created.")
+
+
+@roles_group.command("update")
+@click.argument("name")
+@click.option(
+    "--capabilities",
+    default=None,
+    help="Comma-separated capabilities.",
+)
+@click.option(
+    "--imported-roles",
+    default=None,
+    help="Comma-separated imported roles.",
+)
+@click.option(
+    "--search-indexes",
+    default=None,
+    help="Comma-separated allowed indexes.",
+)
+@click.option("--search-filter", default=None, help="Search filter.")
+@click.option("--default-app", default=None, help="Default app.")
+@click.option("--set", "set_pairs", multiple=True, help="KEY=VALUE extra fields.")
+@click.pass_context
+def update_role(
+    ctx: click.Context,
+    name: str,
+    capabilities: str | None,
+    imported_roles: str | None,
+    search_indexes: str | None,
+    search_filter: str | None,
+    default_app: str | None,
+    set_pairs: tuple[str, ...],
+) -> None:
+    """Update an existing role."""
+    kwargs: dict[str, Any] = {}
+    if set_pairs:
+        kwargs.update(parse_set(set_pairs))
+    if capabilities:
+        kwargs["capabilities"] = [c.strip() for c in capabilities.split(",")]
+    if imported_roles:
+        kwargs["imported_roles"] = [r.strip() for r in imported_roles.split(",")]
+    if search_indexes:
+        kwargs["srchIndexesAllowed"] = [i.strip() for i in search_indexes.split(",")]
+    if search_filter:
+        kwargs["srchFilter"] = search_filter
+    if default_app:
+        kwargs["defaultApp"] = default_app
+    if not kwargs:
+        output.error("No update fields specified.")
+        ctx.exit(1)
+        return
+    details = f"  role: {name}"
+    for k, v in kwargs.items():
+        details += f"\n  {k}: {v}"
+    if not guard.check(ctx, f"Update role '{name}'", details=details):
+        return
+    client = get_client(ctx)
+    try:
+        role = client.service.roles[name]
+    except KeyError:
+        output.error(f"Role '{name}' not found.")
+        ctx.exit(1)
+        return
+    role.update(**kwargs)
+    output.info(f"Role '{name}' updated.")
+
+
+@roles_group.command("delete")
+@click.argument("name")
+@click.pass_context
+def delete_role(ctx: click.Context, name: str) -> None:
+    """Delete a role."""
+    if not guard.check(ctx, f"Delete role '{name}'"):
+        return
+    client = get_client(ctx)
+    try:
+        role = client.service.roles[name]
+    except KeyError:
+        output.error(f"Role '{name}' not found.")
+        ctx.exit(1)
+        return
+    role.delete()
+    output.info(f"Role '{name}' deleted.")
+
+
+# --- user CRUD ---
 
 
 @users_group.command("create")
@@ -164,18 +342,24 @@ def create_user(
 @click.option("--email", default=None, help="Email address.")
 @click.option("--realname", default=None, help="Display name.")
 @click.option("--default-app", default=None, help="Default app.")
+@click.option("--password", default=None, help="New password.")
+@click.option("--set", "set_pairs", multiple=True, help="KEY=VALUE extra fields.")
 @click.pass_context
 def update_user(
     ctx: click.Context,
     name: str,
+    set_pairs: tuple[str, ...],
     *,
     roles: str | None,
     email: str | None,
     realname: str | None,
     default_app: str | None,
+    password: str | None,
 ) -> None:
     """Update an existing user."""
     kwargs: dict[str, Any] = {}
+    if set_pairs:
+        kwargs.update(parse_set(set_pairs))
     if roles is not None:
         kwargs["roles"] = [r.strip() for r in roles.split(",")]
     if email is not None:
@@ -184,13 +368,16 @@ def update_user(
         kwargs["realname"] = realname
     if default_app is not None:
         kwargs["defaultApp"] = default_app
+    if password is not None:
+        kwargs["password"] = password
 
     if not kwargs:
         output.error("No update fields specified.")
         ctx.exit(1)
         return
 
-    changes = ", ".join(f"{k}={v}" for k, v in kwargs.items())
+    show_kwargs = {k: ("***" if k == "password" else v) for k, v in kwargs.items()}
+    changes = ", ".join(f"{k}={v}" for k, v in show_kwargs.items())
     if not guard.check(ctx, f"Update user '{name}'", details=changes):
         return
 

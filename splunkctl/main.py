@@ -20,6 +20,7 @@ from splunkctl.commands.lookups import lookups_group
 from splunkctl.commands.parsers import parsers_group
 from splunkctl.commands.rules import rules_group
 from splunkctl.commands.search import search_group
+from splunkctl.commands.server import server_group
 from splunkctl.commands.skill_cmd import skill_group
 from splunkctl.commands.users import users_group
 
@@ -177,5 +178,6 @@ cli.add_command(lookups_group)
 cli.add_command(parsers_group)
 cli.add_command(rules_group)
 cli.add_command(search_group)
+cli.add_command(server_group)
 cli.add_command(skill_group)
 cli.add_command(users_group)

@@ -308,3 +308,72 @@ def test_get_user_table_truncates(mock_gc: MagicMock) -> None:
     assert result.exit_code == 0
     assert "(+3 more)" in result.output
     assert "cap_7" not in result.output
+
+
+@patch(_PATCH)
+def test_roles_get(mock_gc: MagicMock) -> None:
+    role = _mock_role("analyst", capabilities=["search"], imported_roles=["user"])
+    role.content["srchIndexesAllowed"] = ["main", "_internal"]
+    role.content["srchFilter"] = ""
+    mock_gc.return_value.service.roles.__getitem__.return_value = role
+
+    result = CliRunner().invoke(cli, ["--json", "users", "roles", "get", "analyst"])
+    assert result.exit_code == 0
+    assert "main" in result.output
+    assert "search" in result.output
+
+
+@patch(_PATCH)
+def test_roles_create(mock_gc: MagicMock) -> None:
+    svc = mock_gc.return_value.service
+    result = CliRunner().invoke(
+        cli,
+        [
+            "--yes",
+            "users",
+            "roles",
+            "create",
+            "tier1",
+            "--capabilities",
+            "search",
+            "--search-indexes",
+            "main",
+        ],
+    )
+    assert result.exit_code == 0
+    svc.roles.create.assert_called_once()
+    _, kwargs = svc.roles.create.call_args
+    assert kwargs["capabilities"] == ["search"]
+    assert kwargs["srchIndexesAllowed"] == ["main"]
+
+
+@patch(_PATCH)
+def test_roles_delete_guarded(mock_gc: MagicMock) -> None:
+    result = CliRunner().invoke(cli, ["users", "roles", "delete", "old"])
+    assert result.exit_code == 0
+    assert "DRY RUN" in result.stderr
+
+
+@patch(_PATCH)
+def test_update_user_password_masked(mock_gc: MagicMock) -> None:
+    result = CliRunner().invoke(
+        cli,
+        ["users", "update", "admin", "--password", "new_pass"],
+    )
+    assert result.exit_code == 0
+    assert "***" in result.stderr
+    assert "new_pass" not in result.stderr
+
+
+@patch(_PATCH)
+def test_update_user_password_applied(mock_gc: MagicMock) -> None:
+    mock_user = _mock_user("admin")
+    mock_gc.return_value.service.users.__getitem__.return_value = mock_user
+
+    result = CliRunner().invoke(
+        cli,
+        ["--yes", "users", "update", "admin", "--password", "new_pass"],
+    )
+    assert result.exit_code == 0
+    call_kwargs = mock_user.update.call_args.kwargs
+    assert call_kwargs["password"] == "new_pass"
