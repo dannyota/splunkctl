@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, NotRequired, TypedDict
 
 import click
 import yaml
@@ -51,7 +51,38 @@ _TRUNC = 60
 
 
 def _trunc(val: str) -> str:
-    return val if len(val) <= _TRUNC else val[: _TRUNC - 1] + "…"
+    """Truncate for the text preview, with an explicit hidden-length marker.
+
+    Never emits a bare ``…`` — a truncated value always says how many
+    characters were hidden, e.g. ``foo… [+57 chars]``.
+    """
+    if len(val) <= _TRUNC:
+        return val
+    kept = val[: _TRUNC - 1]
+    hidden = len(val) - len(kept)
+    return f"{kept}… [+{hidden} chars]"
+
+
+class FieldChange(TypedDict):
+    """One field's before/after value in a rule diff."""
+
+    field: str
+    old: str | None
+    new: str
+
+
+class RuleDiff(TypedDict):
+    """Full, untruncated diff classification for one YAML rule doc.
+
+    ``kind`` is the granular text-preview classification (create / update /
+    unchanged / exists / skip). JSON output collapses ``exists`` into
+    ``unchanged`` — see ``_json_row``.
+    """
+
+    name: str | None
+    kind: str
+    changes: list[FieldChange]
+    reason: NotRequired[str]
 
 
 def _rule_to_dict(ss: Any) -> dict[str, Any]:
@@ -154,6 +185,94 @@ def _changes(ss: Any, spl: str, kwargs: dict[str, Any]) -> dict[str, tuple[str, 
     return diff
 
 
+def _field_changes(diff: dict[str, tuple[str, str]]) -> list[FieldChange]:
+    return [{"field": k, "old": old, "new": new} for k, (old, new) in diff.items()]
+
+
+def _create_changes(spl: str, kwargs: dict[str, Any]) -> list[FieldChange]:
+    """Full set of fields a new rule would be created with (old is None)."""
+    changes: list[FieldChange] = [{"field": "search", "old": None, "new": str(spl)}]
+    changes.extend({"field": k, "old": None, "new": str(v)} for k, v in kwargs.items())
+    return changes
+
+
+def _rule_diff(svc: Any, rule: Any, *, update: bool) -> RuleDiff:
+    """Classify one YAML doc and compute its full, untruncated field diff.
+
+    This is the dry-run-only counterpart to ``_plan_rule`` (which drives
+    the ``--yes`` apply path and is left untouched): a single pass that
+    feeds both the text preview and the structured JSON diff.
+    """
+    if not isinstance(rule, dict) or "name" not in rule:
+        return {
+            "name": None,
+            "kind": "skip",
+            "changes": [],
+            "reason": "invalid entry: no name",
+        }
+    name = rule["name"]
+    spl = rule.get("search", "")
+    if not spl:
+        return {
+            "name": name,
+            "kind": "skip",
+            "changes": [],
+            "reason": "no search field",
+        }
+    kwargs = _import_kwargs(rule)
+    try:
+        ss = svc.saved_searches[name]
+    except KeyError:
+        return {"name": name, "kind": "create", "changes": _create_changes(spl, kwargs)}
+    if not update:
+        return {"name": name, "kind": "exists", "changes": []}
+    diff = _changes(ss, spl, kwargs)
+    if not diff:
+        return {"name": name, "kind": "unchanged", "changes": []}
+    return {"name": name, "kind": "update", "changes": _field_changes(diff)}
+
+
+def _preview_lines(d: RuleDiff) -> list[str]:
+    """Render one rule's diff as the human-readable text preview lines."""
+    name = d["name"] or ""
+    kind = d["kind"]
+    if kind == "skip":
+        reason = d.get("reason", "")
+        label = f"{name}: {reason}" if name else reason
+        return [f"  skip: {label}"]
+    if kind == "update":
+        lines = [f"  update: {name}"]
+        lines.extend(
+            f"    {c['field']}: {_trunc(str(c['old']))} -> {_trunc(c['new'])}"
+            for c in d["changes"]
+        )
+        return lines
+    return [f"  {kind}: {name}"]
+
+
+# no-update-mode "exists" is reported to JSON consumers as "unchanged" — it
+# matches the CLI's own summary counts, which already fold the two together.
+_JSON_ACTIONS = {
+    "create": "create",
+    "update": "update",
+    "unchanged": "unchanged",
+    "exists": "unchanged",
+    "skip": "skip",
+}
+
+
+def _json_row(d: RuleDiff) -> dict[str, Any]:
+    """Build one rule's JSON diff row: ``{name, action, changes[, reason]}``."""
+    row: dict[str, Any] = {
+        "name": d["name"],
+        "action": _JSON_ACTIONS[d["kind"]],
+        "changes": d["changes"],
+    }
+    if d["kind"] == "skip":
+        row["reason"] = d.get("reason", "")
+    return row
+
+
 def _plan_rule(svc: Any, rule: Any, *, update: bool) -> tuple[str, list[str]]:
     """Classify one YAML doc: (status line, per-field diff lines)."""
     if not isinstance(rule, dict) or "name" not in rule:
@@ -222,8 +341,12 @@ def import_rules(
     """Import saved searches from a YAML file.
 
     Dry-run previews create/update/unchanged per rule with field-level
-    diffs. Exits non-zero when any rule is skipped or fails, so CI
-    pipelines cannot silently pass a broken detections file.
+    diffs on stderr. Pass ``--json``/``--format json`` to also get a
+    full, untruncated JSON diff array on stdout: one object per rule,
+    ``{"name", "action", "changes": [{"field", "old", "new"}]}`` — ``old``
+    is null for ``create``, ``changes`` is empty for ``unchanged``.
+    Exits non-zero when any rule is skipped or fails, so CI pipelines
+    cannot silently pass a broken detections file.
     """
     p = Path(file_path)
     try:
@@ -241,15 +364,10 @@ def import_rules(
     client = get_client(ctx)
     svc = client.service
 
+    diffs = [_rule_diff(svc, rule, update=update) for rule in docs]
     plan_lines: list[str] = []
-    planned_skips = 0
-    for rule in docs:
-        status, diff_lines = _plan_rule(svc, rule, update=update)
-        kind, _, label = status.partition(":")
-        plan_lines.append(f"  {kind}: {label}")
-        plan_lines.extend(f"  {line}" for line in diff_lines)
-        if kind == "skip":
-            planned_skips += 1
+    for d in diffs:
+        plan_lines.extend(_preview_lines(d))
     detail = f"  update existing: {update}\n" + "\n".join(plan_lines)
 
     if not guard.check(
@@ -257,6 +375,9 @@ def import_rules(
         f"Import {len(docs)} rule(s) from {p.name}",
         details=detail,
     ):
+        obj: dict[str, Any] = ctx.obj or {}
+        if obj.get("json") or obj.get("format") == "json":
+            output.render(ctx, [_json_row(d) for d in diffs])
         return
 
     results: list[str] = []
