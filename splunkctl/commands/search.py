@@ -274,6 +274,16 @@ def cancel_job(ctx: click.Context, sid: str) -> None:
 _CHUNK_SIZE = 1024 * 1024  # 1 MB
 
 
+def _human_size(nbytes: int) -> str:
+    """Format a byte count with a sensible unit."""
+    size = float(nbytes)
+    for unit in ("B", "KB", "MB", "GB"):
+        if size < 1024 or unit == "GB":
+            return f"{size:.0f} {unit}" if unit == "B" else f"{size:.1f} {unit}"
+        size /= 1024
+    return f"{nbytes} B"
+
+
 @search_group.command("upload")
 @click.option(
     "--path",
@@ -301,13 +311,13 @@ def upload_data(
     instance via the receivers/simple REST endpoint.
     """
     p = Path(file_path)
-    size_mb = p.stat().st_size / (1024 * 1024)
+    size = _human_size(p.stat().st_size)
     source = source or p.name
 
     parts = [f"file={p.name}", f"index={index}"]
     if sourcetype:
         parts.append(f"sourcetype={sourcetype}")
-    parts.append(f"size={size_mb:.1f} MB")
+    parts.append(f"size={size}")
     details = f"Upload data: {', '.join(parts)}"
     if not guard.check(ctx, details):
         return
@@ -328,4 +338,4 @@ def upload_data(
         output.error(f"Upload failed: {exc}")
         ctx.exit(1)
         return
-    output.info(f"Uploaded '{p.name}' ({size_mb:.1f} MB) to index={index}.")
+    output.info(f"Uploaded '{p.name}' ({size}) to index={index}.")
