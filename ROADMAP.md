@@ -18,7 +18,14 @@ Phase 3 (6–8)   detection ─► rules, alerts, lookups
 Phase 4 (9–11)  config surfaces ─► dashboards, inputs, parsers
 Phase 5 (12–14) admin ─► indexes, apps, users (full CRUD)
 Phase 6 (15–17) release ─► agent integration, hardening, v0.1.0
+Phase 7 (18–20) reliability ─► SOC bug fixes, errors, paging, profiles
+Phase 8 (21–23) bank SOC ─► ES notables, audit pack, KV store
+Phase 9 (24–25) detection depth ─► conf editor, macros, data models
+Phase 10 (26–27) change control ─► config-as-code state, topology health
 ```
+
+Phases 7–10 come from the 2026-07 bank-SOC gap analysis; task-level detail
+is in [PLAN.md](PLAN.md) (phases E–I).
 
 ---
 
@@ -149,9 +156,78 @@ Extends the read-only `list`/`get` from Wave 4:
 
 ---
 
-## Post v0.1.0
+## Upcoming waves
 
-- **SDK fork** — replace raw REST with proper SDK classes for dashboards,
-  lookups, and HEC tokens in `dannyota/splunk-sdk-python`; upstream PRs
-- **Multi-instance profiles** — `splunkctl config use <profile>`
-- **Config as code** — pull/push workflow for rules and dashboards
+Sequenced from the 2026-07 bank-SOC gap analysis (live CLI evaluation +
+REST surface audit). Detail per task in [PLAN.md](PLAN.md). Wave 18 ships
+as v0.3.1; waves 19–27 ship together as v0.4.0.
+
+### Wave 18 — SOC bug fixes & docs *(→ v0.3.1)*
+
+Defects confirmed live: `rules list` blind to app-private detections
+(`--app` scoping), `search jobs` empty owner, `rules get` hiding
+`action.*` params, blank `server kvstore` on failure, dry-run not
+validating required action fields, truncated non-JSON import diff. Plus
+SKILL.md ES recipes (notables/risk read, `--set action.notable.*`) and the
+`sid` → `search job` alert-investigation pivot.
+
+### Wave 19 — Structured errors & pagination
+
+JSON error envelope (kind/http-status) under `--json`; `--limit`/
+`--offset`/`--all` and uniform `--filter` on every list command — no
+silent truncation of detection or user inventories.
+
+### Wave 20 — Multi-instance profiles
+
+`config use <profile>` for dev/UAT/prod; active profile + host in every
+dry-run banner as a prod-safety control.
+
+### Wave 21 — ES notable triage
+
+`es notables list/get/update` — the SOC incident-review loop (status,
+owner, urgency, disposition, comment) via ES `notable_update`;
+feature-detected, clean error without ES.
+
+### Wave 22 — Audit & RBAC pack
+
+`audit changes` normalizing both `_audit` event shapes; `audit rbac`
+users × roles × capabilities attestation export — regulator evidence.
+
+### Wave 23 — KV store
+
+Collections + data CRUD + JSONL import/export — allowlists, threat intel,
+ES asset/identity.
+
+### Wave 24 — Generic conf editor & knowledge objects
+
+`conf files/list/get/set/unset/reload` over any conf file; thin
+`macros`/`eventtypes`/`tags` verbs on top.
+
+### Wave 25 — Detection depth
+
+`datamodels` (list/acceleration/rebuild), lookup definitions + automatic
+lookups, first-class alert-action flags (`--email-to`, `--webhook-url`).
+
+### Wave 26 — Config-as-code state
+
+`state pull/push/diff` across rules, parsers, dashboards, lookups, macros;
+push writes a before→after diff artifact for change tickets.
+
+### Wave 27 — Topology health *(→ v0.4.0)*
+
+Read-only `server cluster`/`shcluster`/`deployment` — distinguish "no
+threat" from "an indexer is down".
+
+## Deferred
+
+- Forwarder fleet / deployment-server management (health read is Wave 27)
+- ES governance surfaces (incident-review settings, threat-intel framework)
+- Workflow actions CRUD; auth-token minting; JSON `schemaVersion`
+
+## Done post v0.1.0
+
+- **SDK fork** — `Dashboard`, `LookupTableFile`, `HECToken` classes in
+  `dannyota/splunk-sdk-python`, integrated (v0.2.0); first-class alert
+  actions folded into Wave 25 as CLI flags (no fork work needed)
+- **Doctor & Web UI workarounds** — lookup upload, app install, data
+  upload (v0.2.0–v0.3.0)
