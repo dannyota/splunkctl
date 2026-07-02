@@ -3,6 +3,7 @@
 from typing import Any
 
 import click
+from splunklib.client import OperationError
 
 from splunkctl import guard, output
 from splunkctl.client import get_client
@@ -100,7 +101,7 @@ def create_index(
     if datatype is not None:
         kwargs["datatype"] = datatype
     if max_size is not None:
-        kwargs["maxDataSizeMB"] = max_size
+        kwargs["maxTotalDataSizeMB"] = max_size
     if frozen_period is not None:
         kwargs["frozenTimePeriodInSecs"] = frozen_period
     if home_path is not None:
@@ -136,7 +137,7 @@ def update_index(
     """Update index settings."""
     kwargs: dict[str, Any] = {}
     if max_size is not None:
-        kwargs["maxDataSizeMB"] = max_size
+        kwargs["maxTotalDataSizeMB"] = max_size
     if frozen_period is not None:
         kwargs["frozenTimePeriodInSecs"] = frozen_period
 
@@ -184,8 +185,14 @@ def delete_index(ctx: click.Context, name: str) -> None:
 
 @indexes_group.command("clean")
 @click.argument("name")
+@click.option(
+    "--clean-timeout",
+    type=int,
+    default=60,
+    help="Seconds to wait for the index to empty (default 60).",
+)
 @click.pass_context
-def clean_index(ctx: click.Context, name: str) -> None:
+def clean_index(ctx: click.Context, name: str, clean_timeout: int) -> None:
     """Remove all events from an index."""
     if not guard.check(ctx, f"Clean index '{name}' (remove all events)"):
         return
@@ -197,7 +204,20 @@ def clean_index(ctx: click.Context, name: str) -> None:
         output.error(f"Index '{name}' not found.")
         ctx.exit(1)
         return
-    idx.clean(timeout=60)
+    try:
+        idx.clean(timeout=clean_timeout)
+    except OperationError as exc:
+        idx.refresh()
+        disabled = str(idx.content.get("disabled", "0")) == "1"
+        state = "disabled" if disabled else "enabled"
+        remaining = idx.content.get("totalEventCount", "?")
+        output.error(
+            f"Clean did not finish: {exc} "
+            f"(index is {state}, {remaining} events remain). "
+            f"Retry with a larger --clean-timeout."
+        )
+        ctx.exit(1)
+        return
     output.info(f"Index '{name}' cleaned.")
 
 

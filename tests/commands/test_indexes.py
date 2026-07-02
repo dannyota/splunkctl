@@ -90,7 +90,7 @@ def test_create_index_confirmed(mock_gc: MagicMock) -> None:
     )
     assert result.exit_code == 0
     mock_gc.return_value.service.indexes.create.assert_called_once_with(
-        "test_idx", maxDataSizeMB=100
+        "test_idx", maxTotalDataSizeMB=100
     )
 
 
@@ -121,7 +121,7 @@ def test_create_index_all_options(mock_gc: MagicMock) -> None:
     mock_gc.return_value.service.indexes.create.assert_called_once_with(
         "myidx",
         datatype="metric",
-        maxDataSizeMB=200,
+        maxTotalDataSizeMB=200,
         frozenTimePeriodInSecs=86400,
         homePath="/data/hot",
         coldPath="/data/cold",
@@ -238,3 +238,56 @@ def test_reload_indexes_confirmed(mock_gc: MagicMock) -> None:
     mock_gc.return_value.service.post.assert_called_once_with(
         "/services/data/indexes/_reload"
     )
+
+
+@patch(_PATCH)
+def test_create_max_size_sends_maxTotalDataSizeMB(mock_gc: MagicMock) -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["--yes", "indexes", "create", "--name", "t", "--max-size", "100"]
+    )
+    assert result.exit_code == 0
+    _, kwargs = mock_gc.return_value.service.indexes.create.call_args
+    assert kwargs.get("maxTotalDataSizeMB") == 100
+    assert "maxDataSizeMB" not in kwargs
+
+
+@patch(_PATCH)
+def test_update_max_size_sends_maxTotalDataSizeMB(mock_gc: MagicMock) -> None:
+    idx = _mock_index("t")
+    mock_gc.return_value.service.indexes.__getitem__.return_value = idx
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["--yes", "indexes", "update", "t", "--max-size", "200"]
+    )
+    assert result.exit_code == 0
+    _, kwargs = idx.update.call_args
+    assert kwargs.get("maxTotalDataSizeMB") == 200
+    assert "maxDataSizeMB" not in kwargs
+
+
+@patch(_PATCH)
+def test_clean_passes_timeout(mock_gc: MagicMock) -> None:
+    idx = _mock_index("t")
+    mock_gc.return_value.service.indexes.__getitem__.return_value = idx
+    runner = CliRunner()
+    result = runner.invoke(
+        cli, ["--yes", "indexes", "clean", "t", "--clean-timeout", "120"]
+    )
+    assert result.exit_code == 0
+    idx.clean.assert_called_once_with(timeout=120)
+
+
+@patch(_PATCH)
+def test_clean_operation_error_is_clean(mock_gc: MagicMock) -> None:
+    from splunklib.client import OperationError
+
+    idx = _mock_index("t")
+    idx.clean.side_effect = OperationError("took longer than 60 seconds")
+    idx.content = {"disabled": "0", "totalEventCount": "49"}
+    mock_gc.return_value.service.indexes.__getitem__.return_value = idx
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--yes", "indexes", "clean", "t"])
+    assert result.exit_code == 1
+    assert "Traceback" not in result.output
+    assert "--clean-timeout" in result.stderr
