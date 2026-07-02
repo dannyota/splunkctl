@@ -24,35 +24,10 @@ import click
 from splunkctl import guard, output
 from splunkctl.client import get_client
 from splunkctl.commands import conf_ops
-from splunkctl.commands.common import fetch_page, list_options
+from splunkctl.commands.common import app_scope, fetch_page, list_options, trunc
 
-_TRUNC = 60
 # Splunk's own naming for a parameterized macro stanza: `name(argcount)`.
 _ARG_FORM = re.compile(r"^(?P<base>.+)\((?P<n>\d+)\)$")
-
-
-def _trunc(value: str, *, truncate: bool) -> str:
-    """Shorten a long text field for table display; never for JSON.
-
-    Never emits a bare ellipsis — a truncated value always says how
-    many characters were hidden, matching the house style used for
-    rule-diff previews.
-    """
-    if not truncate or len(value) <= _TRUNC:
-        return value
-    kept = value[: _TRUNC - 1]
-    hidden = len(value) - len(kept)
-    return f"{kept}… [+{hidden} chars]"
-
-
-def _app_scope(app: str | None) -> dict[str, str]:
-    """Build the ``app``/``owner`` kwargs for an app-scoped list call.
-
-    Unscoped by default (matches the connection's current namespace);
-    ``owner="-"`` when an app is given so app-private stanzas owned by
-    other users aren't silently excluded — same convention as `conf`.
-    """
-    return {} if app is None else {"app": app, "owner": "-"}
 
 
 # --------------------------------------------------------------------------
@@ -84,7 +59,7 @@ def macros_list(
 ) -> None:
     """List macros with their definitions."""
     client = get_client(ctx)
-    scope = _app_scope(app)
+    scope = app_scope(app)
     items = fetch_page(
         lambda **pg: client.service.confs["macros"].list(**scope, **pg),
         limit=limit,
@@ -95,7 +70,11 @@ def macros_list(
     rows: list[dict[str, Any]] = [
         {
             "name": s.name,
-            "definition": _trunc(s.content.get("definition", ""), truncate=truncate),
+            "definition": (
+                trunc(s.content.get("definition", ""))
+                if truncate
+                else s.content.get("definition", "")
+            ),
             "args": s.content.get("args", ""),
             "app": dict(s.access).get("app", ""),
         }
@@ -125,7 +104,7 @@ def _resolve_macro(client: Any, name: str, app: str | None) -> Any:
             raise
         candidates = [
             (int(m["n"]), s)
-            for s in client.service.confs["macros"].list(**_app_scope(app))
+            for s in client.service.confs["macros"].list(**app_scope(app))
             if (m := _ARG_FORM.match(s.name)) and m["base"] == name
         ]
         if not candidates:
@@ -241,7 +220,7 @@ def eventtypes_list(
 ) -> None:
     """List eventtypes with their search and disabled state."""
     client = get_client(ctx)
-    scope = _app_scope(app)
+    scope = app_scope(app)
     items = fetch_page(
         lambda **pg: client.service.confs["eventtypes"].list(**scope, **pg),
         limit=limit,
@@ -252,7 +231,11 @@ def eventtypes_list(
     rows: list[dict[str, Any]] = [
         {
             "name": s.name,
-            "search": _trunc(s.content.get("search", ""), truncate=truncate),
+            "search": (
+                trunc(s.content.get("search", ""))
+                if truncate
+                else s.content.get("search", "")
+            ),
             "app": dict(s.access).get("app", ""),
             "disabled": s.content.get("disabled", ""),
         }
@@ -343,7 +326,7 @@ def tags_list(
     use ``tags get`` for a stanza's full enabled/disabled breakdown.
     """
     client = get_client(ctx)
-    scope = _app_scope(app)
+    scope = app_scope(app)
     items = fetch_page(
         lambda **pg: client.service.confs["tags"].list(**scope, **pg),
         limit=limit,

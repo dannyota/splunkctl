@@ -18,17 +18,7 @@ import click
 from splunkctl import guard, output
 from splunkctl.client import get_client
 from splunkctl.commands import conf_ops, lookups_wiring
-from splunkctl.commands.common import fetch_page, list_options
-
-
-def _app_scope(app: str | None) -> dict[str, str]:
-    """Build the ``app``/``owner`` kwargs for an app-scoped list call.
-
-    Mirrors ``conf``/``knowledge``'s convention: unscoped by default
-    (current namespace), ``owner="-"`` when an app is given so
-    app-private stanzas owned by other users aren't silently excluded.
-    """
-    return {} if app is None else {"app": app, "owner": "-"}
+from splunkctl.commands.common import app_scope, fetch_page, list_options
 
 
 @click.group("lookups")
@@ -247,7 +237,7 @@ def _warn_if_file_missing(client: Any, file_name: str, app: str | None) -> None:
     """
     try:
         matches = client.service.lookup_table_files.list(
-            search=f"name={file_name}", count=1, **_app_scope(app)
+            search=f"name={file_name}", count=1, **app_scope(app)
         )
     except Exception:
         return
@@ -459,7 +449,7 @@ def list_definitions(
     """
     client = get_client(ctx)
     items = fetch_page(
-        lambda **pg: client.service.confs["transforms"].list(**_app_scope(app), **pg),
+        lambda **pg: client.service.confs["transforms"].list(**app_scope(app), **pg),
         limit=limit,
         offset=offset,
         name_filter=name_filter,

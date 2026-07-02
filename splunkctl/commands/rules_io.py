@@ -10,6 +10,7 @@ import yaml
 
 from splunkctl import guard, output
 from splunkctl.client import get_client
+from splunkctl.commands.common import trunc
 
 _EXPORT_FIELDS = (
     "search",
@@ -46,21 +47,6 @@ _READONLY_KEYS = frozenset(
         "triggered_alert_count",
     }
 )
-
-_TRUNC = 60
-
-
-def _trunc(val: str) -> str:
-    """Truncate for the text preview, with an explicit hidden-length marker.
-
-    Never emits a bare ``…`` — a truncated value always says how many
-    characters were hidden, e.g. ``foo… [+57 chars]``.
-    """
-    if len(val) <= _TRUNC:
-        return val
-    kept = val[: _TRUNC - 1]
-    hidden = len(val) - len(kept)
-    return f"{kept}… [+{hidden} chars]"
 
 
 class FieldChange(TypedDict):
@@ -243,7 +229,7 @@ def _preview_lines(d: RuleDiff) -> list[str]:
     if kind == "update":
         lines = [f"  update: {name}"]
         lines.extend(
-            f"    {c['field']}: {_trunc(str(c['old']))} -> {_trunc(c['new'])}"
+            f"    {c['field']}: {trunc(str(c['old']))} -> {trunc(c['new'])}"
             for c in d["changes"]
         )
         return lines
@@ -291,7 +277,7 @@ def _plan_rule(svc: Any, rule: Any, *, update: bool) -> tuple[str, list[str]]:
     diff = _changes(ss, spl, kwargs)
     if not diff:
         return f"unchanged:{name}", []
-    lines = [f"  {k}: {_trunc(old)} -> {_trunc(new)}" for k, (old, new) in diff.items()]
+    lines = [f"  {k}: {trunc(old)} -> {trunc(new)}" for k, (old, new) in diff.items()]
     return f"update:{name}", lines
 
 

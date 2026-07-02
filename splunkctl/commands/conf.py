@@ -15,7 +15,7 @@ import click
 from splunkctl import guard, output
 from splunkctl.client import get_client
 from splunkctl.commands import conf_ops
-from splunkctl.commands.common import fetch_page, list_options, parse_set
+from splunkctl.commands.common import app_scope, fetch_page, list_options, parse_set
 
 
 def _not_found_message(exc: KeyError, file: str, stanza: str) -> str:
@@ -33,18 +33,6 @@ def _not_found_message(exc: KeyError, file: str, stanza: str) -> str:
     if missing is not None and str(missing) == file:
         return f"Conf file '{file}.conf' not found."
     return f"Stanza '{stanza}' not found in {file}.conf."
-
-
-def _app_scope(app: str | None) -> dict[str, str]:
-    """Build the ``app``/``owner`` kwargs for an app-scoped list call.
-
-    Mirrors the ``rules``/``dashboards`` scoping convention: unscoped by
-    default (matches ``parsers``' existing default, i.e. whatever the
-    connection's current namespace resolves to), ``owner="-"`` when an
-    app is given so app-private stanzas owned by other users aren't
-    silently excluded.
-    """
-    return {} if app is None else {"app": app, "owner": "-"}
 
 
 @click.group("conf")
@@ -70,7 +58,7 @@ def files(
 ) -> None:
     """List conf files known to the server."""
     client = get_client(ctx)
-    scope = _app_scope(app)
+    scope = app_scope(app)
     items = fetch_page(
         lambda **pg: client.service.confs.list(**scope, **pg),
         limit=limit,
@@ -102,7 +90,7 @@ def list_stanzas(
 ) -> None:
     """List stanzas in a conf file."""
     client = get_client(ctx)
-    scope = _app_scope(app)
+    scope = app_scope(app)
     items = fetch_page(
         lambda **pg: client.service.confs[file].list(**scope, **pg),
         limit=limit,
@@ -123,13 +111,21 @@ def list_stanzas(
 @conf_group.command("get")
 @click.argument("file")
 @click.argument("stanza")
+@click.option(
+    "--app",
+    default=None,
+    help="App to resolve the stanza in, when the same stanza exists in "
+    "more than one app (default: current namespace).",
+)
 @click.option("--key", default=None, help="Show only this key's value.")
 @click.pass_context
-def get(ctx: click.Context, file: str, stanza: str, key: str | None) -> None:
+def get(
+    ctx: click.Context, file: str, stanza: str, app: str | None, key: str | None
+) -> None:
     """Show a conf stanza's keys, or one key's value with --key."""
     client = get_client(ctx)
     try:
-        entity = conf_ops.get_stanza(client, file, stanza)
+        entity = conf_ops.get_stanza(client, file, stanza, app=app)
     except KeyError as exc:
         output.error(_not_found_message(exc, file, stanza), kind="not_found")
         ctx.exit(1)

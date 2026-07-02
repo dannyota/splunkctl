@@ -192,6 +192,32 @@ def test_get_not_found(mock_gc: MagicMock) -> None:
     assert "not found" in result.output
 
 
+@patch(_PATCH)
+def test_get_app_scoped(mock_gc: MagicMock) -> None:
+    """``conf get --app`` passes the app namespace through to get_stanza."""
+    svc = mock_gc.return_value.service
+    conf = MagicMock()
+    from types import SimpleNamespace
+
+    stanza = _stanza("my_macro", {"definition": "index=main"})
+    conf.__getitem__.return_value = stanza
+    svc.confs.__getitem__.return_value = conf
+
+    result = CliRunner().invoke(
+        cli, ["--json", "conf", "get", "macros", "my_macro", "--app", "SES"]
+    )
+    assert result.exit_code == 0, result.output
+    # get_stanza calls conf[stanza, SimpleNamespace(owner="-", app=app)]
+    call_args = conf.__getitem__.call_args
+    assert call_args is not None
+    key = call_args[0][0]  # first positional arg is the (stanza, ns) tuple
+    assert key[0] == "my_macro"
+    ns = key[1]
+    assert isinstance(ns, SimpleNamespace)
+    assert ns.app == "SES"
+    assert ns.owner == "-"
+
+
 # --- set ---
 
 

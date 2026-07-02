@@ -354,6 +354,29 @@ _REQUIRED_ACTION_FIELDS: dict[str, str] = {
 }
 
 
+def app_scope(app: str | None) -> dict[str, str]:
+    """Build the ``app``/``owner`` kwargs for an app-scoped list call.
+
+    Unscoped by default (the connection's current namespace); ``owner="-"``
+    when an app is given so app-private stanzas owned by other users aren't
+    silently excluded.
+    """
+    return {} if app is None else {"app": app, "owner": "-"}
+
+
+def trunc(value: str, limit: int = 60) -> str:
+    """Shorten a long text field for table display.
+
+    Never emits a bare ellipsis — a truncated value always says how many
+    characters were hidden, e.g. ``foo… [+57 chars]``.
+    """
+    if len(value) <= limit:
+        return value
+    kept = value[: limit - 1]
+    hidden = len(value) - len(kept)
+    return f"{kept}… [+{hidden} chars]"
+
+
 def warn_missing_action_fields(
     actions: str,
     kwargs: dict[str, Any],
