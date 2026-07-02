@@ -3,6 +3,13 @@
 # from docs/_sidebar.md + docs/guides/*.md + docs/design/*.md.
 #
 # Run before committing docs changes. CI validates freshness via --check.
+#
+# docs/assets/og.png (social link preview) is a static asset, regenerated
+# manually only when banner.svg changes:
+#   google-chrome --headless=new --disable-gpu --hide-scrollbars \
+#     --screenshot=docs/assets/og.png --window-size=1200,300 \
+#     file://$PWD/docs/assets/banner.svg
+#   pngquant --force --quality=80-95 --output docs/assets/og.png docs/assets/og.png
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
