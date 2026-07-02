@@ -69,7 +69,7 @@ def test_license_pools(mock_gc: MagicMock) -> None:
 
 
 @patch(_PATCH)
-def test_kvstore_status(mock_gc: MagicMock) -> None:
+def test_kvstore_status_ready(mock_gc: MagicMock) -> None:
     svc = mock_gc.return_value.service
     resp = MagicMock()
     resp.body.read.return_value = json.dumps(
@@ -77,9 +77,13 @@ def test_kvstore_status(mock_gc: MagicMock) -> None:
             "entry": [
                 {
                     "content": {
-                        "current.status": "ready",
-                        "current.port": "8191",
-                        "current.version": "4.4",
+                        "current": {
+                            "status": "ready",
+                            "port": 8191,
+                            "version": "4.4",
+                            "storageEngine": "wiredTiger",
+                            "dbPath": "/opt/splunk/var/lib/splunk/kvstore/mongo",
+                        }
                     }
                 }
             ]
@@ -89,4 +93,39 @@ def test_kvstore_status(mock_gc: MagicMock) -> None:
 
     result = CliRunner().invoke(cli, ["--json", "server", "kvstore"])
     assert result.exit_code == 0
-    assert "ready" in result.output
+    data = json.loads(result.output)
+    assert data[0] == {
+        "status": "ready",
+        "port": 8191,
+        "version": "4.4",
+        "storage_engine": "wiredTiger",
+        "db_path": "/opt/splunk/var/lib/splunk/kvstore/mongo",
+    }
+
+
+@patch(_PATCH)
+def test_kvstore_status_failed(mock_gc: MagicMock) -> None:
+    svc = mock_gc.return_value.service
+    resp = MagicMock()
+    resp.body.read.return_value = json.dumps(
+        {
+            "entry": [
+                {
+                    "content": {
+                        "current": {
+                            "status": "failed",
+                            "port": 8191,
+                            "storageEngine": "wiredTiger",
+                            "disabled": False,
+                        }
+                    }
+                }
+            ]
+        }
+    ).encode()
+    svc.get.return_value = resp
+
+    result = CliRunner().invoke(cli, ["--json", "server", "kvstore"])
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data[0]["status"] == "failed"

@@ -97,11 +97,12 @@ def kvstore_status(ctx: click.Context) -> None:
         return
 
     c: dict[str, Any] = entries[0].get("content", {})
+    current: dict[str, Any] = c.get("current", {})
     row: dict[str, Any] = {
-        "status": c.get("current.status", ""),
-        "port": c.get("current.port", ""),
-        "version": c.get("current.version", ""),
-        "storage_engine": c.get("current.storageEngine", ""),
-        "db_path": c.get("current.dbPath", ""),
+        "status": str(current.get("status", "")).lower(),
+        "port": current.get("port", ""),
+        "version": current.get("version", ""),
+        "storage_engine": current.get("storageEngine", ""),
+        "db_path": current.get("dbPath", ""),
     }
     output.render(ctx, row)
