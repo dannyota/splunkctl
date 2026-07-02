@@ -577,6 +577,52 @@ dry-run/`--yes` guard even runs.
 > shape but not yet exercised against a live accelerated model (no CIM
 > add-on on the test instance). See `docs/guides/datamodels.md`.
 
+### State (config-as-code, change evidence)
+
+The bank change-management workflow: pull a versioned snapshot,
+edit it, diff it, push it -- with a savable before→after JSON artifact
+a change ticket can reference. Unifies `rules`/`parsers` YAML
+round-trip plus read-only macros/lookups/dashboards introspection into
+one pull → edit → diff → push loop; every read/diff/apply delegates to
+the existing per-type machinery (`rules_io`, `parsers_io`, `conf_ops`,
+`client.upload_lookup`) -- no serialization or apply logic is
+duplicated. Full guide: `docs/guides/state.md`.
+
+```bash
+splunkctl state pull --dir ./snap                       # snapshot everything
+splunkctl state pull --dir ./snap --app my_app           # one app only
+splunkctl state pull --dir ./snap --types rules,macros   # a subset of types
+
+splunkctl state diff --dir ./snap                        # structured drift report
+splunkctl state diff --dir ./snap --types rules --json | jq .
+
+splunkctl state push --dir ./snap                        # dry-run preview
+splunkctl state push --dir ./snap --yes \
+    --report change-12345.json                           # apply + evidence
+```
+
+Pulls write `<dir>/manifest.json` (tool version, host, per-type object
+counts -- deliberately no timestamp, so the manifest stays
+deterministic) plus `rules.yml`/`parsers.yml`/`macros.yml`/
+`lookups/<name>`/`dashboards/<name>.xml` per selected `--types`.
+
+`diff` classifies every object as `added` (on disk only -- push would
+create it), `removed` (live only -- push does **not** delete it),
+`modified` (structured `fields` diff for rules/parsers/macros, a
+`sha256` before/after for the blob-shaped lookups/dashboards), or
+`unchanged`; it always exits 0 (a report, not a gate).
+
+`push` is guarded like every mutation (dry-run by default, `--yes` to
+apply) and only ever creates/updates what `added`/`modified` drift
+names -- a `removed` object is noted (`note: rules: 2 object(s) on the
+instance only — not deleted`) but never touched. Dashboards have no
+import path yet: drifted dashboards are reported as apply-unsupported
+and skipped, never erroring. `--report <file>` writes `{host, types,
+changes: [{type, name, change, before, after}], applied}` on **both**
+the dry-run (`applied: false`, the plan for ticket approval) and the
+`--yes` run (`applied: true`, the change record) -- `changes` only ever
+holds what was/would be applied, never `removed` or dashboard entries.
+
 ### Apps
 
 ```bash

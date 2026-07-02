@@ -30,6 +30,7 @@ from splunkctl.commands.rules import rules_group
 from splunkctl.commands.search import search_group
 from splunkctl.commands.server import server_group
 from splunkctl.commands.skill_cmd import skill_group
+from splunkctl.commands.state import state_group
 from splunkctl.commands.users import users_group
 
 
@@ -199,5 +200,6 @@ cli.add_command(rules_group)
 cli.add_command(search_group)
 cli.add_command(server_group)
 cli.add_command(skill_group)
+cli.add_command(state_group)
 cli.add_command(tags_group)
 cli.add_command(users_group)
