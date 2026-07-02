@@ -1,5 +1,74 @@
 # Changelog
 
+## 0.4.0
+
+Bank-SOC readiness release: agent reliability, ES triage, compliance
+audit, KV store, detection-engineering depth, and config-as-code change
+control — all driven by a 2026-07 gap analysis against real SOC workflows.
+
+### New command groups
+- **es notables** — ES incident-review loop (list/get/update with
+  status, owner, urgency, disposition, comment via `notable_update`);
+  feature-detected on `SplunkEnterpriseSecuritySuite`.
+- **audit changes** — normalized `_audit` event stream (both legacy text
+  and structured JSON shapes) into one six-key schema; client-side
+  filters, zero user input composed into SPL.
+- **audit rbac** — users × roles × capabilities × index-restrictions
+  attestation view with transitive imported-role closure; csv-exportable
+  for periodic access recertification.
+- **kvstore** — KV store collection + document CRUD over raw REST
+  (create/delete/query/insert/update/remove/export/import with JSONL
+  round-trip and 500-doc batch chunking); UrlEncoded path-segment
+  escaping for CIDR-notation keys.
+- **conf** — generic conf-file/stanza editor (files/list/get/set/unset/
+  reload) over any conf file; shared `conf_ops` core extracted from
+  `parsers` (parsers behavior unchanged).
+- **macros** — list/get/set with arg-form stanza resolution (`name(n)`);
+  delegates to `conf_ops`.
+- **eventtypes** / **tags** — read-only list/get over `eventtypes.conf`
+  and `tags.conf`; tags shows enabled-only by default.
+- **datamodels** — list/get (with `--definition`)/acceleration status/
+  rebuild (guarded); acceleration sourced from `admin/summarization`.
+- **state** — unified config-as-code pull/diff/push across rules,
+  parsers, macros, lookups, and dashboards (diff-only). Change-evidence
+  JSON report artifact written on both dry-run and `--yes` for
+  change-ticket workflows. Push never deletes instance objects.
+- **server cluster / shcluster / deployment** — read-only topology
+  health (indexer cluster peers + SF/RF, SH cluster captain/members,
+  deployment server clients); graceful not-enabled on single instances.
+
+### Enhancements
+- **Structured JSON error envelope** — under `--json` or piped output,
+  errors emit `{"error": {"kind", "http_status", "message"}}` on stderr
+  with a typed kind taxonomy (auth/permission/not_found/conflict/http/
+  connection/timeout); `not_found` wired at every lookup-miss site.
+- **Uniform list paging** — `--limit`/`--offset`/`--filter` on all 13
+  list surfaces; no silent truncation (SDK fetch-all default locked in
+  with a regression guard).
+- **Multi-instance profiles** — named profiles in config.yaml with
+  `config use <profile>` and `--profile` global flag; bank-safety guard
+  banner prints `(profile: <name> @ host:port)` on every dry-run/`--yes`
+  confirmation; no-network guarantee for banner construction.
+- **Lookup wiring** — `lookups define` (transforms.conf definition
+  binding file or KV store collection → fields) and `lookups auto`
+  (props.conf `LOOKUP-*` automatic-lookup wiring with OUTPUT/OUTPUTNEW
+  and AS renames); delegates to `conf_ops`.
+- **First-class alert-action flags** — `--email-to`, `--email-subject`,
+  `--webhook-url` on `rules create/update` (sugar over `--set`);
+  conflict with equivalent `--set` → exit 2; integrated with the
+  missing-field dry-run warning.
+
+### Fixes
+- **SPL injection** — shared `spl_quote` helper escapes backslashes
+  before quotes, closing a filter-breakout primitive in the `name=`
+  search filter (rules, es notables).
+- **config init** never clobbers an existing multi-profile file (folds
+  into `profiles.default` instead).
+- **conf set/unset** classify missing-stanza and missing-file errors at
+  apply time (not raw tracebacks).
+- **datamodels rebuild** uses the resolved canonical model name on the
+  wire (not the user's possibly wrong-cased input).
+
 ## 0.3.1
 
 SOC bug-fix wave: fixes found while auditing detection coverage and
