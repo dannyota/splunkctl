@@ -13,16 +13,16 @@
   <url><loc>https://splunkctl.danny.vn/#/guides/lookups</loc><priority>0.8</priority></url>
   <url><loc>https://splunkctl.danny.vn/#/guides/hec</loc><priority>0.7</priority></url>
   <url><loc>https://splunkctl.danny.vn/#/guides/parsers</loc><priority>0.7</priority></url>
-  <url><loc>https://splunkctl.danny.vn/#/guides/apps</loc><priority>0.7</priority></url>
-  <url><loc>https://splunkctl.danny.vn/#/guides/users</loc><priority>0.7</priority></url>
   <url><loc>https://splunkctl.danny.vn/#/guides/knowledge</loc><priority>0.7</priority></url>
   <url><loc>https://splunkctl.danny.vn/#/guides/conf</loc><priority>0.7</priority></url>
+  <url><loc>https://splunkctl.danny.vn/#/guides/apps</loc><priority>0.7</priority></url>
+  <url><loc>https://splunkctl.danny.vn/#/guides/users</loc><priority>0.7</priority></url>
   <url><loc>https://splunkctl.danny.vn/#/guides/state</loc><priority>0.8</priority></url>
   <url><loc>https://splunkctl.danny.vn/#/guides/es</loc><priority>0.8</priority></url>
   <url><loc>https://splunkctl.danny.vn/#/guides/kvstore</loc><priority>0.7</priority></url>
+  <url><loc>https://splunkctl.danny.vn/#/guides/datamodels</loc><priority>0.7</priority></url>
   <url><loc>https://splunkctl.danny.vn/#/guides/audit</loc><priority>0.8</priority></url>
   <url><loc>https://splunkctl.danny.vn/#/guides/server</loc><priority>0.7</priority></url>
-  <url><loc>https://splunkctl.danny.vn/#/guides/datamodels</loc><priority>0.7</priority></url>
   <url><loc>https://splunkctl.danny.vn/#/design/architecture</loc><priority>0.6</priority></url>
   <url><loc>https://splunkctl.danny.vn/#/design/catalog</loc><priority>0.6</priority></url>
 </urlset>

@@ -15,8 +15,18 @@
   - [Lookups](guides/lookups.md)
   - [HEC tokens](guides/hec.md)
   - [Parsers](guides/parsers.md)
+  - [Macros, eventtypes, tags](guides/knowledge.md)
+  - [Conf editor](guides/conf.md)
   - [Apps](guides/apps.md)
   - [Users & roles](guides/users.md)
+
+- **Operations**
+  - [State (config-as-code)](guides/state.md)
+  - [ES notables](guides/es.md)
+  - [KV store](guides/kvstore.md)
+  - [Data models](guides/datamodels.md)
+  - [Audit & RBAC](guides/audit.md)
+  - [Server health](guides/server.md)
 
 - **Design**
   - [Architecture](design/architecture.md)

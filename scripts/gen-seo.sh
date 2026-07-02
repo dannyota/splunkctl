@@ -11,220 +11,167 @@
 #     file://$PWD/docs/assets/banner.svg
 #   pngquant --force --quality=80-95 --output docs/assets/og.png docs/assets/og.png
 set -euo pipefail
-cd "$(dirname "$0")/.."
 
-SITE="https://splunkctl.danny.vn"
-DOCS="docs"
-CHECK=false
-[[ "${1:-}" == "--check" ]] && CHECK=true
+check=false
+[ "${1:-}" = "--check" ] && check=true
 
-# --- discover pages from _sidebar.md + filesystem ---
-declare -a PAGES=()
-declare -A TITLES=()
-declare -A DESCS=()
-declare -A PRIORITIES=()
+root="$(git rev-parse --show-toplevel)"
+docs="$root/docs"
+sidebar="$docs/_sidebar.md"
+base="https://splunkctl.danny.vn"
 
-add_page() {
-  local path="$1" title="$2" desc="$3" pri="${4:-0.7}"
-  PAGES+=("$path")
-  TITLES["$path"]="$title"
-  DESCS["$path"]="$desc"
-  PRIORITIES["$path"]="$pri"
-}
+[ -f "$sidebar" ] || { echo "error: $sidebar not found" >&2; exit 1; }
+
+if $check; then
+  outdir="$(mktemp -d)"
+  trap 'rm -rf "$outdir"' EXIT
+else
+  outdir="$docs"
+fi
 
 first_para() {
-  local f="$1"
-  # Grab lines of the first paragraph (non-header, non-quote, non-fence, non-blank),
-  # strip markdown formatting, join into one line, truncate to first sentence.
   awk '
-    /^```/     { in_fence = !in_fence; next }
-    in_fence   { next }
-    /^$/       { if (started) exit; next }
-    /^[#>|`-]/ { next }
-    {
-      gsub(/\*\*/, "")
-      gsub(/\[([^\]]*)\]\([^)]*\)/, "\\1")
-      gsub(/`/, "")
-      started = 1
-      line = (line ? line " " : "") $0
+    /^```/ { fence=!fence; next }
+    fence { next }
+    /^#/ { found=1; next }
+    found && /^[^#>|[`-]/ && !/^$/ && !/^---/ {
+      gsub(/\*\*/, ""); gsub(/`/, ""); gsub(/\[/, ""); gsub(/\]\([^)]*\)/, "")
+      printf "%s ", $0; count++
+      if (count >= 3) exit
     }
-    END { print line }
-  ' "$f" | awk '{
-    # Prefer first sentence; fall back to word-boundary truncation at 155 chars.
-    if (match($0, /^.{10,155}\. /)) {
-      print substr($0, 1, RLENGTH - 1)
-    } else if (length($0) > 155) {
-      s = substr($0, 1, 155)
-      sub(/ [^ ]*$/, "", s)
-      print s
-    } else {
-      print
-    }
+    found && /^$/ && count > 0 { exit }
+  ' "$1" | sed 's/ $//' | awk '{
+    if (length <= 150) { print; exit }
+    s = substr($0, 1, 150)
+    sub(/ [^ ]*$/, "", s)
+    print s
   }'
 }
 
-add_page "/" "Home" "CLI tool to operate Splunk Enterprise as code" "1.0"
-
-# Canonical page order — matches sidebar groups. Pages not listed here but
-# present on the filesystem are appended at the end as "Advanced".
-ORDERED=(
-  guides/install:0.9
-  guides/configure:0.8
-  guides/doctor:0.8
-  guides/search:0.9
-  guides/rules:0.9
-  guides/alerts:0.8
-  guides/dashboards:0.7
-  guides/indexes:0.7
-  guides/inputs:0.7
-  guides/lookups:0.8
-  guides/hec:0.7
-  guides/parsers:0.7
-  guides/apps:0.7
-  guides/users:0.7
-  guides/knowledge:0.7
-  guides/conf:0.7
-  guides/state:0.8
-  guides/es:0.8
-  guides/kvstore:0.7
-  guides/audit:0.8
-  guides/server:0.7
-  guides/datamodels:0.7
-  design/architecture:0.6
-  design/catalog:0.6
-)
-
-declare -A SEEN=()
-
-for entry in "${ORDERED[@]}"; do
-  rel="${entry%%:*}"
-  pri="${entry##*:}"
-  f="$DOCS/${rel}.md"
-  [[ -f "$f" ]] || continue
-  title="$(head -1 "$f" | sed 's/^# *//')"
-  desc="$(first_para "$f")"
-  [[ -z "$desc" ]] && desc="$title"
-  desc="${desc:0:160}"
-  add_page "$rel" "$title" "$desc" "$pri"
-  SEEN["$rel"]=1
-done
-
-# Pick up any new guide/design pages not in ORDERED.
-for f in "$DOCS"/guides/*.md "$DOCS"/design/*.md; do
-  [[ -f "$f" ]] || continue
-  rel="${f#$DOCS/}"
-  rel="${rel%.md}"
-  [[ -n "${SEEN[$rel]:-}" ]] && continue
-  title="$(head -1 "$f" | sed 's/^# *//')"
-  desc="$(first_para "$f")"
-  [[ -z "$desc" ]] && desc="$title"
-  desc="${desc:0:160}"
-  add_page "$rel" "$title" "$desc" "0.7"
-done
-
 # --- sitemap.xml ---
-sitemap="$DOCS/sitemap.xml"
+
+sitemap="$outdir/sitemap.xml"
 {
   echo '<?xml version="1.0" encoding="UTF-8"?>'
   echo '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
-  for p in "${PAGES[@]}"; do
-    if [[ "$p" == "/" ]]; then
-      loc="$SITE/#/"
-    else
-      loc="$SITE/#/$p"
-    fi
-    echo "  <url><loc>$loc</loc><priority>${PRIORITIES[$p]}</priority></url>"
+  echo "  <url><loc>${base}/#/</loc><priority>1.0</priority></url>"
+
+  grep -oP '\(([^)]+\.md)\)|\(([^)]+/)\)' "$sidebar" | tr -d '()' | while read -r href; do
+    case "$href" in http*) continue ;; esac
+    path="${href%.md}"
+    path="${path%/}"
+    [ -z "$path" ] && continue
+    pri="0.7"
+    case "$path" in
+      guides/install|guides/search|guides/rules) pri="0.9" ;;
+      guides/configure|guides/doctor|guides/alerts|guides/lookups|guides/state|guides/es|guides/audit) pri="0.8" ;;
+      design/*) pri="0.6" ;;
+    esac
+    echo "  <url><loc>${base}/#/${path}</loc><priority>${pri}</priority></url>"
   done
+
   echo '</urlset>'
-} > "$sitemap.tmp"
+} > "$sitemap"
 
 # --- llms.txt ---
-llms="$DOCS/llms.txt"
+
+llms="$outdir/llms.txt"
 {
   echo "# splunkctl"
   echo ""
   echo "> CLI tool to operate Splunk Enterprise as code — for SOC teams, detection engineers, and AI agents. Python, Click, REST API. Every mutation is dry-run by default; nothing changes until you pass --yes."
   echo ""
 
-  section=""
-  for p in "${PAGES[@]}"; do
-    [[ "$p" == "/" ]] && continue
-
-    case "$p" in
-      guides/install|guides/configure|guides/doctor)
-        new_section="Getting started" ;;
-      guides/search|guides/rules|guides/alerts|guides/dashboards|guides/indexes|guides/inputs|guides/lookups|guides/hec|guides/parsers|guides/apps|guides/users)
-        new_section="Core commands" ;;
-      guides/knowledge|guides/conf|guides/state|guides/es|guides/kvstore|guides/audit|guides/server|guides/datamodels)
-        new_section="Advanced" ;;
-      design/*)
-        new_section="Design" ;;
-      *)
-        new_section="Other" ;;
-    esac
-
-    if [[ "$new_section" != "$section" ]]; then
-      [[ -n "$section" ]] && echo ""
-      section="$new_section"
-      echo "## $section"
+  while IFS= read -r line; do
+    title="$(echo "$line" | sed -n 's/^- \*\*\(.*\)\*\*$/\1/p')"
+    if [ -n "$title" ]; then
       echo ""
+      echo "## ${title}"
+      echo ""
+      continue
     fi
 
-    echo "- [${TITLES[$p]}]($SITE/#/$p): ${DESCS[$p]}"
-  done
+    if echo "$line" | grep -qP '^\s*- \['; then
+      link_title="$(echo "$line" | sed -n 's/.*\[\([^]]*\)\].*/\1/p')"
+      href="$(echo "$line" | sed -n 's/.*(\([^)]*\)).*/\1/p')"
+      [ -z "$link_title" ] || [ -z "$href" ] && continue
+
+      case "$href" in
+        http*) echo "- [${link_title}](${href})"; continue ;;
+      esac
+
+      path="${href%.md}"
+      path="${path%/}"
+      url="${base}/#/${path}"
+      [ -z "$path" ] && url="${base}/#/"
+
+      file="$docs/$href"
+      [ "$href" = "/" ] && file="$docs/README.md"
+      [ -d "$file" ] && file="${file%/}/README.md"
+      desc=""
+      if [ -f "$file" ]; then
+        desc="$(first_para "$file")"
+      fi
+
+      if [ -n "$desc" ]; then
+        echo "- [${link_title}](${url}): ${desc}"
+      else
+        echo "- [${link_title}](${url})"
+      fi
+    fi
+  done < "$sidebar"
 
   echo ""
   echo "## Links"
   echo ""
   echo "- [GitHub](https://github.com/dannyota/splunkctl): Source code and releases"
   echo "- [PyPI](https://pypi.org/project/splunkctl/): Python package"
-} > "$llms.tmp"
+} > "$llms"
 
 # --- llms-full.txt ---
-llmsfull="$DOCS/llms-full.txt"
+
+llmsfull="$outdir/llms-full.txt"
 {
   echo "# splunkctl — full documentation"
   echo ""
   echo "> CLI tool to operate Splunk Enterprise as code — for SOC teams, detection engineers, and AI agents."
   echo ""
+  echo "---"
 
-  for p in "${PAGES[@]}"; do
-    [[ "$p" == "/" ]] && continue
-    f="$DOCS/${p}.md"
-    [[ -f "$f" ]] || continue
+  seen=""
+  grep -oP '\(([^)]+)\)' "$sidebar" | tr -d '()' | while read -r href; do
+    case "$href" in http*) continue ;; esac
+    file="$docs/$href"
+    [ "$href" = "/" ] && file="$docs/README.md"
+    [[ "$href" == */ ]] && file="${file}README.md"
+    [ -d "$file" ] && file="${file}/README.md"
+    [ -f "$file" ] || continue
+    real="$(realpath "$file")"
+    echo "$seen" | grep -qF "$real" && continue
+    seen="${seen}${real}"$'\n'
+    echo ""
     echo "---"
     echo ""
-    echo "## Source: $SITE/#/$p"
-    echo ""
-    cat "$f"
-    echo ""
+    cat "$file"
   done
-} > "$llmsfull.tmp"
+  echo ""
+} > "$llmsfull"
 
-# --- check mode or write ---
-if $CHECK; then
-  fail=0
-  for pair in "$sitemap:$sitemap.tmp" "$llms:$llms.tmp" "$llmsfull:$llmsfull.tmp"; do
-    target="${pair%%:*}"
-    tmp="${pair##*:}"
-    if [[ ! -f "$target" ]]; then
-      echo "MISSING  $target — run: bash scripts/gen-seo.sh"
-      fail=1
-    elif ! diff -q "$target" "$tmp" >/dev/null 2>&1; then
-      echo "STALE    $target — run: bash scripts/gen-seo.sh"
-      fail=1
+# --- check or write ---
+
+if $check; then
+  stale=false
+  for f in sitemap.xml llms.txt llms-full.txt; do
+    if ! diff -q "$outdir/$f" "$docs/$f" >/dev/null 2>&1; then
+      echo "stale: $f" >&2
+      stale=true
     fi
-    rm -f "$tmp"
   done
-  if (( fail )); then
-    echo "FAIL: SEO assets are out of date."
+  if $stale; then
+    echo "Run: bash scripts/gen-seo.sh" >&2
     exit 1
   fi
-  echo "OK: SEO assets are fresh."
-  exit 0
+  echo "ok: SEO files up-to-date"
+else
+  echo "generated: sitemap.xml ($(grep -c '<url>' "$sitemap") URLs), llms.txt ($(wc -l < "$llms") lines), llms-full.txt ($(wc -c < "$llmsfull") bytes)"
 fi
-
-mv "$sitemap.tmp" "$sitemap"
-mv "$llms.tmp" "$llms"
-mv "$llmsfull.tmp" "$llmsfull"
-echo "Generated: $sitemap, $llms, $llmsfull"

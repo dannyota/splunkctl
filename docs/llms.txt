@@ -2,41 +2,44 @@
 
 > CLI tool to operate Splunk Enterprise as code — for SOC teams, detection engineers, and AI agents. Python, Click, REST API. Every mutation is dry-run by default; nothing changes until you pass --yes.
 
+- [Home](https://splunkctl.danny.vn/#/): CLI tool for Splunk Enterprise SIEM operations — query, inspect, and manage a remote Splunk instance from your laptop. Built on the fork with Click.
+
 ## Getting started
 
 - [Install](https://splunkctl.danny.vn/#/guides/install): This pulls the forked SDK (splunkctl branch) automatically as a dependency.
 - [Configure](https://splunkctl.danny.vn/#/guides/configure): Prompts for host, port, auth method (token or username/password), tests the connection, and writes ~/.splunkctl/config.yaml with 0600 permissions.
 - [Doctor](https://splunkctl.danny.vn/#/guides/doctor): Diagnose connection, authentication, server health, and user permissions in a single command.
 
-## Core commands
+## Commands
 
-- [Search](https://splunkctl.danny.vn/#/guides/search): Run SPL queries against a remote Splunk instance from your laptop.
+- [Search](https://splunkctl.danny.vn/#/guides/search): Run SPL queries against a remote Splunk instance from your laptop. This is the primary interface for threat hunting, incident response, and ad-hoc
 - [Detection rules](https://splunkctl.danny.vn/#/guides/rules): so they can live in git, pass through CI, and deploy across instances.
-- [Alerts](https://splunkctl.danny.vn/#/guides/alerts): Fired alerts are the SOC's incoming work queue. During an incident, you need to see what triggered, when, and at what severity.
+- [Alerts](https://splunkctl.danny.vn/#/guides/alerts): Fired alerts are the SOC's incoming work queue. During an incident, you need to see what triggered, when, and at what severity. During planned
 - [Dashboards](https://splunkctl.danny.vn/#/guides/dashboards): Uses the Dashboard/Dashboards entity classes from the SDK fork.
 - [Indexes](https://splunkctl.danny.vn/#/guides/indexes): Create, configure, and manage Splunk indexes.
-- [Data inputs](https://splunkctl.danny.vn/#/guides/inputs): Manage monitor, TCP, UDP, script, and HTTP data inputs.
-- [Lookups](https://splunkctl.danny.vn/#/guides/lookups): Lookups turn raw events into actionable intelligence.
-- [HEC tokens](https://splunkctl.danny.vn/#/guides/hec): HEC (HTTP Event Collector) is Splunk's HTTP/JSON ingestion endpoint.
+- [Inputs](https://splunkctl.danny.vn/#/guides/inputs): Manage monitor, TCP, UDP, script, and HTTP data inputs.
+- [Lookups](https://splunkctl.danny.vn/#/guides/lookups): Lookups turn raw events into actionable intelligence. SecOps teams use them for threat intel enrichment (IoC feeds correlated at search time),
+- [HEC tokens](https://splunkctl.danny.vn/#/guides/hec): HEC (HTTP Event Collector) is Splunk's HTTP/JSON ingestion endpoint. SecOps teams use it to push data into Splunk from sources that do not have a
 - [Parsers](https://splunkctl.danny.vn/#/guides/parsers): Manage source types (props.conf) and field extractions (transforms.conf) via the REST API.
-- [Apps](https://splunkctl.danny.vn/#/guides/apps): Splunk's detection and enrichment capabilities live in apps -- Technology Add-ons (TAs) for data normalization, security content packs like Splunk
-- [Users and roles](https://splunkctl.danny.vn/#/guides/users): Manage Splunk users and roles via the REST API.
-
-## Advanced
-
 - [Macros, eventtypes, tags](https://splunkctl.danny.vn/#/guides/knowledge): Friendly, object-shaped verbs over macros.conf, eventtypes.conf, and
-- [Conf](https://splunkctl.danny.vn/#/guides/conf): Generic conf file/stanza editor over the REST confs API — the escape hatch for any Splunk conf file that doesn't have a dedicated command group yet:
-- [State (config-as-code, change evidence)](https://splunkctl.danny.vn/#/guides/state): snapshot of an instance's detection content, edit it like code, diff it against the live instance, then push -- with a savable before→after JSON artifact
-- [ES notable-event triage](https://splunkctl.danny.vn/#/guides/es): The SOC daily loop: see what's queued, pull the full detail on one notable, then assign, set status/urgency/disposition, or leave a comment — alone or in
-- [KV store (collections + data CRUD)](https://splunkctl.danny.vn/#/guides/kvstore): Splunk's KV store backs allowlists, threat-intel feeds, and Enterprise Security's asset/identity tables — schema-less JSON document storage scoped per app.
-- [Change audit & RBAC attestation](https://splunkctl.danny.vn/#/guides/audit): Regulator-facing evidence for bank SOC operations: who changed what (audit changes) and who can do what (audit rbac).
-- [Server Operations](https://splunkctl.danny.vn/#/guides/server): System health, license, KV store status, and topology health reads.
-- [Data models (CIM/tstats acceleration)](https://splunkctl.danny.vn/#/guides/datamodels): Mature SOC detections run on accelerated CIM data models via | tstats — this group answers "which models exist," "is acceleration healthy," and "trigger a
+- [Conf editor](https://splunkctl.danny.vn/#/guides/conf): Generic conf file/stanza editor over the REST confs API — the escape hatch for any Splunk conf file that doesn't have a dedicated command group yet:
+- [Apps](https://splunkctl.danny.vn/#/guides/apps): Splunk's detection and enrichment capabilities live in apps -- Technology Add-ons (TAs) for data normalization, security content packs like Splunk
+- [Users & roles](https://splunkctl.danny.vn/#/guides/users): Manage Splunk users and roles via the REST API.
+
+## Operations
+
+- [State (config-as-code)](https://splunkctl.danny.vn/#/guides/state): snapshot of an instance's detection content, edit it like code, diff it against the live instance, then push -- with a savable before→after JSON
+- [ES notables](https://splunkctl.danny.vn/#/guides/es): The SOC daily loop: see what's queued, pull the full detail on one notable, then assign, set status/urgency/disposition, or leave a comment — alone
+- [KV store](https://splunkctl.danny.vn/#/guides/kvstore): Splunk's KV store backs allowlists, threat-intel feeds, and Enterprise Security's asset/identity tables — schema-less JSON document storage scoped
+- [Data models](https://splunkctl.danny.vn/#/guides/datamodels): Mature SOC detections run on accelerated CIM data models via | tstats — this group answers "which models exist," "is acceleration healthy," and
+- [Audit & RBAC](https://splunkctl.danny.vn/#/guides/audit): Regulator-facing evidence for bank SOC operations: who changed what (audit changes) and who can do what (audit rbac). Both commands are read-only —
+- [Server health](https://splunkctl.danny.vn/#/guides/server): System health, license, KV store status, and topology health reads.
 
 ## Design
 
 - [Architecture](https://splunkctl.danny.vn/#/design/architecture): How splunkctl is built — the layers, the data flow, and the design decisions.
 - [Catalog & status](https://splunkctl.danny.vn/#/design/catalog): The source of truth for what exists and how mature it is — one status per command group, updated in the same commit that moves it forward.
+- [GitHub ↗](https://github.com/dannyota/splunkctl)
 
 ## Links
 
