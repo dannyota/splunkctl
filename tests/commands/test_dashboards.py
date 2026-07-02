@@ -204,3 +204,35 @@ def test_export_not_found(mock_gc: MagicMock) -> None:
     result = CliRunner().invoke(cli, ["dashboards", "export", "missing"])
     assert result.exit_code != 0
     assert "not found" in result.stderr
+
+
+@patch("splunkctl.commands.dashboards.get_client")
+def test_list_app_filters_rows(mock_gc: MagicMock) -> None:
+    mock_svc = MagicMock()
+    mock_svc.dashboards.list.return_value = [
+        _mock_dashboard("mine", app="search"),
+        _mock_dashboard("alert_view", app="system"),
+    ]
+    mock_gc.return_value.service = mock_svc
+
+    result = CliRunner().invoke(
+        cli, ["--json", "dashboards", "list", "--app", "search"]
+    )
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert [d["app"] for d in data] == ["search"]
+
+
+@patch("splunkctl.commands.dashboards.get_client")
+def test_list_excludes_non_dashboards_by_default(mock_gc: MagicMock) -> None:
+    view = _mock_dashboard("nav_thing")
+    view.content = {**view.content, "isDashboard": "0"}
+    mock_svc = MagicMock()
+    mock_svc.dashboards.list.return_value = [_mock_dashboard("real"), view]
+    mock_gc.return_value.service = mock_svc
+
+    result = CliRunner().invoke(cli, ["--json", "dashboards", "list"])
+    assert [d["name"] for d in json.loads(result.output)] == ["real"]
+
+    result = CliRunner().invoke(cli, ["--json", "dashboards", "list", "--all"])
+    assert [d["name"] for d in json.loads(result.output)] == ["real", "nav_thing"]

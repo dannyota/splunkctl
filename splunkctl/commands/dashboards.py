@@ -15,23 +15,37 @@ def dashboards_group() -> None:
 
 
 @dashboards_group.command("list")
-@click.option("--app", default="-", help="Splunk app context.")
+@click.option("--app", default="-", help="Only dashboards owned by this app.")
+@click.option(
+    "--all",
+    "show_all",
+    is_flag=True,
+    help="Include non-dashboard views (nav, forms marked isDashboard=0).",
+)
 @click.pass_context
-def list_dashboards(ctx: click.Context, *, app: str) -> None:
+def list_dashboards(ctx: click.Context, *, app: str, show_all: bool) -> None:
     """List dashboards."""
     client = get_client(ctx)
     items = client.service.dashboards.list(app=app, owner="-")
-    rows: list[dict[str, Any]] = [
-        {
-            "name": d.name,
-            "app": d.access.app,
-            "label": d.content.get("label", ""),
-            "isDashboard": d.content.get("isDashboard", False),
-            "isVisible": d.content.get("isVisible", False),
-        }
-        for d in items
-    ]
-    output.render(ctx, rows)
+    rows: list[dict[str, Any]] = []
+    for d in items:
+        if app != "-" and d.access.app != app:
+            continue
+        is_dashboard = d.content.get("isDashboard", False)
+        if not show_all and str(is_dashboard) in ("0", "False"):
+            continue
+        rows.append(
+            {
+                "name": d.name,
+                "app": d.access.app,
+                "owner": getattr(d.access, "owner", ""),
+                "sharing": getattr(d.access, "sharing", ""),
+                "label": d.content.get("label", ""),
+                "isDashboard": is_dashboard,
+                "isVisible": d.content.get("isVisible", False),
+            }
+        )
+    output.render(ctx, rows, empty="No dashboards found.")
 
 
 @dashboards_group.command("get")
