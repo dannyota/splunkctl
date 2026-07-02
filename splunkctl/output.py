@@ -88,9 +88,12 @@ def is_table(ctx: click.Context) -> bool:
 
 
 def _resolve_table(obj: dict[str, Any]) -> bool:
+    fmt: str | None = obj.get("format")
+    if fmt in ("csv", "jsonl"):
+        return False
     if _resolves_to_json(obj):
         return False
-    return obj.get("format") == "table" or sys.stdout.isatty()
+    return fmt == "table" or sys.stdout.isatty()
 
 
 def _resolves_to_json(obj: dict[str, Any]) -> bool:

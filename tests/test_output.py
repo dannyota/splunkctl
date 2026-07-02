@@ -308,3 +308,63 @@ def test_is_table_resolution() -> None:
     assert runner.invoke(cmd, ["--use-json"]).output.strip() == "False"
     # piped (non-TTY) with no flags resolves to JSON, not table
     assert runner.invoke(cmd, []).output.strip() == "False"
+
+
+def test_csv_not_table_even_on_tty(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Explicit --format csv must not be treated as table, even on a real TTY."""
+
+    @click.command()
+    @click.pass_context
+    def cmd(ctx: click.Context) -> None:
+        monkeypatch.setattr(sys.stdout, "isatty", lambda: True)
+        ctx.ensure_object(dict)
+        ctx.obj.update({"json": False, "format": "csv"})
+        click.echo(str(output.is_table(ctx)))
+
+    result = CliRunner().invoke(cmd)
+    assert result.output.strip() == "False"
+
+
+def test_jsonl_not_table_even_on_tty(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Explicit --format jsonl must not be treated as table, even on a real TTY."""
+
+    @click.command()
+    @click.pass_context
+    def cmd(ctx: click.Context) -> None:
+        monkeypatch.setattr(sys.stdout, "isatty", lambda: True)
+        ctx.ensure_object(dict)
+        ctx.obj.update({"json": False, "format": "jsonl"})
+        click.echo(str(output.is_table(ctx)))
+
+    result = CliRunner().invoke(cmd)
+    assert result.output.strip() == "False"
+
+
+def test_table_format_is_table_on_tty(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Explicit --format table is table, even in a non-TTY context."""
+
+    @click.command()
+    @click.pass_context
+    def cmd(ctx: click.Context) -> None:
+        monkeypatch.setattr(sys.stdout, "isatty", lambda: True)
+        ctx.ensure_object(dict)
+        ctx.obj.update({"json": False, "format": "table"})
+        click.echo(str(output.is_table(ctx)))
+
+    result = CliRunner().invoke(cmd)
+    assert result.output.strip() == "True"
+
+
+def test_no_format_is_table_on_tty(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No format flag defaults to table on a TTY."""
+
+    @click.command()
+    @click.pass_context
+    def cmd(ctx: click.Context) -> None:
+        monkeypatch.setattr(sys.stdout, "isatty", lambda: True)
+        ctx.ensure_object(dict)
+        ctx.obj.update({"json": False, "format": None})
+        click.echo(str(output.is_table(ctx)))
+
+    result = CliRunner().invoke(cmd)
+    assert result.output.strip() == "True"
