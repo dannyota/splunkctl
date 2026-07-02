@@ -50,6 +50,17 @@ answers "when". `--types` controls which of the five files/directories
 get written; `pull` owns and overwrites only the types it's asked to
 touch, and is otherwise read-only against the instance.
 
+**Hard constraint: keep `--app` consistent across pull/diff/push.**
+`lookups/<name>` and `dashboards/<name>.xml` are a *flat* layout --
+the file name carries no app, unlike `rules.yml`/`parsers.yml`/
+`macros.yml`, where every doc records its own `app`. If you `pull`
+unscoped (or with one `--app`) and then `diff`/`push` with a
+*different* single `--app`, a lookup or dashboard belonging to another
+app can be misattributed: it shows as `added` even though it already
+exists live, and `push` would try to *create* it under the wrong app.
+Always use the same `--app` scope across pull, diff, and push (or
+none, for all three) when lookups or dashboards are in play.
+
 ## Object type capability matrix
 
 | Type | Pull (read) | Diff | Push (apply) |
@@ -119,6 +130,15 @@ note: dashboards: 1 drifted object(s) — apply not supported (export-only, no i
 If `dashboards` is the only `--types` value and nothing else drifted,
 `push` still runs cleanly (exit 0) and, with `--report`, still writes
 an artifact (`changes: []`).
+
+**Diff caveat.** `dashboards` drift is a raw-XML content hash, so
+`state diff` can show a handful of dashboards as `modified` with zero
+real edits -- Splunk's export is not always byte-identical across
+requests, and (more commonly) two apps sharing a dashboard name
+collide in the flat `dashboards/<name>.xml` layout (see the `--app`
+constraint above). This is cosmetic -- dashboards are never pushed --
+but don't treat a non-empty dashboard diff as evidence of a real
+change without checking it.
 
 ## The change-ticket workflow
 

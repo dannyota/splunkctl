@@ -195,6 +195,6 @@ def apply_macros(client: Any, dir_path: Path, app: str | None) -> list[ChangeRec
         if entry["change"] not in ("added", "modified"):
             continue
         kv = {k: str(v) for k, v in desired.items()}
-        conf_ops.set_keys(client, "macros", name, kv, app=app)
+        conf_ops.set_keys(client, "macros", name, kv, app=doc_app)
         records.append(change_record("macros", entry))
     return records

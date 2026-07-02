@@ -297,6 +297,62 @@ def test_diff_macros_modified(tmp_path: Path) -> None:
     ]
 
 
+def _write_macro_doc(tmp_path: Path, app: str, definition: str) -> None:
+    doc = [{"name": "my_macro", "app": app, "keys": {"definition": definition}}]
+    (tmp_path / "macros.yml").write_text(yaml.dump(doc))
+
+
+def test_apply_macros_create_uses_macros_own_app(tmp_path: Path) -> None:
+    """A macro absent live is created under ITS OWN app, not the CLI's
+    (unscoped) push default."""
+    _write_macro_doc(tmp_path, "Splunk_Security_Essentials", "index=main")
+    svc = MagicMock()
+    conf = MagicMock()
+    conf.__getitem__.side_effect = KeyError("my_macro")
+    svc.confs.__getitem__.return_value = conf
+    svc.get.side_effect = Exception("404")
+    client = _client(svc)
+
+    records = state_io.apply_macros(client, tmp_path, None)  # unscoped push
+    assert records[0]["change"] == "added"
+    assert conf.create.call_args.kwargs.get("app") == "Splunk_Security_Essentials"
+
+
+def test_apply_macros_update_uses_macros_own_app(tmp_path: Path) -> None:
+    """A macro present live is updated in ITS OWN app's namespace."""
+    _write_macro_doc(tmp_path, "Splunk_Security_Essentials", "index=new")
+    svc = MagicMock()
+    conf = MagicMock()
+    live_stanza = MagicMock()
+    conf.__getitem__.return_value = live_stanza
+    svc.confs.__getitem__.return_value = conf
+    svc.get.return_value = _configs_resp({"definition": "index=old"})
+    client = _client(svc)
+
+    records = state_io.apply_macros(client, tmp_path, None)  # unscoped push
+    assert records[0]["change"] == "modified"
+    live_stanza.update.assert_called_once_with(definition="index=new")
+    namespace = conf.__getitem__.call_args.args[0][1]
+    assert namespace.app == "Splunk_Security_Essentials"
+
+
+def test_apply_macros_unscoped_push_targets_doc_app_not_default(tmp_path: Path) -> None:
+    """Regression guard: unscoped push (`--app` omitted, `app=None`) must
+    target the macro's OWN recorded app, not the connection's default
+    namespace. RED against `conf_ops.set_keys(..., app=app)`."""
+    _write_macro_doc(tmp_path, "some_app", "index=x")
+    svc = MagicMock()
+    conf = MagicMock()
+    conf.__getitem__.side_effect = KeyError("my_macro")
+    svc.confs.__getitem__.return_value = conf
+    svc.get.side_effect = Exception("404")
+    client = _client(svc)
+
+    records = state_io.apply_macros(client, tmp_path, None)
+    assert records[0]["change"] == "added"
+    assert conf.create.call_args.kwargs.get("app") == "some_app"
+
+
 # --------------------------------------------------------------------------
 # lookups
 # --------------------------------------------------------------------------

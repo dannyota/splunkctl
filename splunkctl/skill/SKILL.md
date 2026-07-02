@@ -623,6 +623,21 @@ the dry-run (`applied: false`, the plan for ticket approval) and the
 `--yes` run (`applied: true`, the change record) -- `changes` only ever
 holds what was/would be applied, never `removed` or dashboard entries.
 
+> **Use the SAME `--app` scope across pull, diff, and push** (or none,
+> for all three). `lookups`/`dashboards` use a flat on-disk layout
+> (`lookups/<name>`, `dashboards/<name>.xml`) with no per-file app tag,
+> unlike `rules.yml`/`parsers.yml`/`macros.yml` (which record each
+> object's own `app`). Mixing scopes can misattribute a flat-layout
+> object to the wrong app, and on push, attempt to recreate an object
+> that already exists under a different app.
+>
+> Dashboards are diff-only (never pushed), and their raw-XML diff can
+> show a small number of `modified` rows with zero real edits --
+> Splunk's export isn't always byte-identical, and same-named
+> dashboards across apps collide in the flat layout above. Cosmetic,
+> and harmless for push safety, but don't read a nonzero dashboard
+> diff as a real change without checking it.
+
 ### Apps
 
 ```bash
