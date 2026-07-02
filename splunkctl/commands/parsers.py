@@ -8,6 +8,7 @@ import click
 
 from splunkctl import guard, output
 from splunkctl.client import get_client
+from splunkctl.commands import conf_ops
 from splunkctl.commands.common import (
     fetch_page,
     filter_by_name,
@@ -78,23 +79,21 @@ def set_keys(
         return
 
     client = get_client(ctx)
-    conf = client.service.confs[conf_name]
     try:
-        target = conf[stanza]
-        target.update(**kv)
-        created = False
+        _target, created = conf_ops.set_keys(
+            client,
+            conf_name,
+            stanza,
+            kv,
+            sharing=sharing,
+            create_missing=create_missing,
+        )
     except KeyError:
-        if not create_missing:
-            output.error(
-                f"Stanza '{stanza}' not found in {conf_name}.conf.", kind="not_found"
-            )
-            ctx.exit(1)
-            return
-        target = conf.create(stanza, **kv)
-        created = True
-
-    if sharing or created:
-        client.set_acl(target, sharing=sharing or "app")
+        output.error(
+            f"Stanza '{stanza}' not found in {conf_name}.conf.", kind="not_found"
+        )
+        ctx.exit(1)
+        return
 
     verb = "Created" if created else "Updated"
     output.info(f"{verb} {conf_name} stanza '{stanza}' ({len(kv)} key(s)).")
@@ -128,16 +127,14 @@ def unset_keys(
         return
 
     client = get_client(ctx)
-    conf = client.service.confs[conf_name]
     try:
-        target = conf[stanza]
+        conf_ops.unset_keys(client, conf_name, stanza, keys)
     except KeyError:
         output.error(
             f"Stanza '{stanza}' not found in {conf_name}.conf.", kind="not_found"
         )
         ctx.exit(1)
         return
-    target.update(**dict.fromkeys(keys, ""))
     output.info(
         f"Cleared {len(keys)} key(s) on '{stanza}' "
         "(REST cannot remove conf keys; values set to empty)."
@@ -224,9 +221,8 @@ def get_sourcetype(
         output.render(ctx, row)
         return
 
-    conf = client.service.confs[conf_name]
     try:
-        stanza = conf[sourcetype]
+        stanza = conf_ops.get_stanza(client, conf_name, sourcetype)
     except KeyError:
         output.error(f"Sourcetype '{sourcetype}' not found.", kind="not_found")
         ctx.exit(1)
@@ -252,7 +248,7 @@ def reload_confs(ctx: click.Context, conf_name: str) -> None:
         return
     client = get_client(ctx)
     for t in targets:
-        client.service.post(f"/services/configs/conf-{t}/_reload")
+        conf_ops.reload_conf(client, t)
     output.info(f"Reloaded: {', '.join(targets)}.")
 
 
@@ -367,9 +363,8 @@ def update_sourcetype(
         return
 
     client = get_client(ctx)
-    conf = client.service.confs["props"]
     try:
-        stanza = conf[sourcetype]
+        stanza = conf_ops.get_stanza(client, "props", sourcetype)
     except KeyError:
         output.error(f"Sourcetype '{sourcetype}' not found.", kind="not_found")
         ctx.exit(1)
@@ -392,9 +387,8 @@ def delete_sourcetype(ctx: click.Context, sourcetype: str) -> None:
         return
 
     client = get_client(ctx)
-    conf = client.service.confs["props"]
     try:
-        stanza = conf[sourcetype]
+        stanza = conf_ops.get_stanza(client, "props", sourcetype)
     except KeyError:
         output.error(f"Sourcetype '{sourcetype}' not found.", kind="not_found")
         ctx.exit(1)

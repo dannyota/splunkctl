@@ -40,6 +40,7 @@ All list surfaces accept uniform `--limit`/`--offset`/`--filter` options
 | `hec` | ✅ built | list, get, create (--set), delete, enable, disable, settings (--enable/--disable), send |
 | `parsers` | ✅ built | sourcetypes, get (--key), set, unset, create, update, delete, reload |
 | `parsers import/export` | ✅ built | YAML round-trip for props/transforms stanzas |
+| `conf` | ✅ built | files (--app), list (--app), get (--key), set (diff preview), unset, reload — generic stanza editor for any conf file (macros/eventtypes/tags/authorize/...), no blocklist; shares its stanza get/set/unset/reload core with `parsers` via `conf_ops.py` |
 | `apps` | ✅ built | list, get, install, uninstall, update, reload |
 | `users` | ✅ built | list, get, create, update (--password), delete |
 | `users roles` | ✅ built | list, get, create, update, delete |

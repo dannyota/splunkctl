@@ -436,6 +436,32 @@ splunkctl parsers export --path parsers.yml          # export props/transforms
 splunkctl parsers import --path parsers.yml --yes    # import from YAML
 ```
 
+### Conf (generic escape hatch — any conf file/stanza)
+
+`parsers` only reaches `props.conf`/`transforms.conf`. `conf` reaches
+every other conf file (`macros`, `eventtypes`, `tags`, `limits`,
+`authorize`, `server`, `web`, ...) the same way — there is no
+blocklist, so double-check the preview before `--yes` on a sensitive
+file. Friendly verbs for macros/eventtypes/tags land in a later phase;
+until then this is the general-purpose way to manage them.
+
+```bash
+splunkctl conf files                        # list conf files
+splunkctl conf list macros                  # list stanzas in a conf file
+splunkctl conf list macros --app my_app     # scope to one app's stanzas
+splunkctl conf get macros my_macro          # full stanza config
+splunkctl conf get macros my_macro --key definition  # one key only
+splunkctl conf set macros my_macro definition='index=main' --yes  # create/update
+splunkctl conf unset macros my_macro definition --yes  # clear a key (sets empty)
+splunkctl conf reload macros --yes          # reload the conf file
+```
+
+`conf set` previews a field-level diff (`key: old -> new`, `add` for a
+brand-new key) before applying; `conf unset` previews the same shape
+for the values being cleared. The REST API has no true per-key delete,
+so `unset` sets keys to the empty string — it does not remove the
+stanza itself.
+
 ### Apps
 
 ```bash
