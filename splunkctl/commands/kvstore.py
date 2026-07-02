@@ -10,6 +10,7 @@ blank output or a raw traceback.
 """
 
 import json
+import urllib.parse
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -21,6 +22,15 @@ from splunkctl.client import get_client, rest_get_json, rest_post_json
 
 _OWNER = "nobody"
 _CHUNK_SIZE = 500
+
+
+def _seg(value: str) -> str:
+    """URL-escape a REST API path segment (collection, key, name).
+
+    Escapes all special characters including '/' so CIDR keys like
+    '10.0.0.0/24' are properly addressed as single segments.
+    """
+    return urllib.parse.quote(value, safe="")
 
 
 def _app_option[F: Callable[..., Any]](f: F) -> F:
@@ -149,7 +159,9 @@ def delete_collection(ctx: click.Context, name: str, *, app: str) -> None:
     ):
         return
     client = get_client(ctx)
-    client.service.delete(f"storage/collections/config/{name}", owner=_OWNER, app=app)
+    client.service.delete(
+        f"storage/collections/config/{_seg(name)}", owner=_OWNER, app=app
+    )
     output.info(f"KV store collection '{name}' deleted from app '{app}'.")
 
 
@@ -203,7 +215,7 @@ def query_collection(
     client = get_client(ctx)
     data = rest_get_json(
         client.service,
-        f"storage/collections/data/{collection}",
+        f"storage/collections/data/{_seg(collection)}",
         owner=_OWNER,
         app=app,
         **params,
@@ -244,7 +256,7 @@ def insert_document(
     client = get_client(ctx)
     result = rest_post_json(
         client.service,
-        f"storage/collections/data/{collection}",
+        f"storage/collections/data/{_seg(collection)}",
         doc,
         owner=_OWNER,
         app=app,
@@ -287,7 +299,7 @@ def update_document(
     client = get_client(ctx)
     rest_post_json(
         client.service,
-        f"storage/collections/data/{collection}/{key}",
+        f"storage/collections/data/{_seg(collection)}/{_seg(key)}",
         doc,
         owner=_OWNER,
         app=app,
@@ -320,11 +332,14 @@ def remove_documents(
         raise click.UsageError("exactly one of KEY or --query is required")
 
     if key is not None:
-        if not guard.check(ctx, f"Remove document '{key}' from '{collection}'"):
+        msg = f"Remove document '{key}' from '{collection}' (app '{app}')"
+        if not guard.check(ctx, msg):
             return
         client = get_client(ctx)
         client.service.delete(
-            f"storage/collections/data/{collection}/{key}", owner=_OWNER, app=app
+            f"storage/collections/data/{_seg(collection)}/{_seg(key)}",
+            owner=_OWNER,
+            app=app,
         )
         output.info(f"Removed document '{key}' from '{collection}'.")
         return
@@ -334,13 +349,13 @@ def remove_documents(
     _parse_json(query_json, param_hint="--query")  # validate only, pass raw through
     if not guard.check(
         ctx,
-        f"Remove documents from '{collection}' matching query",
+        f"Remove documents from '{collection}' matching query (app '{app}')",
         details=f"  query: {query_json}",
     ):
         return
     client = get_client(ctx)
     client.service.delete(
-        f"storage/collections/data/{collection}",
+        f"storage/collections/data/{_seg(collection)}",
         owner=_OWNER,
         app=app,
         query=query_json,
@@ -361,7 +376,10 @@ def export_collection(ctx: click.Context, collection: str, *, app: str) -> None:
     """
     client = get_client(ctx)
     data = rest_get_json(
-        client.service, f"storage/collections/data/{collection}", owner=_OWNER, app=app
+        client.service,
+        f"storage/collections/data/{_seg(collection)}",
+        owner=_OWNER,
+        app=app,
     )
     docs: list[dict[str, Any]] = data if isinstance(data, list) else []
     lines = "\n".join(json.dumps(doc, default=str) for doc in docs)
@@ -415,7 +433,7 @@ def import_documents(
         chunk = docs[start : start + _CHUNK_SIZE]
         rest_post_json(
             client.service,
-            f"storage/collections/data/{collection}/batch_save",
+            f"storage/collections/data/{_seg(collection)}/batch_save",
             chunk,
             owner=_OWNER,
             app=app,
