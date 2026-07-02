@@ -325,6 +325,42 @@ def test_rebuild_applies_with_yes_disables_then_reenables(mock_gc: MagicMock) ->
 
 
 @patch(_PATCH)
+def test_rebuild_case_insensitive_input_posts_resolved_canonical_name(
+    mock_gc: MagicMock,
+) -> None:
+    """``_resolve`` matches ``search=name=<name>`` case-insensitively, so a
+    lowercase ``rebuild authentication`` finds the canonically-cased
+    ``Authentication`` entry and clears the exists/is-accelerated checks
+    and the guard preview. Both mutation POSTs must still address the
+    model Splunk actually has on disk (``Authentication``) — a raw-input
+    ``authentication`` path 404s server-side, since ``datamodel/model/<name>``
+    resolves case-sensitively even though the search collection doesn't."""
+    svc = mock_gc.return_value.service
+    svc.get.return_value = _resp(
+        {
+            "entry": [
+                _model_entry(
+                    "Authentication",
+                    app="Splunk_SA_CIM",
+                    accelerated=True,
+                    earliest_time="-30d",
+                )
+            ]
+        }
+    )
+
+    result = CliRunner().invoke(
+        cli, ["--yes", "datamodels", "rebuild", "authentication"]
+    )
+    assert result.exit_code == 0
+    assert svc.post.call_count == 2
+    first = svc.post.call_args_list[0]
+    second = svc.post.call_args_list[1]
+    assert first.args == ("datamodel/model/Authentication",)
+    assert second.args == ("datamodel/model/Authentication",)
+
+
+@patch(_PATCH)
 def test_rebuild_permission_denied_classified_envelope(mock_gc: MagicMock) -> None:
     svc = mock_gc.return_value.service
     svc.get.return_value = _resp(

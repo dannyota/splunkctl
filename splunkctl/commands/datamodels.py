@@ -303,6 +303,7 @@ def rebuild_model(ctx: click.Context, name: str, *, app: str) -> None:
     content: dict[str, Any] = entry.get("content", {})
     accel = _parse_acceleration(content)
     resolved_app = str(entry.get("acl", {}).get("app", ""))
+    resolved_name = str(entry.get("name", name))
 
     if not accel.get("enabled"):
         output.error(f"Data model '{name}' is not accelerated — nothing to rebuild.")
@@ -322,16 +323,18 @@ def rebuild_model(ctx: click.Context, name: str, *, app: str) -> None:
         return
 
     client.service.post(
-        "datamodel/model/" + _seg(name),
+        "datamodel/model/" + _seg(resolved_name),
         owner=_OWNER,
         app=resolved_app,
         acceleration="0",
     )
     client.service.post(
-        "datamodel/model/" + _seg(name),
+        "datamodel/model/" + _seg(resolved_name),
         owner=_OWNER,
         app=resolved_app,
         acceleration="1",
         **{"acceleration.earliest_time": earliest},
     )
-    output.info(f"Rebuild triggered for data model '{name}' (app '{resolved_app}').")
+    output.info(
+        f"Rebuild triggered for data model '{resolved_name}' (app '{resolved_app}')."
+    )
