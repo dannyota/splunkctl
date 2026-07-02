@@ -114,7 +114,7 @@ def test_list_roles(mock_gc: MagicMock) -> None:
         _mock_role("user", imported_roles=["power"], capabilities=["search"]),
     ]
     runner = CliRunner()
-    result = runner.invoke(cli, ["--json", "users", "roles"])
+    result = runner.invoke(cli, ["--json", "users", "roles", "list"])
     assert result.exit_code == 0
     assert "admin" in result.output
     assert "search" in result.output
@@ -128,12 +128,12 @@ def test_roles_truncated_capabilities(mock_gc: MagicMock) -> None:
     ]
     runner = CliRunner()
     # machine-readable output carries the full list
-    result = runner.invoke(cli, ["--json", "users", "roles"])
+    result = runner.invoke(cli, ["--json", "users", "roles", "list"])
     assert result.exit_code == 0
     assert "more)" not in result.output
     assert "cap_9" in result.output
     # table output truncates for readability
-    result = runner.invoke(cli, ["--format", "table", "users", "roles"])
+    result = runner.invoke(cli, ["--format", "table", "users", "roles", "list"])
     assert result.exit_code == 0
     assert "+5 more" in result.output
 

@@ -118,7 +118,7 @@ connection, preserving lazy auth even for a blocked dry-run.
 
 Every list surface (`rules list`, `alerts list`, `dashboards list`,
 `indexes list`, `inputs list`, `lookups list`, `hec list`, `apps list`,
-`users list`, `users roles`, `parsers sourcetypes`, `parsers extractions`,
+`users list`, `users roles list`, `parsers sourcetypes`, `parsers extractions`,
 `search jobs`) accepts three uniform options:
 
 | Option | Meaning |
@@ -494,6 +494,7 @@ splunkctl conf files                        # list conf files
 splunkctl conf list macros                  # list stanzas in a conf file
 splunkctl conf list macros --app my_app     # scope to one app's stanzas
 splunkctl conf get macros my_macro          # full stanza config
+splunkctl conf get macros my_macro --app SES  # scope to one app
 splunkctl conf get macros my_macro --key definition  # one key only
 splunkctl conf set macros my_macro definition='index=main' --yes  # create/update
 splunkctl conf unset macros my_macro definition --yes  # clear a key (sets empty)
@@ -664,7 +665,7 @@ splunkctl users create --name newuser --password 'pass' \
 splunkctl users update newuser --roles 'user,power' --yes
 splunkctl users update newuser --password 'newpass' --yes
 splunkctl users delete newuser --yes
-splunkctl users roles                   # list all roles
+splunkctl users roles list               # list all roles
 splunkctl users roles get admin         # role details
 splunkctl users roles create --name myrole --imported-roles user \
     --capabilities 'search,list_inputs' --yes
@@ -927,7 +928,7 @@ splunkctl indexes list --json \
 
 ```bash
 splunkctl users list --json | jq '.[] | {name, roles, email}'
-splunkctl users roles --json | jq '.[] | {name, capabilities}'
+splunkctl users roles list --json | jq '.[] | {name, capabilities}'
 ```
 
 ### Periodic access recertification (RBAC attestation)

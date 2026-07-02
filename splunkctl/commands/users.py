@@ -121,28 +121,33 @@ def get_user(ctx: click.Context, name: str) -> None:
 # --- roles sub-group ---
 
 
-@users_group.group("roles", invoke_without_command=True)
+@users_group.group("roles")
+@click.pass_context
+def roles_group(ctx: click.Context) -> None:
+    """Manage roles."""
+
+
+@roles_group.command("list")
 @list_options
 @click.pass_context
-def roles_group(
+def list_roles(
     ctx: click.Context,
     *,
     limit: int | None,
     offset: int,
     name_filter: str | None,
 ) -> None:
-    """Manage roles (bare invocation lists all roles)."""
-    if ctx.invoked_subcommand is None:
-        client = get_client(ctx)
-        roles = fetch_page(
-            client.service.roles.list,
-            limit=limit,
-            offset=offset,
-            name_filter=name_filter,
-        )
-        truncate = output.is_table(ctx)
-        rows = [_role_row(r, truncate=truncate) for r in roles]
-        output.render(ctx, rows, empty="No roles found.")
+    """List all roles."""
+    client = get_client(ctx)
+    roles = fetch_page(
+        client.service.roles.list,
+        limit=limit,
+        offset=offset,
+        name_filter=name_filter,
+    )
+    truncate = output.is_table(ctx)
+    rows = [_role_row(r, truncate=truncate) for r in roles]
+    output.render(ctx, rows, empty="No roles found.")
 
 
 @roles_group.command("get")

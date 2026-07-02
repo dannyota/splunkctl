@@ -423,7 +423,7 @@ def test_rule(
     while not job.is_done():
         if time.monotonic() > deadline:
             job.cancel()
-            output.error(f"Test run timed out after {timeout}s.")
+            output.error(f"Test run timed out after {timeout}s.", kind="timeout")
             ctx.exit(1)
             return
         time.sleep(0.5)

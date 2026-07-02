@@ -127,13 +127,15 @@ def test_roles_list_paging_and_filter(mock_gc: MagicMock) -> None:
     fake = SdkCollection(roles)
     mock_gc.return_value.service.roles = fake
     result = CliRunner().invoke(
-        cli, ["--json", "users", "roles", "--limit", "2", "--offset", "1"]
+        cli, ["--json", "users", "roles", "list", "--limit", "2", "--offset", "1"]
     )
     assert result.exit_code == 0
     assert _names(result.output) == ["power", "user"]
     assert fake.calls == [{"count": 2, "offset": 1}]
 
-    result = CliRunner().invoke(cli, ["--json", "users", "roles", "--filter", "ADMIN"])
+    result = CliRunner().invoke(
+        cli, ["--json", "users", "roles", "list", "--filter", "ADMIN"]
+    )
     assert result.exit_code == 0
     assert _names(result.output) == ["admin", "sc_admin"]
 

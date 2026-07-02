@@ -86,7 +86,8 @@ def _drift_from_rule_diff(rd: RuleDiff) -> DriftEntry:
     name = rd["name"]
     if name is None:
         raise ValueError("cannot build a drift entry for a skipped (nameless) rule doc")
-    entry: DriftEntry = {"name": name, "change": _RULE_CHANGE[rd["kind"]]}
+    change = _RULE_CHANGE.get(rd["kind"], "unchanged")
+    entry: DriftEntry = {"name": name, "change": change}
     if rd["changes"]:
         entry["fields"] = rd["changes"]
     return entry

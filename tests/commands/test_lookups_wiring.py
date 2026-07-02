@@ -4,7 +4,7 @@ No CLI/guard/SDK scaffolding here — these exercise the value-string and
 kv-dict construction directly, so the LOOKUP-<class> grammar and the
 transforms.conf key-building logic have a fast, focused test surface of
 their own. CLI-level delegation/guard/validation behavior for `lookups
-define`/`lookups auto` lives in test_lookups_define_auto.py.
+define`/`lookups auto` lives in test_lookups_define.py and test_lookups_auto.py.
 """
 
 import click

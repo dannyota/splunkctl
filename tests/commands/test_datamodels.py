@@ -191,7 +191,7 @@ def test_list_empty(mock_gc: MagicMock) -> None:
 
 
 @patch(_PATCH)
-def test_list_kv_store_independent_failure_classified(mock_gc: MagicMock) -> None:
+def test_list_failure_classified(mock_gc: MagicMock) -> None:
     """A REST failure is never swallowed locally — it reaches the central
     F1 classifier as a clean envelope, same as kvstore/es."""
     svc = mock_gc.return_value.service

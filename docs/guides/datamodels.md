@@ -84,8 +84,7 @@ acceleration config is enabled, with its build status:
   `enabled: true, has_summary: false` — accelerated, but nothing built)
 - `is_complete` / `percent_complete` — from `summary.complete` (a 0–1
   fraction server-side; rendered here as a 0–100 percentage, rounded to
-  1 decimal place — mirrors exactly what Splunk Web's own summarization
-  dashboard does: `int(float(complete) * 100)`)
+  1 decimal place: `round(float(complete) * 100, 1)`)
 - `size`, `earliest_summarized`, `latest_summarized` — raw
   `summary.size`/`summary.earliest_time`/`summary.latest_time`,
   unmodified (epoch seconds, not reformatted)
