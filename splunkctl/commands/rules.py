@@ -90,6 +90,18 @@ _DETAIL_FIELDS = (
 )
 
 
+def _action_params(c: dict[str, Any]) -> dict[str, Any]:
+    """Non-empty ``action.<name>.*`` content keys for each enabled action."""
+    actions = str(c.get("actions", "") or "")
+    params: dict[str, Any] = {}
+    for act in (a.strip() for a in actions.split(",") if a.strip()):
+        prefix = f"action.{act}."
+        for key, val in c.items():
+            if key.startswith(prefix) and val not in ("", None):
+                params[key] = val
+    return params
+
+
 def _detail(ss: Any) -> dict[str, Any]:
     c: dict[str, Any] = ss.content
     acl: dict[str, Any] = ss.access
@@ -100,6 +112,7 @@ def _detail(ss: Any) -> dict[str, Any]:
         "sharing": acl.get("sharing", ""),
     }
     row.update({f: c.get(f, "") for f in _DETAIL_FIELDS})
+    row.update(_action_params(c))
     return row
 
 

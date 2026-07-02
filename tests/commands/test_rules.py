@@ -467,3 +467,34 @@ def test_rules_test_dispatches_with_window(mock_gc: MagicMock) -> None:
     assert kwargs["dispatch.earliest_time"] == "-24h"
     assert kwargs["trigger_actions"] == "0"
     assert json.loads(result.stdout)[0]["count"] == "3"
+
+
+@patch(_PATCH)
+def test_get_shows_enabled_action_params(mock_gc: MagicMock) -> None:
+    ss = _mock_ss("r1")
+    ss.content["actions"] = "email"
+    ss.content["action.email.to"] = "secops@example.com"
+    ss.content["action.email.subject"] = ""  # empty value: excluded
+    ss.content["action.webhook.url"] = "https://example.com/hook"  # disabled: excluded
+    svc = _setup_svc(mock_gc)
+    svc.saved_searches.__getitem__.return_value = ss
+
+    result = CliRunner().invoke(cli, ["--json", "rules", "get", "r1"])
+    assert result.exit_code == 0, result.output
+    row = json.loads(result.output)[0]
+    assert row["action.email.to"] == "secops@example.com"
+    assert "action.email.subject" not in row
+    assert "action.webhook.url" not in row
+
+
+@patch(_PATCH)
+def test_get_no_actions_omits_action_keys(mock_gc: MagicMock) -> None:
+    ss = _mock_ss("r1")
+    ss.content["actions"] = ""
+    svc = _setup_svc(mock_gc)
+    svc.saved_searches.__getitem__.return_value = ss
+
+    result = CliRunner().invoke(cli, ["--json", "rules", "get", "r1"])
+    assert result.exit_code == 0, result.output
+    row = json.loads(result.output)[0]
+    assert not any(k.startswith("action.") for k in row)
