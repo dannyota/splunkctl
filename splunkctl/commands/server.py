@@ -203,8 +203,9 @@ def cluster_health(ctx: click.Context) -> None:
                     "bucket_count": pc.get("bucket_count", 0),
                 }
             )
-    except Exception:  # noqa: S110 — peer detail is best-effort
-        pass
+    except Exception as exc:
+        if not _is_not_enabled(exc):
+            raise
 
     output.render(ctx, rows, empty="No cluster info available.")
 

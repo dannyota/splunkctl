@@ -280,6 +280,22 @@ def test_cluster_genuine_error(mock_gc: MagicMock) -> None:
 
 
 @patch(_PATCH)
+def test_cluster_peers_genuine_error_propagates(mock_gc: MagicMock) -> None:
+    """A 401 on the peers endpoint propagates (not swallowed as best-effort)."""
+    svc = mock_gc.return_value.service
+    info_resp = _json_resp(_CLUSTER_INFO)
+
+    def route_get(path: str, **kw: Any) -> MagicMock:
+        if "peers" in path:
+            raise _http_error(401, "Unauthorized")
+        return info_resp
+
+    svc.get.side_effect = route_get
+    result = CliRunner().invoke(cli, ["--json", "server", "cluster"])
+    assert result.exit_code == 1
+
+
+@patch(_PATCH)
 def test_cluster_manager_fallback(mock_gc: MagicMock) -> None:
     """Falls back from cluster/manager to cluster/master on 404."""
     svc = mock_gc.return_value.service
