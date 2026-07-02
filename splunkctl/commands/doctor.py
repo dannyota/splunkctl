@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import importlib.resources
 import json
 import ssl
 import urllib.request
+from pathlib import Path
 from typing import Any
 
 import click
@@ -23,6 +25,20 @@ _KEY_CAPABILITIES = (
     "change_own_password",
 )
 
+_HINTS: dict[str, str] = {
+    "REST API reachable": ("Check SPLUNK_HOST/SPLUNK_PORT and that Splunk is running."),
+    "Authenticated": "Verify SPLUNK_USER/SPLUNK_PASS or SPLUNK_TOKEN.",
+    "License": "Run 'splunkctl server license' to inspect license state.",
+    "Splunkd health": ("Run 'splunkctl server messages' to see system warnings."),
+    "System messages": (
+        "Dismiss with 'splunkctl server messages --dismiss NAME --yes'."
+    ),
+    "Web UI reachable": ("Web UI is optional; lookup-upload and some ops need it."),
+    "Skill freshness": ("Run 'splunkctl skill install' to update the installed guide."),
+}
+
+_INSTALL_DIR = Path.home() / ".claude" / "skills" / "splunkctl"
+
 
 def _check(
     label: str,
@@ -30,6 +46,7 @@ def _check(
     detail: str = "",
     *,
     warn: bool = False,
+    hint: str = "",
 ) -> dict[str, str]:
     if passed:
         status = "OK"
@@ -40,12 +57,27 @@ def _check(
     click.echo(f"  {'PASS' if passed else status:4s}  {label}", err=True)
     if detail:
         click.echo(f"        {detail}", err=True)
-    return {"check": label, "status": status, "detail": detail}
+    resolved_hint = hint or _HINTS.get(label, "")
+    if not passed and resolved_hint:
+        click.echo(f"        hint: {resolved_hint}", err=True)
+    entry: dict[str, str] = {
+        "check": label,
+        "status": status,
+        "detail": detail,
+    }
+    if not passed and resolved_hint:
+        entry["hint"] = resolved_hint
+    return entry
 
 
 @click.command("doctor")
+@click.option(
+    "--strict",
+    is_flag=True,
+    help="Treat warnings as failures (exit 1).",
+)
 @click.pass_context
-def doctor_cmd(ctx: click.Context) -> None:
+def doctor_cmd(ctx: click.Context, *, strict: bool = False) -> None:
     """Check connection, auth, server health, and user permissions."""
     results: list[dict[str, str]] = []
     click.echo("splunkctl doctor", err=True)
@@ -59,7 +91,7 @@ def doctor_cmd(ctx: click.Context) -> None:
         results.append(_check("REST API reachable", True))
     except Exception as exc:
         results.append(_check("REST API reachable", False, str(exc)))
-        _finish(ctx, results)
+        _finish(ctx, results, strict=strict)
         return
 
     # --- 2. Auth ---
@@ -144,7 +176,8 @@ def doctor_cmd(ctx: click.Context) -> None:
         cap_set = set(caps)
 
         for cap in _KEY_CAPABILITIES:
-            results.append(_check(f"cap:{cap}", cap in cap_set))
+            hint = f"Grant '{cap}' to your user or role." if cap not in cap_set else ""
+            results.append(_check(f"cap:{cap}", cap in cap_set, hint=hint))
     except Exception as exc:
         results.append(_check("User lookup", False, str(exc)))
 
@@ -183,10 +216,39 @@ def doctor_cmd(ctx: click.Context) -> None:
             )
         )
 
-    _finish(ctx, results)
+    # --- 7. Skill freshness ---
+    click.echo("[Skill]", err=True)
+    _check_skill_freshness(results)
+
+    _finish(ctx, results, strict=strict)
 
 
-def _finish(ctx: click.Context, results: list[dict[str, str]]) -> None:
+def _check_skill_freshness(results: list[dict[str, str]]) -> None:
+    installed = _INSTALL_DIR / "SKILL.md"
+    if not installed.exists():
+        results.append(_check("Skill freshness", False, "not installed", warn=True))
+        return
+    try:
+        ref = importlib.resources.files("splunkctl.skill").joinpath("SKILL.md")
+        embedded = ref.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        results.append(_check("Skill freshness", False, "embedded SKILL.md missing"))
+        return
+    installed_text = installed.read_text(encoding="utf-8")
+    if installed_text == embedded:
+        results.append(_check("Skill freshness", True, "up to date"))
+    else:
+        results.append(
+            _check("Skill freshness", False, "installed copy is stale", warn=True)
+        )
+
+
+def _finish(
+    ctx: click.Context,
+    results: list[dict[str, str]],
+    *,
+    strict: bool = False,
+) -> None:
     click.echo("", err=True)
     fails = sum(1 for r in results if r["status"] == "FAIL")
     warns = sum(1 for r in results if r["status"] == "WARN")
@@ -202,5 +264,5 @@ def _finish(ctx: click.Context, results: list[dict[str, str]]) -> None:
     if fmt == "json" or obj.get("json"):
         click.echo(json.dumps(results, indent=2))
 
-    if fails:
+    if fails or (strict and warns):
         ctx.exit(1)
