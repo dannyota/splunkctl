@@ -58,7 +58,8 @@ def list_inputs(
     collection pages each kind with a 30-per-kind default limit, so environments
     with >30 inputs of a single kind may return incomplete results. To verify
     completeness for a specific kind, use: splunkctl search oneshot
-    '| rest /services/data/inputs/<kind>' (e.g., /services/data/inputs/monitor).
+    '| rest /services/data/inputs/<kind>' --limit 10000 (e.g.,
+    /services/data/inputs/monitor).
     """
     client = get_client(ctx)
     rows = [_input_row(i) for i in client.service.inputs.list()]

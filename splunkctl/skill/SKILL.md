@@ -79,7 +79,7 @@ Every list surface (`rules list`, `alerts list`, `dashboards list`,
   the SDK's union Inputs collection, which pages each kind with a 30-per-kind
   default limit — for environments with >30 inputs of a single kind, the list
   may be incomplete. To verify completeness for a specific kind, use
-  `splunkctl search oneshot '| rest /services/data/inputs/<kind>'` (e.g.,
+  `splunkctl search oneshot '| rest /services/data/inputs/<kind>' --limit 10000` (e.g.,
   `'| rest /services/data/inputs/monitor'`).
 - **Order**: `--filter` narrows first; `--limit`/`--offset` then page the
   filtered set.
