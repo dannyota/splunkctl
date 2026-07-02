@@ -105,6 +105,21 @@ def download_lookup(
     """Download a lookup table as CSV."""
     client = get_client(ctx)
     try:
+        matches = client.service.lookup_table_files.list(
+            search=f"name={name}",
+            app=app,
+            owner="-",
+            count=1,
+        )
+    except Exception as exc:
+        output.error(f"Download failed: {exc}")
+        ctx.exit(1)
+        return
+    if not matches:
+        output.error(f"Lookup '{name}' not found in app '{app}'.")
+        ctx.exit(1)
+        return
+    try:
         stream = client.service.jobs.oneshot(
             f"| inputlookup {name}",
             output_mode="csv",

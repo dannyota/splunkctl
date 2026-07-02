@@ -198,3 +198,19 @@ def test_download_to_file(mock_gc: MagicMock, tmp_path: Path) -> None:
     assert out_file.exists()
     content = out_file.read_text()
     assert "host,ip" in content
+
+
+@patch("splunkctl.commands.lookups.get_client")
+def test_download_missing_lookup_fails(mock_gc: MagicMock, tmp_path) -> None:
+    mock_svc = MagicMock()
+    mock_svc.lookup_table_files.list.return_value = []
+    mock_gc.return_value.service = mock_svc
+
+    out = tmp_path / "x.csv"
+    result = CliRunner().invoke(
+        cli, ["lookups", "download", "ghost.csv", "--app", "search", "--out", str(out)]
+    )
+    assert result.exit_code == 1
+    assert "not found" in result.stderr
+    assert not out.exists()
+    mock_svc.jobs.oneshot.assert_not_called()
