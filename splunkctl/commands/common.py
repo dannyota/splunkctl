@@ -7,6 +7,17 @@ import click
 
 from splunkctl import output
 
+
+def spl_quote(value: str) -> str:
+    """Quote a value for an SPL ``field=value`` search filter.
+
+    Escapes backslashes FIRST, then quotes, to prevent SPL injection.
+    A value ending in backslash or containing backslash-quote sequences
+    cannot break out of the literal or be reinterpreted by the SPL parser.
+    """
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
 _ALERT_TYPES = (
     "custom",
     "number of events",

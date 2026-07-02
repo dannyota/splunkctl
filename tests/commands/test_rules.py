@@ -3,9 +3,25 @@ from unittest.mock import MagicMock, patch
 
 from click.testing import CliRunner
 
+from splunkctl.commands.common import spl_quote
 from splunkctl.main import cli
 
 _PATCH = "splunkctl.commands.rules.get_client"
+
+
+# --- unit: SPL quoting ---
+
+
+def test_quoted_escapes_embedded_quotes() -> None:
+    assert spl_quote('bob"smith') == '"bob\\"smith"'
+
+
+def test_quoted_escapes_trailing_backslash() -> None:
+    """Trailing backslash must be escaped to prevent SPL injection."""
+    assert spl_quote("x\\") == '"x\\\\"'
+
+
+# --- integration: rules list/get ---
 
 
 def _mock_ss(name: str = "test-rule") -> MagicMock:

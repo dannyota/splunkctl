@@ -7,7 +7,8 @@ import click
 import pytest
 from click.testing import CliRunner
 
-from splunkctl.commands.es import _list_spl, _quoted, _status_to_int
+from splunkctl.commands.common import spl_quote
+from splunkctl.commands.es import _list_spl, _status_to_int
 from splunkctl.main import cli
 
 _PATCH = "splunkctl.commands.es.get_client"
@@ -56,7 +57,20 @@ def test_status_to_int_rejects_unknown() -> None:
 
 
 def test_quoted_escapes_embedded_quotes() -> None:
-    assert _quoted('bob"smith') == '"bob\\"smith"'
+    assert spl_quote('bob"smith') == '"bob\\"smith"'
+
+
+def test_quoted_escapes_trailing_backslash() -> None:
+    """Trailing backslash must be escaped to prevent SPL injection."""
+    assert spl_quote("x\\") == '"x\\\\"'
+
+
+def test_list_spl_owner_filter_with_trailing_backslash() -> None:
+    """Owner filter with trailing backslash stays quoted (injection prevention)."""
+    spl = _list_spl(status_filter=None, owner_filter="x\\", rule_filter=None)
+    assert 'owner="x\\\\"' in spl
+    # Verify it's still inside a quoted string, not breaking out to a pipe
+    assert "| delete" not in spl
 
 
 # --- unit: list SPL construction ---

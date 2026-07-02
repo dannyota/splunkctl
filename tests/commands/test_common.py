@@ -150,3 +150,34 @@ def test_fetch_page_filter_fetches_all_then_pages_client_side() -> None:
     out = fetch_page(fetch, limit=2, offset=1, name_filter="ALERT")
     assert calls == [{}]
     assert [i.name for i in out] == ["alert-b", "alert-c"]
+
+
+# --- SPL quoting for injection prevention ---
+
+
+def test_spl_quote_plain() -> None:
+    """Plain string with no special characters."""
+    from splunkctl.commands.common import spl_quote
+
+    assert spl_quote("plain") == '"plain"'
+
+
+def test_spl_quote_embedded_quote() -> None:
+    """Double quote in the middle must be escaped."""
+    from splunkctl.commands.common import spl_quote
+
+    assert spl_quote('bob"smith') == '"bob\\"smith"'
+
+
+def test_spl_quote_trailing_backslash() -> None:
+    """Trailing backslash must be escaped to prevent SPL injection."""
+    from splunkctl.commands.common import spl_quote
+
+    assert spl_quote("x\\") == '"x\\\\"'
+
+
+def test_spl_quote_backslash_then_quote() -> None:
+    """Backslash before quote; backslash must be escaped first."""
+    from splunkctl.commands.common import spl_quote
+
+    assert spl_quote('x\\"') == '"x\\\\\\""'

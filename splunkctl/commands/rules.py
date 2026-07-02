@@ -8,13 +8,8 @@ import click
 from splunkctl import guard, output
 from splunkctl.client import get_client
 from splunkctl.commands import common
-from splunkctl.commands.common import read_results
+from splunkctl.commands.common import read_results, spl_quote
 from splunkctl.commands.rules_io import export_rules, import_rules
-
-
-def _quoted(value: str) -> str:
-    """Quote a value for an SPL ``field=value`` search filter."""
-    return '"' + value.replace('"', '\\"') + '"'
 
 
 def _resolve_rule(
@@ -40,7 +35,7 @@ def _resolve_rule(
     elif owner is not None:
         scope_kwargs["owner"] = owner
     matches = svc.saved_searches.list(
-        search=f"name={_quoted(name)}", count=10, **scope_kwargs
+        search=f"name={spl_quote(name)}", count=10, **scope_kwargs
     )
     for m in matches:
         if m.name == name:

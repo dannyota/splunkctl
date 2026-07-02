@@ -11,7 +11,7 @@ import click
 
 from splunkctl import guard, output
 from splunkctl.client import get_client
-from splunkctl.commands.common import read_results
+from splunkctl.commands.common import read_results, spl_quote
 
 _ES_APP = "SplunkEnterpriseSecuritySuite"
 
@@ -63,11 +63,6 @@ def _status_to_int(value: str) -> str:
     raise click.BadParameter(f"'{value}' is not a known status ({known}, or 0-5)")
 
 
-def _quoted(value: str) -> str:
-    """Quote a value for an SPL ``field=value`` search filter."""
-    return '"' + value.replace('"', '\\"') + '"'
-
-
 def _list_spl(
     *,
     status_filter: str | None,
@@ -83,9 +78,9 @@ def _list_spl(
     if status_filter is not None:
         clauses.append(f"status={_status_to_int(status_filter)}")
     if owner_filter is not None:
-        clauses.append(f"owner={_quoted(owner_filter)}")
+        clauses.append(f"owner={spl_quote(owner_filter)}")
     if rule_filter is not None:
-        clauses.append(f"rule_name={_quoted(f'*{rule_filter}*')}")
+        clauses.append(f"rule_name={spl_quote(f'*{rule_filter}*')}")
     clauses.append("| sort - _time")
     clauses.append("| rename _time as time, rule_name as rule")
     clauses.append(
@@ -160,7 +155,7 @@ def get_notable(ctx: click.Context, event_id: str) -> None:
     if svc is None:
         return
 
-    spl = f"search index=notable event_id={_quoted(event_id)} | sort - _time | head 1"
+    spl = f"search index=notable event_id={spl_quote(event_id)} | sort - _time | head 1"
     stream: Any = svc.jobs.oneshot(spl, output_mode="json", count=1)
     rows = read_results(stream)
     if not rows:
