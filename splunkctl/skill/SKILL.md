@@ -359,6 +359,50 @@ splunkctl lookups download my_lookup.csv --app search --out local.csv
 splunkctl lookups delete my_lookup.csv --app search --yes
 ```
 
+### KV store (collections + data CRUD)
+
+Allowlists, threat intel, ES asset/identity — schema-less JSON document
+storage scoped per app. No SDK entity class; every command is a thin,
+typed wrapper around raw `storage/collections/{config|data}` REST calls,
+always addressing `servicesNS/nobody/<app>/...` (`--app`, default
+`search`). Live round-trip pending a healthy KV store — the local dev
+instance's is down (`server kvstore` -> `status: failed`); only the
+negative path (clean classified failure, never blank/traceback) is
+live-verified. Full guide: `docs/guides/kvstore.md`.
+
+```bash
+splunkctl kvstore collections                       # list collection names (app: search)
+splunkctl kvstore create my_allowlist --yes          # empty collection
+splunkctl kvstore delete my_allowlist --yes          # collection + ALL its data
+
+splunkctl kvstore query my_allowlist                              # all documents
+splunkctl kvstore query my_allowlist --query '{"host": "evil.example"}'
+splunkctl kvstore query my_allowlist --limit 50 --skip 100 --sort '-_key'
+
+splunkctl kvstore insert my_allowlist --data '{"host": "evil.example"}' --yes
+splunkctl kvstore insert my_allowlist --file doc.json --yes
+splunkctl kvstore update my_allowlist <key> --data '{"host": "new.example"}' --yes
+splunkctl kvstore remove my_allowlist <key> --yes                       # by _key
+splunkctl kvstore remove my_allowlist --query '{"host": "evil.example"}' --yes  # by query
+
+splunkctl kvstore export my_allowlist --out backup.jsonl   # JSONL, one doc per line
+splunkctl kvstore import my_allowlist --file backup.jsonl --yes   # upserts by _key, chunked at 500
+```
+
+`query`'s `--limit`/`--skip`/`--sort` are KV store API params passed
+straight through server-side — this is **not** the uniform
+`--limit`/`--offset`/`--filter` list-paging convention above (no
+client-side filtering, no `--offset`/`--filter`). `insert`/`update`
+require exactly one of `--data`/`--file`; `remove` requires exactly one
+of `KEY`/`--query`; invalid JSON anywhere is a usage error (exit 2), not
+a silent failure. `export`/`import` round-trip JSONL with `_key`
+preserved, so re-importing an export upserts onto the same documents
+(`batch_save` semantics). A raw collection name isn't automatically
+usable via `| inputlookup` — that needs a lookup *definition*
+(`transforms.conf`) binding the collection to a lookup name, which H4
+(lookup definitions & automatic lookups) will wire up; until then define
+it manually via Splunk Web.
+
 ### HEC (HTTP Event Collector)
 
 ```bash

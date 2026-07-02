@@ -6,6 +6,7 @@ handle remotely (e.g. lookup file upload requires server-side staging).
 
 from __future__ import annotations
 
+import json
 import re
 import urllib.parse
 from pathlib import Path
@@ -323,6 +324,54 @@ def _expect_ok(resp: requests.Response, what: str) -> None:
         ) from None
     if result.get("status") != "OK":
         raise RuntimeError(f"{what} failed: {result.get('msg', 'unknown error')}")
+
+
+def rest_get_json(
+    svc: Any,
+    path: str,
+    *,
+    owner: str | None = None,
+    app: str | None = None,
+    **query: Any,
+) -> Any:
+    """GET a REST path via the SDK's authenticated session and parse JSON.
+
+    Always passes ``output_mode=json`` so endpoints that default to Atom
+    XML (e.g. ``storage/collections/config``) come back as JSON just like
+    the KV store data endpoints already do. Any raised ``HTTPError`` (or
+    connection failure) is left to propagate — callers rely on
+    ``splunkctl.errors.classify`` at the top level to turn it into a
+    clean error envelope.
+    """
+    resp = svc.get(path, owner=owner, app=app, output_mode="json", **query)
+    return json.loads(resp.body.read())
+
+
+def rest_post_json(
+    svc: Any,
+    path: str,
+    body: Any,
+    *,
+    owner: str | None = None,
+    app: str | None = None,
+) -> Any:
+    """POST a JSON-encoded body to a REST path and parse the JSON response.
+
+    The KV store data API (``storage/collections/data/...``) requires
+    ``Content-Type: application/json`` on the request body and always
+    responds with JSON — unlike most Splunk config endpoints, which use
+    ``x-www-form-urlencoded`` params via plain keyword arguments. Returns
+    ``None`` for an empty response body (e.g. some KV store writes).
+    """
+    resp = svc.post(
+        path,
+        owner=owner,
+        app=app,
+        headers=[("Content-Type", "application/json")],
+        body=json.dumps(body),
+    )
+    raw = resp.body.read()
+    return json.loads(raw) if raw else None
 
 
 def get_client(ctx: click.Context) -> SplunkClient:

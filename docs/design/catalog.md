@@ -46,6 +46,7 @@ All list surfaces accept uniform `--limit`/`--offset`/`--filter` options
 | `server` | ✅ built | messages (--dismiss), license, kvstore |
 | `es` | ✅ built | notables list (--since/--until/--status/--owner/--rule/--limit), get, update (bulk triage via `notable_update`) — feature-detected on `SplunkEnterpriseSecuritySuite`; live-verified against ES: pending (local dev instance has SSE, not ES) |
 | `audit` | ✅ built | changes (--since/--until/--user/--action/--object-type/--limit, normalizes both `_audit` event shapes, zero SPL composition), rbac (--roles-only, transitive capability/index aggregation) — read-only, live-verified |
+| `kvstore` | ✅ built | collections (--app), create, delete, query (--query/--limit/--skip/--sort), insert/update/remove (--data/--file/--query), export/import (JSONL, batch_save chunked at 500) — raw REST (no SDK entity), F1-classified errors; live round-trip pending healthy KV store (local dev instance's KV store is down; negative path live-verified) |
 | `doctor` | ✅ built | Connection/auth/health/permissions/skill check, --strict, remediation hints |
 | `commands` | ✅ built | Machine-readable JSON tree with guard markers, global options |
 | `skill` | ✅ built | print, install |

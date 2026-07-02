@@ -20,6 +20,7 @@ from splunkctl.commands.hec import hec_group
 from splunkctl.commands.indexes import indexes_group
 from splunkctl.commands.info import info
 from splunkctl.commands.inputs import inputs_group
+from splunkctl.commands.kvstore import kvstore_group
 from splunkctl.commands.lookups import lookups_group
 from splunkctl.commands.parsers import parsers_group
 from splunkctl.commands.rules import rules_group
@@ -184,6 +185,7 @@ cli.add_command(hec_group)
 cli.add_command(indexes_group)
 cli.add_command(info)
 cli.add_command(inputs_group)
+cli.add_command(kvstore_group)
 cli.add_command(lookups_group)
 cli.add_command(parsers_group)
 cli.add_command(rules_group)

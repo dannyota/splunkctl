@@ -1,5 +1,6 @@
 """Tests for splunkctl.client."""
 
+import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -197,3 +198,92 @@ def test_set_acl_explicit_owner() -> None:
     c = SplunkClient(host="h")
     c.set_acl(entity, sharing="global", owner="nobody")
     entity.acl_update.assert_called_once_with(sharing="global", owner="nobody")
+
+
+# --- REST JSON helpers (KV store and other raw-REST commands) ---
+
+
+def test_rest_get_json_parses_body_and_forces_output_mode() -> None:
+    from splunkctl.client import rest_get_json
+
+    svc = MagicMock()
+    resp = MagicMock()
+    resp.body.read.return_value = json.dumps({"entry": []}).encode()
+    svc.get.return_value = resp
+
+    result = rest_get_json(
+        svc, "storage/collections/config", owner="nobody", app="search"
+    )
+
+    assert result == {"entry": []}
+    svc.get.assert_called_once_with(
+        "storage/collections/config", owner="nobody", app="search", output_mode="json"
+    )
+
+
+def test_rest_get_json_forwards_extra_query_params() -> None:
+    from splunkctl.client import rest_get_json
+
+    svc = MagicMock()
+    resp = MagicMock()
+    resp.body.read.return_value = b"[]"
+    svc.get.return_value = resp
+
+    rest_get_json(
+        svc,
+        "storage/collections/data/agenttest_g3",
+        owner="nobody",
+        app="search",
+        limit=10,
+        skip=5,
+    )
+
+    svc.get.assert_called_once_with(
+        "storage/collections/data/agenttest_g3",
+        owner="nobody",
+        app="search",
+        output_mode="json",
+        limit=10,
+        skip=5,
+    )
+
+
+def test_rest_post_json_sends_content_type_and_json_body() -> None:
+    from splunkctl.client import rest_post_json
+
+    svc = MagicMock()
+    resp = MagicMock()
+    resp.body.read.return_value = json.dumps({"_key": "abc123"}).encode()
+    svc.post.return_value = resp
+
+    result = rest_post_json(
+        svc,
+        "storage/collections/data/agenttest_g3",
+        {"host": "evil.example"},
+        owner="nobody",
+        app="search",
+    )
+
+    assert result == {"_key": "abc123"}
+    svc.post.assert_called_once_with(
+        "storage/collections/data/agenttest_g3",
+        owner="nobody",
+        app="search",
+        headers=[("Content-Type", "application/json")],
+        body=json.dumps({"host": "evil.example"}),
+    )
+
+
+def test_rest_post_json_empty_response_returns_none() -> None:
+    from splunkctl.client import rest_post_json
+
+    svc = MagicMock()
+    resp = MagicMock()
+    resp.body.read.return_value = b""
+    svc.post.return_value = resp
+
+    result = rest_post_json(
+        svc, "storage/collections/data/x/batch_save", [], owner="nobody", app="search"
+    )
+
+    assert result is None
