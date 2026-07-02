@@ -221,3 +221,101 @@ def test_delete_not_found(mock_gc: MagicMock) -> None:
     result = CliRunner().invoke(cli, ["--yes", "parsers", "delete", "nope"])
     assert result.exit_code != 0
     assert "not found" in result.output
+
+
+_PATCH = "splunkctl.commands.parsers.get_client"
+
+
+@patch(_PATCH)
+def test_set_updates_existing_stanza_multikey(mock_gc: MagicMock) -> None:
+    stanza = MagicMock()
+    conf = MagicMock()
+    conf.__getitem__.return_value = stanza
+    mock_gc.return_value.service.confs.__getitem__.return_value = conf
+
+    result = CliRunner().invoke(
+        cli,
+        [
+            "--yes", "parsers", "set", "acme:fw",
+            "TIME_FORMAT=%s", "SHOULD_LINEMERGE=false",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    _, kwargs = stanza.update.call_args
+    assert kwargs == {"TIME_FORMAT": "%s", "SHOULD_LINEMERGE": "false"}
+
+
+@patch(_PATCH)
+def test_set_creates_missing_stanza_with_app_sharing(mock_gc: MagicMock) -> None:
+    created = MagicMock()
+    conf = MagicMock()
+    conf.__getitem__.side_effect = KeyError("acme:fw")
+    conf.create.return_value = created
+    mock_client = mock_gc.return_value
+    mock_client.service.confs.__getitem__.return_value = conf
+
+    result = CliRunner().invoke(
+        cli, ["--yes", "parsers", "set", "acme:fw", "TIME_FORMAT=%s"]
+    )
+    assert result.exit_code == 0, result.output
+    conf.create.assert_called_once_with("acme:fw", TIME_FORMAT="%s")
+    # new parsing stanzas default to app sharing — user-private ones
+    # never apply at index time
+    mock_client.set_acl.assert_called_once_with(created, sharing="app")
+
+
+@patch(_PATCH)
+def test_set_no_create_missing_fails(mock_gc: MagicMock) -> None:
+    conf = MagicMock()
+    conf.__getitem__.side_effect = KeyError("nope")
+    mock_gc.return_value.service.confs.__getitem__.return_value = conf
+
+    result = CliRunner().invoke(
+        cli, ["--yes", "parsers", "set", "nope", "K=V", "--no-create"]
+    )
+    assert result.exit_code == 1
+    assert "not found" in result.stderr
+    conf.create.assert_not_called()
+
+
+@patch(_PATCH)
+def test_set_transforms_conf(mock_gc: MagicMock) -> None:
+    stanza = MagicMock()
+    confs = mock_gc.return_value.service.confs
+    conf = MagicMock()
+    conf.__getitem__.return_value = stanza
+    confs.__getitem__.return_value = conf
+
+    result = CliRunner().invoke(
+        cli,
+        [
+            "--yes", "parsers", "set", "acme_dev", "--conf", "transforms",
+            "REGEX=devname=(?<fw_device>\\S+)", "FORMAT=fw_device::$1",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    confs.__getitem__.assert_called_with("transforms")
+
+
+def test_set_invalid_pair_rejected() -> None:
+    result = CliRunner().invoke(
+        cli, ["--yes", "parsers", "set", "st", "NOEQUALS"]
+    )
+    assert result.exit_code != 0
+    assert "KEY=VALUE" in result.output + result.stderr
+
+
+@patch(_PATCH)
+def test_unset_clears_keys_with_warning(mock_gc: MagicMock) -> None:
+    stanza = MagicMock()
+    conf = MagicMock()
+    conf.__getitem__.return_value = stanza
+    mock_gc.return_value.service.confs.__getitem__.return_value = conf
+
+    result = CliRunner().invoke(
+        cli, ["--yes", "parsers", "unset", "acme:fw", "TIME_FORMAT", "TIME_PREFIX"]
+    )
+    assert result.exit_code == 0, result.output
+    _, kwargs = stanza.update.call_args
+    assert kwargs == {"TIME_FORMAT": "", "TIME_PREFIX": ""}
+    assert "Cleared" in result.stderr

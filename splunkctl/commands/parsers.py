@@ -6,11 +6,123 @@ import click
 
 from splunkctl import guard, output
 from splunkctl.client import get_client
+from splunkctl.commands.common import parse_set
 
 
 @click.group("parsers")
 def parsers_group() -> None:
     """Manage source types and field extractions."""
+
+
+@parsers_group.command("set")
+@click.argument("stanza")
+@click.argument("pairs", nargs=-1, required=True)
+@click.option(
+    "--conf",
+    "conf_name",
+    type=click.Choice(["props", "transforms"]),
+    default="props",
+    help="Target conf file (default props).",
+)
+@click.option(
+    "--sharing",
+    type=click.Choice(["user", "app", "global"]),
+    default=None,
+    help="Promote stanza sharing (new stanzas default to app).",
+)
+@click.option(
+    "--create/--no-create",
+    "create_missing",
+    default=True,
+    help="Create the stanza when missing (default: create).",
+)
+@click.pass_context
+def set_keys(
+    ctx: click.Context,
+    stanza: str,
+    pairs: tuple[str, ...],
+    conf_name: str,
+    sharing: str | None,
+    *,
+    create_missing: bool,
+) -> None:
+    """Set one or more KEY=VALUE parsing keys on a conf stanza.
+
+    Examples: TIME_FORMAT, LINE_BREAKER, SHOULD_LINEMERGE, EXTRACT-*,
+    REPORT-*, REGEX/FORMAT (with --conf transforms). New stanzas are
+    app-shared by default — user-private parsing stanzas do not apply
+    at index time.
+    """
+    kv = parse_set(pairs)
+    details = f"  conf: {conf_name}\n  stanza: {stanza}"
+    for k, v in kv.items():
+        details += f"\n  {k} = {v}"
+    if sharing:
+        details += f"\n  sharing -> {sharing}"
+
+    if not guard.check(ctx, f"Set {len(kv)} key(s) on '{stanza}'", details=details):
+        return
+
+    client = get_client(ctx)
+    conf = client.service.confs[conf_name]
+    try:
+        target = conf[stanza]
+        target.update(**kv)
+        created = False
+    except KeyError:
+        if not create_missing:
+            output.error(f"Stanza '{stanza}' not found in {conf_name}.conf.")
+            ctx.exit(1)
+            return
+        target = conf.create(stanza, **kv)
+        created = True
+
+    if sharing or created:
+        client.set_acl(target, sharing=sharing or "app")
+
+    verb = "Created" if created else "Updated"
+    output.info(f"{verb} {conf_name} stanza '{stanza}' ({len(kv)} key(s)).")
+
+
+@parsers_group.command("unset")
+@click.argument("stanza")
+@click.argument("keys", nargs=-1, required=True)
+@click.option(
+    "--conf",
+    "conf_name",
+    type=click.Choice(["props", "transforms"]),
+    default="props",
+    help="Target conf file (default props).",
+)
+@click.pass_context
+def unset_keys(
+    ctx: click.Context,
+    stanza: str,
+    keys: tuple[str, ...],
+    conf_name: str,
+) -> None:
+    """Clear parsing keys on a conf stanza.
+
+    The REST API cannot remove a conf key, so values are set to the
+    empty string (which disables most parsing keys).
+    """
+    details = f"  conf: {conf_name}\n  stanza: {stanza}\n  clear: {', '.join(keys)}"
+    if not guard.check(ctx, f"Clear {len(keys)} key(s) on '{stanza}'", details=details):
+        return
+
+    client = get_client(ctx)
+    conf = client.service.confs[conf_name]
+    try:
+        target = conf[stanza]
+    except KeyError:
+        output.error(f"Stanza '{stanza}' not found in {conf_name}.conf.")
+        ctx.exit(1)
+        return
+    target.update(**dict.fromkeys(keys, ""))
+    output.info(
+        f"Cleared {len(keys)} key(s) on '{stanza}' "
+        "(REST cannot remove conf keys; values set to empty)."
+    )
 
 
 @parsers_group.command("sourcetypes")
