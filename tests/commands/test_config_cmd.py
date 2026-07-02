@@ -67,6 +67,26 @@ def test_config_test_failure(mock_cls: MagicMock) -> None:
     assert result.exit_code != 0
 
 
+@patch("splunkctl.commands.config_cmd.SplunkClient")
+def test_config_test_unreachable_host_maps_to_connection_envelope(
+    mock_cls: MagicMock,
+) -> None:
+    """`config test --json` against an unreachable host classifies like any
+    other command — same taxonomy as _CLI.invoke, not a bare fallback.
+
+    stderr also carries the "Connecting to ..." advisory line printed
+    before the connectivity check, so the envelope is parsed from the
+    last line, same as the SKILL.md jq recipe does.
+    """
+    mock_cls.side_effect = ConnectionRefusedError("Connection refused")
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--json", "config", "test"])
+    assert result.exit_code == 1
+    last_line = result.stderr.strip().splitlines()[-1]
+    err = json.loads(last_line)["error"]
+    assert err["kind"] == "connection"
+
+
 # --- Profiles (schema v2) ---
 
 

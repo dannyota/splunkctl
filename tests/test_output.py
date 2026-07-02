@@ -341,7 +341,7 @@ def test_jsonl_not_table_even_on_tty(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_table_format_is_table_on_tty(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Explicit --format table is table, even in a non-TTY context."""
+    """Explicit --format table is table in a TTY context."""
 
     @click.command()
     @click.pass_context

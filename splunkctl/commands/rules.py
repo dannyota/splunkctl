@@ -315,7 +315,7 @@ def delete(ctx: click.Context, name: str) -> None:
     try:
         ss = client.service.saved_searches[name]
     except KeyError:
-        output.error(f"Saved search not found: {name}")
+        output.error(f"Saved search not found: {name}", kind="not_found")
         ctx.exit(1)
         return
     ss.delete()
@@ -335,7 +335,7 @@ def enable(ctx: click.Context, name: str) -> None:
     try:
         ss = client.service.saved_searches[name]
     except KeyError:
-        output.error(f"Saved search not found: {name}")
+        output.error(f"Saved search not found: {name}", kind="not_found")
         ctx.exit(1)
         return
     ss.update(disabled="0", is_scheduled="1").refresh()
@@ -355,7 +355,7 @@ def disable(ctx: click.Context, name: str) -> None:
     try:
         ss = client.service.saved_searches[name]
     except KeyError:
-        output.error(f"Saved search not found: {name}")
+        output.error(f"Saved search not found: {name}", kind="not_found")
         ctx.exit(1)
         return
     ss.update(disabled="1").refresh()
@@ -379,7 +379,7 @@ def share(ctx: click.Context, name: str, sharing: str, owner: str | None) -> Non
     try:
         ss = client.service.saved_searches[name]
     except KeyError:
-        output.error(f"Saved search not found: {name}")
+        output.error(f"Saved search not found: {name}", kind="not_found")
         ctx.exit(1)
         return
     current = dict(ss.access).get("sharing", "?")
@@ -410,7 +410,7 @@ def test_rule(
     try:
         ss = client.service.saved_searches[name]
     except KeyError:
-        output.error(f"Saved search not found: {name}")
+        output.error(f"Saved search not found: {name}", kind="not_found")
         ctx.exit(1)
         return
 
@@ -448,7 +448,7 @@ def history(ctx: click.Context, name: str) -> None:
     try:
         ss = client.service.saved_searches[name]
     except KeyError:
-        output.error(f"Saved search not found: {name}")
+        output.error(f"Saved search not found: {name}", kind="not_found")
         ctx.exit(1)
         return
     jobs = ss.history()

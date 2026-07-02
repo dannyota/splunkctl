@@ -78,7 +78,7 @@ def get(ctx: click.Context, *, name: str) -> None:
     client = get_client(ctx)
     inp = _find_input(client.service, name)
     if inp is None:
-        output.error(f"Input not found: {name}")
+        output.error(f"Input not found: {name}", kind="not_found")
         ctx.exit(1)
         return
     row: dict[str, Any] = {"name": inp.name, "kind": inp.kind}
@@ -165,7 +165,7 @@ def update(
     client = get_client(ctx)
     inp = _find_input(client.service, name)
     if inp is None:
-        output.error(f"Input not found: {name}")
+        output.error(f"Input not found: {name}", kind="not_found")
         ctx.exit(1)
         return
     inp.update(**kwargs).refresh()
@@ -184,7 +184,7 @@ def delete(ctx: click.Context, *, name: str) -> None:
     client = get_client(ctx)
     inp = _find_input(client.service, name)
     if inp is None:
-        output.error(f"Input not found: {name}")
+        output.error(f"Input not found: {name}", kind="not_found")
         ctx.exit(1)
         return
     inp.delete()
@@ -203,7 +203,7 @@ def enable(ctx: click.Context, *, name: str) -> None:
     client = get_client(ctx)
     inp = _find_input(client.service, name)
     if inp is None:
-        output.error(f"Input not found: {name}")
+        output.error(f"Input not found: {name}", kind="not_found")
         ctx.exit(1)
         return
     inp.enable()
@@ -222,7 +222,7 @@ def disable(ctx: click.Context, *, name: str) -> None:
     client = get_client(ctx)
     inp = _find_input(client.service, name)
     if inp is None:
-        output.error(f"Input not found: {name}")
+        output.error(f"Input not found: {name}", kind="not_found")
         ctx.exit(1)
         return
     inp.disable()

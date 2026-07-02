@@ -136,6 +136,18 @@ def test_get_dashboard_not_found(mock_gc: MagicMock) -> None:
 
 
 @patch(_PATCH)
+def test_get_dashboard_not_found_json_envelope(mock_gc: MagicMock) -> None:
+    mock_svc = MagicMock()
+    mock_svc.dashboards.list.return_value = []
+    mock_gc.return_value.service = mock_svc
+
+    result = CliRunner().invoke(cli, ["--json", "dashboards", "get", "missing"])
+    assert result.exit_code == 1
+    payload = json.loads(result.stderr)
+    assert payload["error"]["kind"] == "not_found"
+
+
+@patch(_PATCH)
 def test_create_validates_broken_xml(mock_gc: MagicMock, tmp_path: Path) -> None:
     bad = tmp_path / "broken.xml"
     bad.write_text("<dashboard><unclosed>")

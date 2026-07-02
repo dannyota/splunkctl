@@ -56,7 +56,7 @@ def get_hec(ctx: click.Context, name: str) -> None:
     try:
         token = client.service.hec_tokens[name]
     except KeyError:
-        output.error(f"HEC token '{name}' not found.")
+        output.error(f"HEC token '{name}' not found.", kind="not_found")
         ctx.exit(1)
         return
     row: dict[str, Any] = {
@@ -125,7 +125,7 @@ def delete_hec(ctx: click.Context, name: str) -> None:
     try:
         client.service.hec_tokens[name].delete()
     except KeyError:
-        output.error(f"HEC token '{name}' not found.")
+        output.error(f"HEC token '{name}' not found.", kind="not_found")
         ctx.exit(1)
         return
     except Exception as exc:
@@ -147,7 +147,7 @@ def enable_hec(ctx: click.Context, name: str) -> None:
     try:
         client.service.hec_tokens[name].enable()
     except KeyError:
-        output.error(f"HEC token '{name}' not found.")
+        output.error(f"HEC token '{name}' not found.", kind="not_found")
         ctx.exit(1)
         return
     output.info(f"HEC token '{name}' enabled.")
@@ -165,7 +165,7 @@ def disable_hec(ctx: click.Context, name: str) -> None:
     try:
         client.service.hec_tokens[name].disable()
     except KeyError:
-        output.error(f"HEC token '{name}' not found.")
+        output.error(f"HEC token '{name}' not found.", kind="not_found")
         ctx.exit(1)
         return
     output.info(f"HEC token '{name}' disabled.")
@@ -226,7 +226,7 @@ def hec_send(
     try:
         token_entity = svc.hec_tokens[name]
     except KeyError:
-        output.error(f"HEC token '{name}' not found.")
+        output.error(f"HEC token '{name}' not found.", kind="not_found")
         ctx.exit(1)
         return
     token_val = str(token_entity.content.get("token", ""))

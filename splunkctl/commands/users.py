@@ -112,7 +112,7 @@ def get_user(ctx: click.Context, name: str) -> None:
     try:
         user = client.service.users[name]
     except KeyError:
-        output.error(f"User '{name}' not found.")
+        output.error(f"User '{name}' not found.", kind="not_found")
         ctx.exit(1)
         return
     output.render(ctx, _user_detail(user, truncate=output.is_table(ctx)))
@@ -154,7 +154,7 @@ def get_role(ctx: click.Context, name: str) -> None:
     try:
         role = client.service.roles[name]
     except KeyError:
-        output.error(f"Role '{name}' not found.")
+        output.error(f"Role '{name}' not found.", kind="not_found")
         ctx.exit(1)
         return
     c: dict[str, Any] = role.content
@@ -292,7 +292,7 @@ def update_role(
     try:
         role = client.service.roles[name]
     except KeyError:
-        output.error(f"Role '{name}' not found.")
+        output.error(f"Role '{name}' not found.", kind="not_found")
         ctx.exit(1)
         return
     role.update(**kwargs)
@@ -311,7 +311,7 @@ def delete_role(ctx: click.Context, name: str) -> None:
     try:
         role = client.service.roles[name]
     except KeyError:
-        output.error(f"Role '{name}' not found.")
+        output.error(f"Role '{name}' not found.", kind="not_found")
         ctx.exit(1)
         return
     role.delete()
@@ -414,7 +414,7 @@ def update_user(
     try:
         user = client.service.users[name]
     except KeyError:
-        output.error(f"User '{name}' not found.")
+        output.error(f"User '{name}' not found.", kind="not_found")
         ctx.exit(1)
         return
 
@@ -441,7 +441,7 @@ def delete_user(ctx: click.Context, name: str) -> None:
     try:
         user = client.service.users[name]
     except KeyError:
-        output.error(f"User '{name}' not found.")
+        output.error(f"User '{name}' not found.", kind="not_found")
         ctx.exit(1)
         return
 

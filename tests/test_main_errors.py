@@ -3,6 +3,7 @@
 import json
 
 import click
+import requests
 from click.testing import CliRunner
 
 from splunkctl.config import ProfileNotFoundError
@@ -124,6 +125,37 @@ def test_unclassified_exception_still_propagates() -> None:
     assert result.exit_code != 0
     assert result.exception is not None
     assert "error" not in (result.stderr or "")
+
+
+def test_requests_timeout_maps_to_timeout() -> None:
+    """requests.exceptions.Timeout subclasses OSError (via RequestException),
+    so it must be classified before the generic OSError fallback — otherwise
+    it would be misclassified as a plain "connection" failure."""
+    exit_code, err = _invoke_and_get_envelope(requests.exceptions.Timeout("timed out"))
+    assert exit_code == 1
+    assert err["kind"] == "timeout"
+    assert err["http_status"] is None
+
+
+def test_requests_connection_error_maps_to_connection() -> None:
+    exit_code, err = _invoke_and_get_envelope(
+        requests.exceptions.ConnectionError("refused")
+    )
+    assert exit_code == 1
+    assert err["kind"] == "connection"
+    assert err["http_status"] is None
+
+
+def test_requests_other_exception_falls_back_to_connection() -> None:
+    """Any other requests.exceptions.RequestException — not Timeout or
+    ConnectionError specifically — still gets a typed envelope instead of
+    an unhandled traceback."""
+    exit_code, err = _invoke_and_get_envelope(
+        requests.exceptions.RequestException("weird transport failure")
+    )
+    assert exit_code == 1
+    assert err["kind"] == "connection"
+    assert err["http_status"] is None
 
 
 def test_profile_not_found_maps_to_not_found() -> None:

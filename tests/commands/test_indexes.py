@@ -1,5 +1,6 @@
 """Tests for index management commands."""
 
+import json
 from unittest.mock import MagicMock, patch
 
 from click.testing import CliRunner
@@ -68,6 +69,16 @@ def test_get_index_not_found(mock_gc: MagicMock) -> None:
     result = runner.invoke(cli, ["indexes", "get", "nope"])
     assert result.exit_code != 0
     assert "not found" in result.output
+
+
+@patch(_PATCH)
+def test_get_index_not_found_json_envelope(mock_gc: MagicMock) -> None:
+    mock_gc.return_value.service.indexes.__getitem__.side_effect = KeyError("nope")
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--json", "indexes", "get", "nope"])
+    assert result.exit_code == 1
+    payload = json.loads(result.stderr)
+    assert payload["error"]["kind"] == "not_found"
 
 
 @patch(_PATCH)

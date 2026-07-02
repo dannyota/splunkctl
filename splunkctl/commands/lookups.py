@@ -66,7 +66,7 @@ def get_lookup(ctx: click.Context, name: str, *, app: str) -> None:
             raise KeyError(name)
         lk = matches[0]
     except (KeyError, Exception) as exc:
-        output.error(f"Lookup '{name}' not found: {exc}")
+        output.error(f"Lookup '{name}' not found: {exc}", kind="not_found")
         ctx.exit(1)
         return
     row: dict[str, Any] = {
@@ -131,7 +131,7 @@ def download_lookup(
         ctx.exit(1)
         return
     if not matches:
-        output.error(f"Lookup '{name}' not found in app '{app}'.")
+        output.error(f"Lookup '{name}' not found in app '{app}'.", kind="not_found")
         ctx.exit(1)
         return
     try:

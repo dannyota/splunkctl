@@ -278,7 +278,7 @@ def get_job(
     try:
         job: Any = svc.jobs[sid]
     except KeyError:
-        output.error(f"Job '{sid}' not found.")
+        output.error(f"Job '{sid}' not found.", kind="not_found")
         ctx.exit(1)
         return
 
@@ -329,7 +329,7 @@ def cancel_job(ctx: click.Context, sid: str) -> None:
     try:
         job: Any = svc.jobs[sid]
     except KeyError:
-        output.error(f"Job '{sid}' not found.")
+        output.error(f"Job '{sid}' not found.", kind="not_found")
         ctx.exit(1)
         return
 

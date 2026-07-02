@@ -1,5 +1,6 @@
 """Tests for user and role management commands."""
 
+import json
 from unittest.mock import MagicMock, patch
 
 from click.testing import CliRunner
@@ -94,6 +95,16 @@ def test_get_user_not_found(mock_gc: MagicMock) -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["users", "get", "nope"])
     assert result.exit_code != 0
+
+
+@patch(_PATCH)
+def test_get_user_not_found_json_envelope(mock_gc: MagicMock) -> None:
+    mock_gc.return_value.service.users.__getitem__.side_effect = KeyError("nope")
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--json", "users", "get", "nope"])
+    assert result.exit_code == 1
+    payload = json.loads(result.stderr)
+    assert payload["error"]["kind"] == "not_found"
 
 
 @patch(_PATCH)

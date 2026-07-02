@@ -69,7 +69,7 @@ def get_alert(ctx: click.Context, name: str) -> None:
             output.info(f"{name}: {len(rows)} firing(s)")
             output.render(ctx, rows)
             return
-    output.error(f"Fired alert not found: {name}")
+    output.error(f"Fired alert not found: {name}", kind="not_found")
     ctx.exit(1)
 
 
@@ -117,7 +117,7 @@ def suppress_alert(ctx: click.Context, name: str, duration: int) -> None:
     try:
         ss = client.service.saved_searches[name]
     except KeyError:
-        output.error(f"Saved search not found: {name}")
+        output.error(f"Saved search not found: {name}", kind="not_found")
         ctx.exit(1)
         return
     ss.update(
@@ -138,7 +138,7 @@ def unsuppress_alert(ctx: click.Context, name: str) -> None:
     try:
         ss = client.service.saved_searches[name]
     except KeyError:
-        output.error(f"Saved search not found: {name}")
+        output.error(f"Saved search not found: {name}", kind="not_found")
         ctx.exit(1)
         return
     ss.update(**{"alert.suppress": "0"}).refresh()

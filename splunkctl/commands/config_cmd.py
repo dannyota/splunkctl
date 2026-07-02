@@ -6,6 +6,7 @@ from typing import Any
 import click
 
 from splunkctl import config as cfg_mod
+from splunkctl import errors as err_mod
 from splunkctl import output
 from splunkctl.client import SplunkClient
 
@@ -139,5 +140,13 @@ def test(ctx: click.Context) -> None:
         svc_info = client.service.info
         output.info(f"OK — {svc_info['serverName']} (Splunk {svc_info['version']})")
     except Exception as exc:
-        output.error(str(exc))
+        classified = err_mod.classify(exc)
+        if classified is not None:
+            output.error(
+                classified.message,
+                kind=classified.kind,
+                http_status=classified.http_status,
+            )
+        else:
+            output.error(str(exc))
         ctx.exit(1)

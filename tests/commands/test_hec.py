@@ -82,6 +82,18 @@ def test_get_hec_not_found(mock_gc: MagicMock) -> None:
     assert "not found" in result.stderr
 
 
+@patch("splunkctl.commands.hec.get_client")
+def test_get_hec_not_found_json_envelope(mock_gc: MagicMock) -> None:
+    mock_svc = MagicMock()
+    mock_svc.hec_tokens.__getitem__.side_effect = KeyError("nope")
+    mock_gc.return_value.service = mock_svc
+
+    result = CliRunner().invoke(cli, ["--json", "hec", "get", "nope"])
+    assert result.exit_code == 1
+    payload = json.loads(result.stderr)
+    assert payload["error"]["kind"] == "not_found"
+
+
 def test_create_dry_run() -> None:
     result = CliRunner().invoke(cli, ["hec", "create", "--name", "new_token"])
     assert result.exit_code == 0

@@ -177,7 +177,7 @@ def get_dashboard(
     try:
         d = _resolve(client.service, name, app)
     except (KeyError, Exception):
-        output.error(f"Dashboard '{name}' not found.")
+        output.error(f"Dashboard '{name}' not found.", kind="not_found")
         ctx.exit(1)
         return
     xml = d.export()
@@ -304,7 +304,7 @@ def update_dashboard(
     try:
         d = _resolve(client.service, name, app)
     except (KeyError, Exception):
-        output.error(f"Dashboard '{name}' not found.")
+        output.error(f"Dashboard '{name}' not found.", kind="not_found")
         ctx.exit(1)
         return
     cur_xml = d.export()
@@ -391,7 +391,7 @@ def export_dashboard(
     try:
         d = _resolve(client.service, name, app)
     except (KeyError, Exception):
-        output.error(f"Dashboard '{name}' not found.")
+        output.error(f"Dashboard '{name}' not found.", kind="not_found")
         ctx.exit(1)
         return
     xml = d.export()
@@ -471,7 +471,7 @@ def share_dashboard(
     try:
         d = _resolve(client.service, name, app)
     except (KeyError, Exception):
-        output.error(f"Dashboard '{name}' not found.")
+        output.error(f"Dashboard '{name}' not found.", kind="not_found")
         ctx.exit(1)
         return
     client.set_acl(d, sharing=sharing, owner=owner)

@@ -634,8 +634,12 @@ text — `jq`-able, no text-scraping needed — while a TTY (or an explicit
 | `usage` | reserved for app-level argument validation — not yet emitted |
 | `error` | fallback for unclassified app errors |
 
-Recipe: `splunkctl rules get my-rule --json 2>&1 1>/dev/null | jq -r .error.kind`
-to branch on failure type without parsing text.
+Recipe: `splunkctl rules get my-rule --json 2>&1 1>/dev/null | jq -R 'fromjson? // empty | .error.kind'`
+to branch on failure type without parsing text. Use the `-R`/`fromjson?`
+form, not `jq -r .error.kind` — stderr can carry advisory lines (a `--yes`
+path's `Applying: ...` banner, `output.info` lines, dry-run warnings)
+alongside the single-line JSON envelope, and those lines aren't JSON
+themselves.
 
 ## Output piping
 

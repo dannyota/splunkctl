@@ -80,7 +80,7 @@ def get_index(ctx: click.Context, name: str) -> None:
     try:
         idx = client.service.indexes[name]
     except KeyError:
-        output.error(f"Index '{name}' not found.")
+        output.error(f"Index '{name}' not found.", kind="not_found")
         ctx.exit(1)
         return
     output.render(ctx, _index_row(idx, _DETAIL_FIELDS))
@@ -173,7 +173,7 @@ def update_index(
     try:
         idx = client.service.indexes[name]
     except KeyError:
-        output.error(f"Index '{name}' not found.")
+        output.error(f"Index '{name}' not found.", kind="not_found")
         ctx.exit(1)
         return
     idx.update(**kwargs).refresh()
@@ -193,7 +193,7 @@ def delete_index(ctx: click.Context, name: str) -> None:
     try:
         idx = client.service.indexes[name]
     except KeyError:
-        output.error(f"Index '{name}' not found.")
+        output.error(f"Index '{name}' not found.", kind="not_found")
         ctx.exit(1)
         return
     idx.delete()
@@ -219,7 +219,7 @@ def clean_index(ctx: click.Context, name: str, clean_timeout: int) -> None:
     try:
         idx = client.service.indexes[name]
     except KeyError:
-        output.error(f"Index '{name}' not found.")
+        output.error(f"Index '{name}' not found.", kind="not_found")
         ctx.exit(1)
         return
     try:

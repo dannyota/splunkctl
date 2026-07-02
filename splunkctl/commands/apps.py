@@ -70,7 +70,7 @@ def get_app(ctx: click.Context, name: str) -> None:
     try:
         app = svc.apps[name]
     except KeyError:
-        output.error(f"App '{name}' not found.")
+        output.error(f"App '{name}' not found.", kind="not_found")
         ctx.exit(1)
         return
     output.render(ctx, _app_row(app))
@@ -126,7 +126,7 @@ def uninstall_app(ctx: click.Context, name: str) -> None:
         app = svc.apps[name]
         app.delete()
     except KeyError:
-        output.error(f"App '{name}' not found.")
+        output.error(f"App '{name}' not found.", kind="not_found")
         ctx.exit(1)
         return
     except Exception as exc:
@@ -175,7 +175,7 @@ def update_app(
         app = svc.apps[name]
         app.update(**kwargs)
     except KeyError:
-        output.error(f"App '{name}' not found.")
+        output.error(f"App '{name}' not found.", kind="not_found")
         ctx.exit(1)
         return
     except Exception as exc:

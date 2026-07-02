@@ -85,7 +85,9 @@ def set_keys(
         created = False
     except KeyError:
         if not create_missing:
-            output.error(f"Stanza '{stanza}' not found in {conf_name}.conf.")
+            output.error(
+                f"Stanza '{stanza}' not found in {conf_name}.conf.", kind="not_found"
+            )
             ctx.exit(1)
             return
         target = conf.create(stanza, **kv)
@@ -130,7 +132,9 @@ def unset_keys(
     try:
         target = conf[stanza]
     except KeyError:
-        output.error(f"Stanza '{stanza}' not found in {conf_name}.conf.")
+        output.error(
+            f"Stanza '{stanza}' not found in {conf_name}.conf.", kind="not_found"
+        )
         ctx.exit(1)
         return
     target.update(**dict.fromkeys(keys, ""))
@@ -204,7 +208,7 @@ def get_sourcetype(
         try:
             resp = client.service.get(path, output_mode="json")
         except Exception:
-            output.error(f"Sourcetype '{sourcetype}' not found.")
+            output.error(f"Sourcetype '{sourcetype}' not found.", kind="not_found")
             ctx.exit(1)
             return
         body = json.loads(resp.body.read())
@@ -224,7 +228,7 @@ def get_sourcetype(
     try:
         stanza = conf[sourcetype]
     except KeyError:
-        output.error(f"Sourcetype '{sourcetype}' not found.")
+        output.error(f"Sourcetype '{sourcetype}' not found.", kind="not_found")
         ctx.exit(1)
         return
     row = {"name": stanza.name, **dict(stanza.content)}
@@ -367,7 +371,7 @@ def update_sourcetype(
     try:
         stanza = conf[sourcetype]
     except KeyError:
-        output.error(f"Sourcetype '{sourcetype}' not found.")
+        output.error(f"Sourcetype '{sourcetype}' not found.", kind="not_found")
         ctx.exit(1)
         return
     stanza.update(**kwargs).refresh()
@@ -392,7 +396,7 @@ def delete_sourcetype(ctx: click.Context, sourcetype: str) -> None:
     try:
         stanza = conf[sourcetype]
     except KeyError:
-        output.error(f"Sourcetype '{sourcetype}' not found.")
+        output.error(f"Sourcetype '{sourcetype}' not found.", kind="not_found")
         ctx.exit(1)
         return
     stanza.delete()

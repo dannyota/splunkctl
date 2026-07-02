@@ -7,6 +7,7 @@ import click
 
 from splunkctl import __version__, output
 from splunkctl import config as cfg_mod
+from splunkctl import errors as err_mod
 from splunkctl.commands.alerts import alerts_group
 from splunkctl.commands.apps import apps_group
 from splunkctl.commands.commands_meta import commands_meta
@@ -24,23 +25,6 @@ from splunkctl.commands.search import search_group
 from splunkctl.commands.server import server_group
 from splunkctl.commands.skill_cmd import skill_group
 from splunkctl.commands.users import users_group
-
-_HTTP_KIND: dict[int, str] = {
-    401: "auth",
-    403: "permission",
-    404: "not_found",
-    409: "conflict",
-}
-
-
-def _kind_for_status(status: int | None) -> str:
-    """Map an HTTP status code to an error envelope kind.
-
-    Any HTTP error not in ``_HTTP_KIND`` maps to the generic ``http`` kind.
-    """
-    if status is None:
-        return "http"
-    return _HTTP_KIND.get(status, "http")
 
 
 class _CLI(click.Group):
@@ -121,35 +105,13 @@ class _CLI(click.Group):
             if isinstance(exc, cfg_mod.ProfileNotFoundError):
                 output.error(f"Profile not found: {exc.name}", kind="not_found")
                 sys.exit(1)
-            name = type(exc).__name__
-            if name == "HTTPError":
-                status: int | None = getattr(exc, "status", None)
-                msg = str(exc)
-                kind = _kind_for_status(status)
-                if status == 403:
-                    output.error(
-                        f"Permission denied: {msg}", kind=kind, http_status=status
-                    )
-                elif status == 401:
-                    output.error(
-                        f"Authentication failed: {msg}", kind=kind, http_status=status
-                    )
-                elif status == 404:
-                    output.error(f"Not found: {msg}", kind=kind, http_status=status)
-                else:
-                    output.error(msg, kind=kind, http_status=status)
-                sys.exit(1)
-            if name == "AuthenticationError":
-                status = getattr(exc, "status", None)
+            classified = err_mod.classify(exc)
+            if classified is not None:
                 output.error(
-                    f"Authentication failed: {exc}", kind="auth", http_status=status
+                    classified.message,
+                    kind=classified.kind,
+                    http_status=classified.http_status,
                 )
-                sys.exit(1)
-            if isinstance(exc, TimeoutError):
-                output.error(str(exc), kind="timeout")
-                sys.exit(1)
-            if isinstance(exc, OSError):
-                output.error(str(exc), kind="connection")
                 sys.exit(1)
             raise
 
