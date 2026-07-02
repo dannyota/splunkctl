@@ -110,6 +110,17 @@ def _profile_config(raw: dict[str, Any], name: str) -> dict[str, Any]:
     return raw
 
 
+def is_v2_file(path: Path | None = None) -> bool:
+    """True when the config file at ``path`` already uses schema v2.
+
+    False for a missing, empty, or legacy (flat) file. Callers use this to
+    decide whether a write must be routed through ``save_profile`` (folds
+    values into a profile, preserving siblings) instead of ``save`` (raw
+    overwrite) — see ``config init``.
+    """
+    return _is_v2(_read_raw(path or DEFAULT_PATH))
+
+
 def profile_names(path: Path | None = None) -> list[str]:
     """List known profile names — ``["default"]`` for a legacy/missing file."""
     raw = _read_raw(path or DEFAULT_PATH)

@@ -55,7 +55,11 @@ def init(
 ) -> None:
     """Interactive setup — create or overwrite config.
 
-    Bare ``config init`` always writes the flat (legacy-compatible) file.
+    Bare ``config init`` writes the flat (legacy-compatible) file — unless
+    the destination already exists and uses the ``profiles:`` schema, in
+    which case it folds the new values into ``profiles.default`` instead,
+    leaving sibling profiles and the ``current`` pointer untouched. This
+    never clobbers an existing multi-profile file.
     ``config init --profile <name>`` targets that named profile instead —
     use ``config use <name>`` afterwards to make it active.
     """
@@ -70,6 +74,8 @@ def init(
     dest = Path(path) if path else None
     if profile_name:
         saved = cfg_mod.save_profile(cfg, profile_name, dest)
+    elif cfg_mod.is_v2_file(dest):
+        saved = cfg_mod.save_profile(cfg, "default", dest)
     else:
         saved = cfg_mod.save(cfg, dest)
     output.info(f"Config saved to {saved}")

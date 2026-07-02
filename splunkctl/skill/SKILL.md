@@ -64,10 +64,14 @@ Selection precedence: `--profile <name>` global flag > `current:` pointer >
 connectivity (lazy auth is preserved). A plain single-instance config file
 (flat `host`/`port`/... at the root, no `profiles:` key) keeps working
 unchanged forever — it's treated as an implicit profile named `default`.
-`config init` (bare) always writes that flat shape; `config init --profile
-<name>` creates/updates a named profile instead (upgrading a legacy file
-in place, folding its old values into `profiles.default`, then run `config
-use <name>` to make the new profile active).
+`config init` (bare) writes that flat shape — unless the destination
+already has a `profiles:` key, in which case it folds the new values into
+`profiles.default` instead, leaving sibling profiles and `current`
+untouched (bare `config init` never clobbers an existing multi-profile
+file). `config init --profile <name>` creates/updates a named profile
+instead (upgrading a legacy file in place, folding its old values into
+`profiles.default`, then run `config use <name>` to make the new profile
+active).
 
 **Bank-safety guard banner.** Every dry-run preview and every `--yes`
 confirmation prints where the mutation is headed —

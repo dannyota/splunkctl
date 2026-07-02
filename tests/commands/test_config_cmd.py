@@ -206,6 +206,46 @@ def test_config_init_bare_still_writes_flat_file(tmp_path: Path) -> None:
     assert raw["host"] == "myhost"
 
 
+def test_config_init_bare_never_clobbers_existing_profiles(tmp_path: Path) -> None:
+    """Bare `config init` against a v2 file must fold into 'default', not
+    overwrite the whole file and destroy sibling profiles."""
+    cfg = tmp_path / "config.yaml"
+    _v2_config(
+        cfg,
+        {
+            "default": {"host": "old-default-host"},
+            "uat": {"host": "uat-host", "port": 9089},
+        },
+        current="uat",
+    )
+    cfg.chmod(stat.S_IRUSR | stat.S_IWUSR)
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "config",
+            "init",
+            "--path",
+            str(cfg),
+            "--host",
+            "newhost",
+            "--port",
+            "8089",
+            "--username",
+            "admin",
+            "--password",
+            "secret",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    raw = yaml.safe_load(cfg.read_text())
+    assert raw["profiles"]["uat"] == {"host": "uat-host", "port": 9089}
+    assert raw["current"] == "uat"
+    assert raw["profiles"]["default"]["host"] == "newhost"
+    mode = cfg.stat().st_mode
+    assert mode & 0o777 == 0o600
+
+
 def test_global_profile_flag_selects_profile_for_read_commands(
     tmp_path: Path,
 ) -> None:

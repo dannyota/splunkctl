@@ -58,11 +58,14 @@ pointer > `default`.
 
 **Legacy files keep working.** A plain flat file (no `profiles:` key) is
 treated as an implicit profile named `default` — nothing to migrate. Bare
-`config init` always writes that flat shape. The first time you run
-`config init --profile <name>` against a legacy file, it's upgraded to the
-`profiles:` schema in place: the old flat keys move under
-`profiles.default`, the new named profile is added alongside it, and file
-permissions stay `0600`.
+`config init` writes that flat shape — unless the destination file already
+has a `profiles:` key, in which case it folds the new values into
+`profiles.default` instead, leaving sibling profiles and `current`
+untouched (bare `config init` never clobbers an existing multi-profile
+file). The first time you run `config init --profile <name>` against a
+legacy file, it's upgraded to the `profiles:` schema in place: the old flat
+keys move under `profiles.default`, the new named profile is added
+alongside it, and file permissions stay `0600`.
 
 **Guard banner.** Every dry-run preview and `--yes` confirmation prints
 which instance is about to be mutated —
