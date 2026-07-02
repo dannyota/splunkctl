@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.3.1
+
+SOC bug-fix wave: fixes found while auditing detection coverage and
+alert investigation workflows against a live instance.
+
+### Fixes
+- **rules list/get** `--app` without `--owner` now wildcards the owner
+  (`owner="-"`), so app-private saved searches owned by other users are
+  no longer silently excluded from an app audit — matches the
+  `dashboards`/`lookups` scoping pattern. `--app`+`--owner` and the
+  default-namespace/`--owner`-only paths are unchanged.
+- **search jobs** `owner` column reads the real submitting user from the
+  job's ACL (`entry.acl.owner`); the job's internal `author` field is
+  always blank and was being shown instead.
+- **server kvstore** parses the REST response's nested `content.current`
+  object instead of looking up flat dotted keys, so a failed KV store
+  reports `status: failed` instead of a blank row with exit 0.
+
+### Enhancements
+- **rules get** surfaces every enabled action's non-empty
+  `action.<name>.*` params (e.g. `action.email.to`,
+  `action.notable.param.severity`) inline, without a full YAML export.
+- **rules create/update** `--actions email`/`--actions webhook` warn on
+  stderr during dry-run when the action's required companion field
+  (`action.email.to`, `action.webhook.param.url`) is missing, instead of
+  failing on `--yes`.
+- **rules import** `--json`/`--format json` emits a full, untruncated
+  dry-run diff array (one object per rule: name/action/changes) for
+  programmatic verification before applying; text-mode preview marks
+  truncated values explicitly instead of a bare ellipsis.
+- **SKILL.md** documents ES recipes (notable/risk read, correlation
+  search authoring, asset/identity CSVs) and rewrites the alert
+  investigation workflow to pivot from a firing sid to `search job
+  <sid>`, falling back to SPL re-run only once the job TTL has expired.
+
 ## 0.3.0
 
 ### New commands
