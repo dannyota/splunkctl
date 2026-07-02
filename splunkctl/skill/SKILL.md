@@ -679,11 +679,25 @@ splunkctl server messages               # list system messages
 splunkctl server messages --dismiss warn_disk --yes  # dismiss a message
 splunkctl server license                # license pool usage
 splunkctl server kvstore                # KV store status
+splunkctl server cluster                # indexer cluster health (mode, peers, SF/RF)
+splunkctl server shcluster              # search head cluster health (captain, members)
+splunkctl server deployment             # deployment server clients + last check-in
 ```
 
 `kvstore` always reports an explicit status word (`ready`, `failed`,
 `starting`, `unknown`, ...) — never a blank field, so a down KV store
 can't be mistaken for a healthy empty result.
+
+**Topology health reads** (`cluster`, `shcluster`, `deployment`) are
+read-only. On a non-clustered/non-SHC/non-deployment-server instance
+they report `mode: disabled` (or `status: no_clients`) and exit 0 —
+never an error. This lets an agent distinguish "no detection results
+because there's no threat" from "the indexer cluster is degraded / a
+forwarder stopped checking in." Genuine errors (401, 503 for other
+reasons) propagate to the central error classifier.
+
+`cluster` prefers the `cluster/manager` endpoint (Splunk 9+) and falls
+back to `cluster/master` on older versions.
 
 ### Config
 
