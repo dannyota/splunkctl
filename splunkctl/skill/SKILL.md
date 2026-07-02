@@ -530,6 +530,12 @@ what Splunk Web's own "Rebuild" button does), dropping and rebuilding
 the summary from scratch; a non-accelerated model exits 1 before the
 dry-run/`--yes` guard even runs.
 
+> **Verification status:** `list`/`get`/non-accelerated `acceleration` are
+> live-verified; the populated `acceleration` status row and the
+> `rebuild --yes` apply path are unit-tested against the documented REST
+> shape but not yet exercised against a live accelerated model (no CIM
+> add-on on the test instance). See `docs/guides/datamodels.md`.
+
 ### Apps
 
 ```bash
