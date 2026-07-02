@@ -24,6 +24,23 @@ from splunkctl.commands.server import server_group
 from splunkctl.commands.skill_cmd import skill_group
 from splunkctl.commands.users import users_group
 
+_HTTP_KIND: dict[int, str] = {
+    401: "auth",
+    403: "permission",
+    404: "not_found",
+    409: "conflict",
+}
+
+
+def _kind_for_status(status: int | None) -> str:
+    """Map an HTTP status code to an error envelope kind.
+
+    Any HTTP error not in ``_HTTP_KIND`` maps to the generic ``http`` kind.
+    """
+    if status is None:
+        return "http"
+    return _HTTP_KIND.get(status, "http")
+
 
 class _CLI(click.Group):
     """Top-level group with flag hoisting and SDK error handling.
@@ -101,18 +118,33 @@ class _CLI(click.Group):
         except Exception as exc:
             name = type(exc).__name__
             if name == "HTTPError":
+                status: int | None = getattr(exc, "status", None)
                 msg = str(exc)
-                if "403" in msg:
-                    output.error(f"Permission denied: {msg}")
-                elif "401" in msg:
-                    output.error(f"Authentication failed: {msg}")
-                elif "404" in msg:
-                    output.error(f"Not found: {msg}")
+                kind = _kind_for_status(status)
+                if status == 403:
+                    output.error(
+                        f"Permission denied: {msg}", kind=kind, http_status=status
+                    )
+                elif status == 401:
+                    output.error(
+                        f"Authentication failed: {msg}", kind=kind, http_status=status
+                    )
+                elif status == 404:
+                    output.error(f"Not found: {msg}", kind=kind, http_status=status)
                 else:
-                    output.error(msg)
+                    output.error(msg, kind=kind, http_status=status)
                 sys.exit(1)
             if name == "AuthenticationError":
-                output.error(f"Authentication failed: {exc}")
+                status = getattr(exc, "status", None)
+                output.error(
+                    f"Authentication failed: {exc}", kind="auth", http_status=status
+                )
+                sys.exit(1)
+            if isinstance(exc, TimeoutError):
+                output.error(str(exc), kind="timeout")
+                sys.exit(1)
+            if isinstance(exc, OSError):
+                output.error(str(exc), kind="connection")
                 sys.exit(1)
             raise
 

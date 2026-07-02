@@ -66,6 +66,18 @@ def test_get_not_found(mock_gc: MagicMock) -> None:
 
 
 @patch("splunkctl.commands.rules.get_client")
+def test_get_not_found_json_envelope(mock_gc: MagicMock) -> None:
+    svc = _setup_svc(mock_gc)
+    svc.saved_searches.__getitem__.side_effect = KeyError("nope")
+
+    result = CliRunner().invoke(cli, ["rules", "get", "missing", "--json"])
+    assert result.exit_code == 1
+    payload = json.loads(result.stderr)
+    assert payload["error"]["kind"] == "not_found"
+    assert payload["error"]["http_status"] is None
+
+
+@patch("splunkctl.commands.rules.get_client")
 def test_create_dry_run(mock_gc: MagicMock) -> None:
     result = CliRunner().invoke(
         cli,

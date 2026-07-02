@@ -53,6 +53,7 @@ command group, updated in the same commit that moves it forward.
 | `commands --json` | ✅ built | Guard markers, global options, note field |
 | `skill install` | ✅ built | Write to `~/.claude/skills/` |
 | `doctor --strict` | ✅ built | CI-friendly health gate |
+| JSON error envelope | ✅ built | `--json`/`--format json` errors as one `jq`-able stderr line: kind + http_status + message |
 
 ## SDK fork status
 

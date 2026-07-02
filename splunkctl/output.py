@@ -93,9 +93,42 @@ def _resolve_table(obj: dict[str, Any]) -> bool:
     return obj.get("format") == "table" or sys.stdout.isatty()
 
 
-def error(msg: str) -> None:
-    """Print error to stderr."""
+def error(
+    msg: str,
+    *,
+    kind: str = "error",
+    http_status: int | None = None,
+) -> None:
+    """Print an error to stderr.
+
+    Under ``--json``/``--format json`` this emits a single-line JSON
+    envelope — ``{"error": {"kind", "http_status", "message"}}`` — instead
+    of the human ``Error: ...`` line, so an agent can branch on failures
+    without scraping text. Every other format keeps the human text.
+
+    Args:
+        msg: Human-readable message (no ``Error: `` prefix — this function
+            adds it for the text path and omits it for the JSON path).
+        kind: One of ``auth``, ``not_found``, ``conflict``, ``permission``,
+            ``timeout``, ``connection``, ``http``, ``usage``, or the
+            fallback ``error`` (default) for unclassified app errors.
+        http_status: HTTP status code for HTTP-derived kinds; ``None``
+            (serializes to ``null``) for non-HTTP kinds.
+    """
+    if _json_errors():
+        payload = {"error": {"kind": kind, "http_status": http_status, "message": msg}}
+        click.echo(json.dumps(payload), err=True)
+        return
     click.echo(f"Error: {msg}", err=True)
+
+
+def _json_errors() -> bool:
+    """True when the active Click context resolves to --json/--format json."""
+    ctx = click.get_current_context(silent=True)
+    if ctx is None:
+        return False
+    obj: dict[str, Any] = ctx.obj or {}
+    return bool(obj.get("json")) or obj.get("format") == "json"
 
 
 def info(msg: str) -> None:

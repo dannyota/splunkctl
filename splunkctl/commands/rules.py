@@ -30,7 +30,7 @@ def _resolve_rule(
         try:
             return svc.saved_searches[name]
         except KeyError:
-            output.error(f"Saved search not found: {name}")
+            output.error(f"Saved search not found: {name}", kind="not_found")
             ctx.exit(1)
             raise
     scope_kwargs: dict[str, str] = {}
@@ -46,7 +46,7 @@ def _resolve_rule(
         if m.name == name:
             return m
     scope = ", ".join(f"{k}={v}" for k, v in scope_kwargs.items())
-    output.error(f"Saved search not found ({scope}): {name}")
+    output.error(f"Saved search not found ({scope}): {name}", kind="not_found")
     ctx.exit(1)
     raise KeyError(name)
 

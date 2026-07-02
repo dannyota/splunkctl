@@ -118,6 +118,96 @@ def test_error_to_stderr(capsys: pytest.CaptureFixture[str]) -> None:
     assert "Error: something broke" in captured.err
 
 
+def _error_cmd(
+    msg: str,
+    *,
+    kind: str | None = None,
+    http_status: int | None = None,
+    **flags: object,
+) -> click.Command:
+    @click.command()
+    @click.pass_context
+    def cmd(ctx: click.Context) -> None:
+        ctx.ensure_object(dict)
+        ctx.obj.update({"json": False, "format": None, **flags})
+        if kind is None:
+            output.error(msg)
+        else:
+            output.error(msg, kind=kind, http_status=http_status)
+
+    return cmd
+
+
+def test_error_envelope_under_json_flag() -> None:
+    result = CliRunner().invoke(
+        _error_cmd("not found: rule1", kind="not_found", http_status=404, json=True)
+    )
+    assert result.stdout == ""
+    payload = json.loads(result.stderr)
+    assert payload == {
+        "error": {
+            "kind": "not_found",
+            "http_status": 404,
+            "message": "not found: rule1",
+        }
+    }
+
+
+def test_error_envelope_under_format_json() -> None:
+    result = CliRunner().invoke(
+        _error_cmd("bad token", kind="permission", http_status=403, format="json")
+    )
+    payload = json.loads(result.stderr)
+    assert payload["error"]["kind"] == "permission"
+    assert payload["error"]["http_status"] == 403
+
+
+def test_error_envelope_is_single_line() -> None:
+    result = CliRunner().invoke(
+        _error_cmd("boom", kind="http", http_status=500, json=True)
+    )
+    assert result.stderr.strip().count("\n") == 0
+
+
+def test_error_human_text_unchanged_for_table_format() -> None:
+    result = CliRunner().invoke(
+        _error_cmd("rule1 missing", kind="not_found", http_status=404, format="table")
+    )
+    assert result.stderr == "Error: rule1 missing\n"
+
+
+def test_error_human_text_unchanged_when_no_format_flags() -> None:
+    result = CliRunner().invoke(
+        _error_cmd("rule1 missing", kind="not_found", http_status=404)
+    )
+    assert result.stderr == "Error: rule1 missing\n"
+
+
+def test_error_default_kind_is_error_fallback() -> None:
+    result = CliRunner().invoke(_error_cmd("unclassified failure", json=True))
+    payload = json.loads(result.stderr)
+    assert payload["error"]["kind"] == "error"
+    assert payload["error"]["http_status"] is None
+
+
+def test_error_http_status_null_for_non_http_kind() -> None:
+    result = CliRunner().invoke(
+        _error_cmd("socket refused", kind="connection", json=True)
+    )
+    payload = json.loads(result.stderr)
+    assert payload["error"]["kind"] == "connection"
+    assert payload["error"]["http_status"] is None
+
+
+def test_error_message_strips_error_prefix() -> None:
+    result = CliRunner().invoke(
+        _error_cmd("Saved search not found: foo", kind="not_found", json=True)
+    )
+    payload = json.loads(result.stderr)
+    assert payload["error"]["message"] == "Saved search not found: foo"
+    assert not payload["error"]["message"].startswith("Error: ")
+
+
 def _render_cmd(
     data: list[dict[str, object]], *, empty: str | None = None, **flags: object
 ) -> click.Command:

@@ -514,6 +514,38 @@ splunkctl search oneshot '| metadata type=sources index=main' --limit 100
 - **Permission denied**: check user roles with `splunkctl users get <name>`
 - **Debug**: add `--debug` to see full HTTP request/response logs
 
+### JSON error envelope
+
+Under `--json` or `--format json`, failures print one JSON line to stderr
+instead of `Error: ...` text — `jq`-able, no text-scraping needed:
+
+```json
+{"error": {"kind": "not_found", "http_status": 404, "message": "Saved search not found: my-rule"}}
+```
+
+- `kind` — a typed failure category (see table below). `message` is the
+  same text that would appear after `Error: ` in non-JSON mode.
+- `http_status` — the HTTP status code when the failure came from a REST
+  call; `null` for non-HTTP failures (connection, timeout, app-level).
+- Exit code is unchanged (`1`); stdout stays empty/`[]` per the usual
+  empty-result contract. Non-JSON formats are unaffected — same `Error:
+  ...` text as always.
+
+| kind | meaning |
+|---|---|
+| `auth` | 401 — authentication failed (bad credentials/token) |
+| `permission` | 403 — authenticated but not authorized |
+| `not_found` | 404, or an app-level lookup miss (e.g. unknown rule name) |
+| `conflict` | 409 — e.g. name already exists |
+| `http` | any other HTTP error status |
+| `connection` | socket/SSL/DNS failure — Splunk unreachable |
+| `timeout` | request timed out |
+| `usage` | app-level argument validation failure |
+| `error` | fallback for unclassified app errors |
+
+Recipe: `splunkctl rules get my-rule --json 2>&1 1>/dev/null | jq -r .error.kind`
+to branch on failure type without parsing text.
+
 ## Output piping
 
 ```bash
