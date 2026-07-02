@@ -6,17 +6,13 @@ handle remotely (e.g. lookup file upload requires server-side staging).
 
 from __future__ import annotations
 
-import http.cookiejar
-import json
 import re
-import ssl
 import urllib.parse
-import urllib.request
-import uuid
 from pathlib import Path
 from typing import Any
 
 import click
+import requests
 import splunklib.client as splunk_client
 
 from splunkctl import config as cfg_mod
@@ -111,7 +107,10 @@ class SplunkClient:
             cfg = cfg_mod.load(self._config_path)
             cfg.update(self._overrides)
             self._web_session = _WebSession(
-                self.service, verify=bool(cfg.get("verify", False))
+                self.service,
+                verify=bool(cfg.get("verify", False)),
+                debug=self._debug,
+                timeout=self._timeout or 30,
             )
         return self._web_session
 
@@ -139,9 +138,23 @@ class SplunkClient:
 
 
 class _WebSession:
-    """Manages authentication and uploads via Splunk Web UI."""
+    """Authenticated Splunk Web session for form-handler operations.
 
-    def __init__(self, service: Any, *, verify: bool = True) -> None:
+    Uses ``requests`` deliberately: the manager form handlers answer a
+    plain urllib POST with a 303 that dead-ends in a 404, while a
+    keep-alive session receives the JSON result directly (verified
+    against Splunk 10.4). TLS verification is on unless the user's
+    config explicitly disables it for self-signed dev instances.
+    """
+
+    def __init__(
+        self,
+        service: Any,
+        *,
+        verify: bool = True,
+        debug: bool = False,
+        timeout: int = 30,
+    ) -> None:
         self._host: str = service.host
         self._username: str = service.username
         self._password: str = service.password
@@ -155,15 +168,10 @@ class _WebSession:
         self._web_port = int(web_conf["httpport"])
         self._web_ssl = str(web_conf.content.get("enableSplunkWebSSL", "0")) == "1"
 
-        self._cookies = http.cookiejar.CookieJar()
-        ctx = ssl.create_default_context()
-        if not verify:
-            ctx.check_hostname = False
-            ctx.verify_mode = ssl.CERT_NONE  # noqa: S501
-        self._opener = urllib.request.build_opener(
-            urllib.request.HTTPCookieProcessor(self._cookies),
-            urllib.request.HTTPSHandler(context=ctx),
-        )
+        self._debug = debug
+        self._timeout = timeout
+        self._session = requests.Session()
+        self._session.verify = verify
         self._csrf_token: str | None = None
         self._logged_in = False
 
@@ -172,79 +180,46 @@ class _WebSession:
         scheme = "https" if self._web_ssl else "http"
         return f"{scheme}://{self._host}:{self._web_port}"
 
+    def _request(self, method: str, url: str, **kwargs: Any) -> requests.Response:
+        resp = self._session.request(method, url, timeout=self._timeout, **kwargs)
+        if self._debug:
+            click.echo(f"web {method} {url} -> {resp.status_code}", err=True)
+        return resp
+
     def _login(self) -> None:
         """Authenticate to Splunk Web and obtain session cookies."""
         login_url = f"{self._base_url}/en-US/account/login"
-        resp = self._opener.open(login_url)  # noqa: S310
-        page = resp.read().decode("utf-8")
+        page = self._request("GET", login_url).text
 
         m = re.search(r'"cval"\s*:\s*(\d+)', page)
         cval = m.group(1) if m else "0"
 
-        data = urllib.parse.urlencode(
-            {
+        resp = self._request(
+            "POST",
+            login_url,
+            data={
                 "username": self._username,
                 "password": self._password,
                 "cval": cval,
-            }
-        ).encode()
-        resp = self._opener.open(login_url, data)  # noqa: S310
-        body = json.loads(resp.read().decode("utf-8"))
+            },
+        )
+        try:
+            body: dict[str, Any] = resp.json()
+        except ValueError:
+            raise RuntimeError(
+                f"Splunk Web login failed: HTTP {resp.status_code}"
+            ) from None
         if body.get("status") == "fail":
             msg = body.get("msg", "unknown error")
             raise RuntimeError(f"Splunk Web login failed: {msg}")
 
-        for cookie in self._cookies:
-            if cookie.name.startswith("splunkweb_csrf_token"):
+        for cookie in self._session.cookies:
+            if cookie.name and cookie.name.startswith("splunkweb_csrf_token"):
                 self._csrf_token = cookie.value
                 break
         if not self._csrf_token:
             raise RuntimeError("Could not obtain CSRF token from Splunk Web")
         self._logged_in = True
-
-    def _multipart_post(
-        self,
-        url: str,
-        fields: list[tuple[str, str]],
-        file_field: str,
-        file_name: str,
-        file_data: bytes,
-        content_type: str = "application/octet-stream",
-    ) -> bytes:
-        """Build and send a multipart/form-data POST."""
-        if not self._logged_in:
-            self._login()
-
-        boundary = uuid.uuid4().hex
-        body = b""
-        for field_name, value in fields:
-            body += f"--{boundary}\r\n".encode()
-            body += (
-                f'Content-Disposition: form-data; name="{field_name}"\r\n'
-                f"\r\n"
-                f"{value}\r\n"
-            ).encode()
-
-        body += f"--{boundary}\r\n".encode()
-        body += (
-            f'Content-Disposition: form-data; name="{file_field}";'
-            f' filename="{file_name}"\r\n'
-            f"Content-Type: {content_type}\r\n"
-            f"\r\n"
-        ).encode()
-        body += file_data
-        body += f"\r\n--{boundary}--\r\n".encode()
-
-        req = urllib.request.Request(  # noqa: S310
-            url,
-            data=body,
-            headers={
-                "Content-Type": f"multipart/form-data; boundary={boundary}",
-            },
-            method="POST",
-        )
-        resp = self._opener.open(req)  # noqa: S310
-        return bytes(resp.read())
 
     def upload_lookup(
         self,
@@ -255,6 +230,9 @@ class _WebSession:
         update: bool = False,
     ) -> None:
         """Upload a lookup file via multipart form POST."""
+        if not self._logged_in:
+            self._login()
+
         if update:
             url = (
                 f"{self._base_url}/en-US/manager/{app}"
@@ -265,27 +243,22 @@ class _WebSession:
             url = f"{self._base_url}/en-US/manager/{app}/data/lookup-table-files/_new"
             action = "new"
 
-        fields: list[tuple[str, str]] = [
-            ("__action", action),
-            ("__redirect", ""),
-            ("__ns", app),
-            ("splunk_form_key", self._csrf_token or ""),
-        ]
+        data: dict[str, str] = {
+            "__action": action,
+            "__redirect": "",
+            "__ns": app,
+            "splunk_form_key": self._csrf_token or "",
+        }
         if not update:
-            fields.append(("name", name))
+            data["name"] = name
 
-        resp_body = self._multipart_post(
+        resp = self._request(
+            "POST",
             url,
-            fields,
-            file_field="spl-ctrl_lookupfile",
-            file_name=name,
-            file_data=file_path.read_bytes(),
-            content_type="text/csv",
+            data=data,
+            files={"spl-ctrl_lookupfile": (name, file_path.read_bytes(), "text/csv")},
         )
-        result = json.loads(resp_body.decode("utf-8"))
-        if result.get("status") != "OK":
-            msg = result.get("msg", "unknown error")
-            raise RuntimeError(f"Lookup upload failed: {msg}")
+        _expect_ok(resp, "Lookup upload")
 
     def install_app(
         self,
@@ -298,30 +271,45 @@ class _WebSession:
             self._login()
 
         upload_url = f"{self._base_url}/en-US/manager/appinstall/_upload"
-        resp = self._opener.open(upload_url)  # noqa: S310
-        page = resp.read().decode("utf-8")
+        page = self._request("GET", upload_url).text
 
-        m = re.search(
-            r'name="state"\s+[^>]*value="([^"]*)"',
-            page,
-        )
+        m = re.search(r'name="state"\s+[^>]*value="([^"]*)"', page)
         state = m.group(1) if m else ""
 
-        fields: list[tuple[str, str]] = [
-            ("state", state),
-            ("splunk_form_key", self._csrf_token or ""),
-        ]
+        data: dict[str, str] = {
+            "state": state,
+            "splunk_form_key": self._csrf_token or "",
+        }
         if force:
-            fields.append(("force", "1"))
+            data["force"] = "1"
 
-        self._multipart_post(
+        resp = self._request(
+            "POST",
             upload_url,
-            fields,
-            file_field="appfile",
-            file_name=file_path.name,
-            file_data=file_path.read_bytes(),
-            content_type="application/gzip",
+            data=data,
+            files={
+                "appfile": (
+                    file_path.name,
+                    file_path.read_bytes(),
+                    "application/gzip",
+                )
+            },
         )
+        if resp.status_code >= 400:
+            raise RuntimeError(f"App install failed: HTTP {resp.status_code}")
+
+
+def _expect_ok(resp: requests.Response, what: str) -> None:
+    """Raise unless the form handler answered with JSON status OK."""
+    try:
+        result: dict[str, Any] = resp.json()
+    except ValueError:
+        raise RuntimeError(
+            f"{what} failed: HTTP {resp.status_code} — "
+            f"unexpected response: {resp.text[:200]!r}"
+        ) from None
+    if result.get("status") != "OK":
+        raise RuntimeError(f"{what} failed: {result.get('msg', 'unknown error')}")
 
 
 def get_client(ctx: click.Context) -> SplunkClient:
