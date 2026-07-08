@@ -20,8 +20,8 @@ fork with [Click](https://click.palletsprojects.com/). The core loop is
 covering rules, parsers, macros, lookups, and dashboards, with a
 change-evidence report artifact for bank change tickets. It's built for
 humans and LLM agents alike: deterministic flags, `--json` everywhere,
-structured error envelopes, and an embedded agent operating guide
-(`splunkctl skill`).
+structured error envelopes, and a built-in MCP server
+(`splunkctl mcp serve`) with progressive tool discovery.
 
 > **Every mutation is dry-run by default.** Nothing changes until you pass
 > `--yes`. Always preview, read it, then apply.
@@ -52,9 +52,9 @@ structured error envelopes, and an embedded agent operating guide
   `--limit`/`--offset`/`--filter` on every list surface, multi-instance
   profiles with a bank-safety guard banner
   (`(profile: uat @ host:port)`).
-- **Built for agents** — `splunkctl commands --json` for self-discovery,
-  `splunkctl skill` / `skill install` for LLM agent harnesses, guard
-  markers on every mutation, dual output (TTY = table, pipe = JSON).
+- **Built for agents** — built-in MCP server with 129 auto-generated tools,
+  progressive discovery (5 meta-tools + focus/unfocus), 22 guide resources,
+  guard markers on every mutation, dual output (TTY = table, pipe = JSON).
 
 ## Install
 
@@ -137,7 +137,7 @@ splunkctl state push --dir config/ --report r.json --yes  # deploy + evidence
 | `datamodels` | Data model definitions + acceleration health |
 | `state` | Config-as-code pull/diff/push with change-evidence reports |
 | `commands` | Machine-readable command tree (JSON) |
-| `skill` | Embedded agent operating guide |
+| `mcp` | Built-in MCP server for AI agent integration |
 
 ## Global flags
 
@@ -197,19 +197,21 @@ that adds entity classes missing from the upstream SDK:
 pip install git+https://github.com/dannyota/splunk-sdk-python@splunkctl
 ```
 
-## Agent integration
+## Agent integration (MCP)
 
-splunkctl ships with an embedded operating guide for AI agents
-(Claude Code, etc.):
+splunkctl ships with a built-in
+[MCP](https://modelcontextprotocol.io) server for AI agent integration:
 
 ```bash
-splunkctl skill                    # print the guide
-splunkctl skill install            # install to ~/.claude/skills/
-splunkctl commands --json          # JSON command tree for discovery
+splunkctl mcp install              # register in .mcp.json
+splunkctl mcp serve                # start stdio MCP server
 ```
 
-The guide covers auth, every command with examples, ES recipes, SPL
-patterns, the mutation guard, error handling, and workflow recipes.
+The MCP server auto-generates 129 typed tools from the Click command tree
+with progressive discovery — agents start with 5 meta-tools (`help`,
+`usage`, `focus`, `unfocus`, `run`) and dynamically load typed schemas per
+command group. 22 guide resources are served as `guide://` URIs. Mutations
+are guarded: `yes=true` to apply (dry-run by default).
 
 ## License
 

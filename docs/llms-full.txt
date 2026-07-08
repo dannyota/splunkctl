@@ -2353,7 +2353,7 @@ command group, updated in the same commit that moves it forward.
 ## Command groups
 
 All list surfaces accept uniform `--limit`/`--offset`/`--filter` options
-(filter first, then paging; defaults fetch everything) — see SKILL.md.
+(filter first, then paging; defaults fetch everything).
 
 | Group | Status | Subcommands |
 |---|---|---|
@@ -2383,17 +2383,17 @@ All list surfaces accept uniform `--limit`/`--offset`/`--filter` options
 | `audit` | ✅ built | changes (--since/--until/--user/--action/--object-type/--limit, normalizes both `_audit` event shapes, zero SPL composition), rbac (--roles-only, transitive capability/index aggregation) — read-only, live-verified |
 | `kvstore` | ✅ built | collections (--app), create, delete, query (--query/--limit/--skip/--sort), insert/update/remove (--data/--file/--query), export/import (JSONL, batch_save chunked at 500) — raw REST (no SDK entity), F1-classified errors; live round-trip pending healthy KV store (local dev instance's KV store is down; negative path live-verified) |
 | `state` | ✅ built | pull (--dir/--app/--types), diff (--dir/--app/--types, structured drift, exit 0 always), push (guarded, --dir/--app/--types/--report) — unified config-as-code across rules/parsers/macros/lookups/dashboards, orchestrating `rules_io`/`parsers_io`/`conf_ops`/`client.upload_lookup` (no re-implemented serialization/apply); dashboards is pull+diff only (no import path); push never deletes (`removed` drift is reported, never applied); `--report` writes the before→after change-ticket artifact on both dry-run (`applied:false`) and `--yes` (`applied:true`); live-verified full pull→edit→diff→push→report cycle |
-| `doctor` | ✅ built | Connection/auth/health/permissions/skill check, --strict, remediation hints |
+| `doctor` | ✅ built | Connection/auth/health/KV store/permissions/MCP check, --strict, hints |
 | `commands` | ✅ built | Machine-readable JSON tree with guard markers, global options |
-| `skill` | ✅ built | print, install |
+| `mcp` | ✅ built | serve (stdio MCP server), install (.mcp.json registration) |
 
 ## Agent integration
 
 | Feature | Status | Notes |
 |---|---|---|
-| `SKILL.md` | ✅ built | Full agent operating guide |
+| MCP server | ✅ built | 5 meta-tools (help/usage/focus/unfocus/run), 129 auto-generated tools, 22 guide resources |
+| `mcp install` | ✅ built | Write `.mcp.json` for Claude Code registration |
 | `commands --json` | ✅ built | Guard markers, global options, note field |
-| `skill install` | ✅ built | Write to `~/.claude/skills/` |
 | `doctor --strict` | ✅ built | CI-friendly health gate |
 | JSON error envelope | ✅ built | `--json`/`--format json` errors as one `jq`-able stderr line: kind + http_status + message |
 | Multi-instance profiles | ✅ built | `profiles:`/`current:` config schema v2, `--profile` global flag, guard banner (`profile`/`env`/`flags` source) on every dry-run and `--yes` confirmation, no network I/O |
