@@ -90,6 +90,19 @@ def create_server() -> FastMCP:
         instructions=_INSTRUCTIONS,
     )
 
+    from mcp.server.lowlevel.server import NotificationOptions
+
+    _orig = mcp._mcp_server.create_initialization_options
+
+    def _init_opts_with_list_changed(**kwargs: Any) -> Any:
+        kwargs.setdefault(
+            "notification_options",
+            NotificationOptions(tools_changed=True),
+        )
+        return _orig(**kwargs)
+
+    mcp._mcp_server.create_initialization_options = _init_opts_with_list_changed  # type: ignore[assignment]
+
     all_tools: ToolIndex = build_tool_index(cli)
     focused: dict[str, list[str]] = {}
 

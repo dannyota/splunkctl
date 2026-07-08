@@ -33,6 +33,7 @@ _HINTS: dict[str, str] = {
         "Dismiss with 'splunkctl server messages --dismiss NAME --yes'."
     ),
     "Web UI reachable": ("Web UI is optional; lookup-upload and some ops need it."),
+    "KV Store": ("Ask your Splunk admin to restart Splunk or check mongod.log."),
     "MCP registered": "Run 'splunkctl mcp install' to register the MCP server.",
 }
 
@@ -157,7 +158,22 @@ def doctor_cmd(ctx: click.Context, *, strict: bool = False) -> None:
     else:
         results.append(_check("System messages", True, "no errors"))
 
-    # --- 5. User permissions ---
+    # --- 5. KV Store ---
+    click.echo("[KV Store]", err=True)
+    try:
+        resp = svc.get("/services/kvstore/status", output_mode="json")
+        kv_data = json.loads(resp.body.read())
+        kv_status = kv_data["entry"][0]["content"].get("current", {})
+        kv_state = kv_status.get("status", "unknown")
+        kv_ok = kv_state == "ready"
+        kv_detail = kv_state
+        if not kv_ok and kv_state == "failed":
+            kv_detail = "failed — restart Splunk or check mongod.log"
+        results.append(_check("KV Store", kv_ok, kv_detail, warn=not kv_ok))
+    except Exception:
+        results.append(_check("KV Store", False, "could not query status", warn=True))
+
+    # --- 6. User permissions ---
     click.echo("[Permissions]", err=True)
     try:
         user = svc.users[svc.username]
@@ -178,7 +194,7 @@ def doctor_cmd(ctx: click.Context, *, strict: bool = False) -> None:
     except Exception as exc:
         results.append(_check("User lookup", False, str(exc)))
 
-    # --- 6. Web UI ---
+    # --- 7. Web UI ---
     click.echo("[Web UI]", err=True)
     try:
         web_conf = svc.confs["web"]["settings"]
@@ -213,7 +229,7 @@ def doctor_cmd(ctx: click.Context, *, strict: bool = False) -> None:
             )
         )
 
-    # --- 7. MCP registration ---
+    # --- 8. MCP registration ---
     click.echo("[MCP]", err=True)
     _check_mcp_registered(results)
 
