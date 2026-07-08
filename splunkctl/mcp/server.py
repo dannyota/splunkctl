@@ -1,0 +1,308 @@
+"""MCP server with progressive disclosure via 5 meta-tools."""
+
+from __future__ import annotations
+
+import json
+import shlex
+import subprocess
+import sys
+from typing import Any
+
+from mcp.server.fastmcp import Context, FastMCP
+from mcp.types import ToolAnnotations
+
+from splunkctl.mcp.resources import load_guides
+from splunkctl.mcp.tools import (
+    ToolEntry,
+    ToolIndex,
+    build_tool_index,
+    group_names,
+    group_summary,
+    group_tools,
+)
+
+_INSTRUCTIONS = """\
+splunkctl is a CLI for Splunk Enterprise SIEM operations. Start with \
+`help` to see command groups, then `focus <group>` to load typed tools — \
+the preferred way to run commands (validated arguments, full schemas). \
+`usage <command>` previews one command's schema and auto-loads it as a \
+callable tool. `run` is an escape hatch for raw command strings (no \
+validation). `unfocus` when done to free context. Mutations are guarded: \
+pass yes=true to apply (dry-run by default)."""
+
+_FORCE_FLAGS = ["--json"]
+
+_STRIP_PARAMS = frozenset(
+    {"yes", "json", "debug", "format", "fields", "out", "config", "profile", "timeout"}
+)
+
+
+def _exec_cli(args: list[str]) -> str:
+    """Run ``splunkctl <args>`` as a subprocess and return output."""
+    cmd = [sys.executable, "-m", "splunkctl", *args, *_FORCE_FLAGS]
+    result = subprocess.run(  # noqa: S603
+        cmd,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    out = result.stdout.strip()
+    err = result.stderr.strip()
+    if result.returncode != 0:
+        return err or out or f"Command failed with exit code {result.returncode}"
+    if err and out:
+        return f"{out}\n\n{err}"
+    return out or err or "(no output)"
+
+
+def _split_command(raw: str) -> list[str]:
+    """Shell-style tokenizer that respects quotes."""
+    try:
+        return shlex.split(raw)
+    except ValueError:
+        return raw.split()
+
+
+def _build_cli_args(entry: ToolEntry, params: dict[str, Any]) -> list[str]:
+    """Convert typed tool parameters to CLI arg list."""
+    args = list(entry.cmd_path)
+    for pname, value in params.items():
+        if pname in _STRIP_PARAMS:
+            continue
+        flag = f"--{pname.replace('_', '-')}"
+        if isinstance(value, bool):
+            if value:
+                args.append(flag)
+        elif isinstance(value, list):
+            for item in value:
+                args.extend([flag, str(item)])
+        else:
+            args.extend([flag, str(value)])
+    return args
+
+
+def create_server() -> FastMCP:
+    """Build the MCP server with meta-tools and guide resources."""
+    from splunkctl.main import cli
+
+    mcp = FastMCP(
+        name="splunkctl",
+        instructions=_INSTRUCTIONS,
+    )
+
+    all_tools: ToolIndex = build_tool_index(cli)
+    focused: dict[str, list[str]] = {}
+
+    # --- Meta-tool: help ---
+
+    @mcp.tool(
+        name="help",
+        description="List command groups, or subcommands within a group.",
+        annotations=ToolAnnotations(readOnlyHint=True),
+    )
+    async def help_tool(group: str | None = None) -> str:
+        """List command groups, or subcommands within a group."""
+        if group is None:
+            rows = group_summary(cli)
+            lines = [
+                f"{r['group']:16s} {r['description']} ({r['count']} cmds)" for r in rows
+            ]
+            return "\n".join(lines)
+        return _exec_cli([group, "--help"])
+
+    # --- Meta-tool: usage ---
+
+    @mcp.tool(
+        name="usage",
+        description=(
+            "Show flags, args, and description for one command. "
+            "Auto-loads it as a callable tool."
+        ),
+        annotations=ToolAnnotations(readOnlyHint=True),
+    )
+    async def usage_tool(command: str, ctx: Context) -> str:  # type: ignore[type-arg]
+        """Show full schema for one command and auto-load it."""
+        tool_name = command.strip().replace(" ", "_").replace("-", "_")
+        entry = all_tools.get(tool_name)
+        if entry is None:
+            return f"Unknown command: {command}"
+
+        if tool_name not in focused.get("_usage", []):
+            _register_tool(mcp, entry)
+            focused.setdefault("_usage", []).append(tool_name)
+            await ctx.session.send_tool_list_changed()
+
+        return json.dumps(
+            {
+                "name": entry.name,
+                "description": entry.description,
+                "guarded": entry.guarded,
+                "inputSchema": entry.schema,
+            },
+            indent=2,
+        )
+
+    # --- Meta-tool: focus ---
+
+    @mcp.tool(
+        name="focus",
+        description=(
+            "Load typed tools for a command group (enables full schemas). "
+            "Preferred over run for validated arguments."
+        ),
+        annotations=ToolAnnotations(readOnlyHint=True),
+    )
+    async def focus_tool(group: str, ctx: Context) -> str:  # type: ignore[type-arg]
+        """Load typed tools for a command group."""
+        if group in focused:
+            count = len(focused[group])
+            return f"Group '{group}' already focused ({count} tools)."
+
+        entries = group_tools(all_tools, group)
+        if not entries:
+            available = group_names(cli)
+            return (
+                f"No tools found for group '{group}'. Available: {', '.join(available)}"
+            )
+
+        names: list[str] = []
+        for entry in entries:
+            _register_tool(mcp, entry)
+            names.append(entry.name)
+        focused[group] = names
+        await ctx.session.send_tool_list_changed()
+
+        lines = [f"Loaded {len(names)} tools for '{group}':"]
+        for entry in entries:
+            tag = " [guarded]" if entry.guarded else ""
+            lines.append(f"  {entry.name}{tag} — {entry.description}")
+        return "\n".join(lines)
+
+    # --- Meta-tool: unfocus ---
+
+    @mcp.tool(
+        name="unfocus",
+        description="Unload a command group's typed tools to free context.",
+        annotations=ToolAnnotations(readOnlyHint=True),
+    )
+    async def unfocus_tool(
+        group: str | None = None,
+        ctx: Context = None,  # type: ignore[type-arg,assignment]
+    ) -> str:
+        """Unload a command group or all groups."""
+        if group is None:
+            removed = 0
+            for names in focused.values():
+                for n in names:
+                    try:
+                        mcp.remove_tool(n)
+                    except Exception:  # noqa: BLE001, S110
+                        pass
+                    removed += 1
+            focused.clear()
+            if ctx is not None:
+                await ctx.session.send_tool_list_changed()
+            return f"Unloaded all focused tools ({removed} total)."
+
+        if group not in focused:
+            return f"Group '{group}' is not focused."
+        for n in focused[group]:
+            try:
+                mcp.remove_tool(n)
+            except Exception:  # noqa: BLE001, S110
+                pass
+        count = len(focused.pop(group))
+        if ctx is not None:
+            await ctx.session.send_tool_list_changed()
+        return f"Unloaded {count} tools for '{group}'."
+
+    # --- Meta-tool: run ---
+
+    @mcp.tool(
+        name="run",
+        description=(
+            "Run any splunkctl command. Pass the full command "
+            "(e.g. 'search run index=main | head 10'). "
+            "Use shell-style quoting for values with spaces. "
+            "Prefer focus + typed tools for complex commands."
+        ),
+        annotations=ToolAnnotations(readOnlyHint=False),
+    )
+    async def run_tool(command: str, yes: bool = False) -> str:
+        """Execute a raw splunkctl command string."""
+        tokens = _split_command(command)
+        if yes:
+            tokens.append("--yes")
+        result = _exec_cli(tokens)
+
+        tool_name = "_".join(
+            t.replace("-", "_") for t in tokens if not t.startswith("-")
+        )
+        if tool_name in all_tools and not any(
+            tool_name in names for names in focused.values()
+        ):
+            result += (
+                f"\n\nTip: run `focus {tokens[0]}` to load typed tools "
+                f"with validated schemas for this group."
+            )
+        return result
+
+    # --- Guide resources ---
+
+    for guide in load_guides():
+        slug = guide["slug"]
+        title = guide["title"]
+        text = guide["text"]
+
+        def _make_guide(content: str) -> Any:
+            def _reader() -> str:
+                return content
+
+            return _reader
+
+        mcp.resource(
+            f"guide://{slug}",
+            name=title,
+            description=f"Guide: {title}",
+            mime_type="text/markdown",
+        )(_make_guide(text))
+
+    return mcp
+
+
+def _register_tool(mcp: FastMCP, entry: ToolEntry) -> None:
+    """Register a focused tool that executes via subprocess.
+
+    Constructs a Tool object directly to use the Click-derived JSON
+    Schema instead of FastMCP's auto-generation from function signatures.
+    """
+    from mcp.server.fastmcp.tools import Tool as MCPTool
+    from mcp.server.fastmcp.utilities.func_metadata import func_metadata
+
+    annotations = ToolAnnotations(
+        readOnlyHint=not entry.guarded,
+        destructiveHint=entry.guarded,
+    )
+
+    async def _runner(**kwargs: Any) -> str:
+        cli_args = _build_cli_args(entry, kwargs)
+        return _exec_cli(cli_args)
+
+    tool = MCPTool(
+        fn=_runner,
+        name=entry.name,
+        title=None,
+        description=entry.description,
+        parameters=entry.schema,
+        fn_metadata=func_metadata(_runner),
+        is_async=True,
+        context_kwarg=None,
+        annotations=annotations,
+    )
+    mcp._tool_manager._tools[tool.name] = tool
+
+
+def run_server() -> None:
+    """Create and run the MCP server on stdio."""
+    server = create_server()
+    server.run(transport="stdio")

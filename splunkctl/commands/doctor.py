@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import importlib.resources
 import json
 import ssl
 import urllib.request
@@ -34,10 +33,8 @@ _HINTS: dict[str, str] = {
         "Dismiss with 'splunkctl server messages --dismiss NAME --yes'."
     ),
     "Web UI reachable": ("Web UI is optional; lookup-upload and some ops need it."),
-    "Skill freshness": ("Run 'splunkctl skill install' to update the installed guide."),
+    "MCP registered": "Run 'splunkctl mcp install' to register the MCP server.",
 }
-
-_INSTALL_DIR = Path.home() / ".claude" / "skills" / "splunkctl"
 
 
 def _check(
@@ -216,31 +213,36 @@ def doctor_cmd(ctx: click.Context, *, strict: bool = False) -> None:
             )
         )
 
-    # --- 7. Skill freshness ---
-    click.echo("[Skill]", err=True)
-    _check_skill_freshness(results)
+    # --- 7. MCP registration ---
+    click.echo("[MCP]", err=True)
+    _check_mcp_registered(results)
 
     _finish(ctx, results, strict=strict)
 
 
-def _check_skill_freshness(results: list[dict[str, str]]) -> None:
-    installed = _INSTALL_DIR / "SKILL.md"
-    if not installed.exists():
-        results.append(_check("Skill freshness", False, "not installed", warn=True))
+def _check_mcp_registered(results: list[dict[str, str]]) -> None:
+    mcp_json = Path.cwd() / ".mcp.json"
+    if not mcp_json.exists():
+        results.append(
+            _check("MCP registered", False, ".mcp.json not found", warn=True)
+        )
         return
     try:
-        ref = importlib.resources.files("splunkctl.skill").joinpath("SKILL.md")
-        embedded = ref.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        results.append(_check("Skill freshness", False, "embedded SKILL.md missing"))
-        return
-    installed_text = installed.read_text(encoding="utf-8")
-    if installed_text == embedded:
-        results.append(_check("Skill freshness", True, "up to date"))
-    else:
-        results.append(
-            _check("Skill freshness", False, "installed copy is stale", warn=True)
-        )
+        data = json.loads(mcp_json.read_text(encoding="utf-8"))
+        servers = data.get("mcpServers", {})
+        if "splunkctl" in servers:
+            results.append(_check("MCP registered", True, ".mcp.json"))
+        else:
+            results.append(
+                _check(
+                    "MCP registered",
+                    False,
+                    "splunkctl entry missing from .mcp.json",
+                    warn=True,
+                )
+            )
+    except Exception as exc:
+        results.append(_check("MCP registered", False, str(exc)))
 
 
 def _finish(

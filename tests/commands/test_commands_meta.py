@@ -26,7 +26,7 @@ def test_commands_json_output() -> None:
     assert "alerts" in names
     assert "dashboards" in names
     assert "commands" in names
-    assert "skill" in names
+    assert "mcp" in names
 
 
 def test_commands_includes_version() -> None:

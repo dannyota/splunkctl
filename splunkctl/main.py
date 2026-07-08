@@ -25,11 +25,11 @@ from splunkctl.commands.inputs import inputs_group
 from splunkctl.commands.knowledge import eventtypes_group, macros_group, tags_group
 from splunkctl.commands.kvstore import kvstore_group
 from splunkctl.commands.lookups import lookups_group
+from splunkctl.commands.mcp_cmd import mcp_group
 from splunkctl.commands.parsers import parsers_group
 from splunkctl.commands.rules import rules_group
 from splunkctl.commands.search import search_group
 from splunkctl.commands.server import server_group
-from splunkctl.commands.skill_cmd import skill_group
 from splunkctl.commands.state import state_group
 from splunkctl.commands.users import users_group
 
@@ -199,7 +199,7 @@ cli.add_command(parsers_group)
 cli.add_command(rules_group)
 cli.add_command(search_group)
 cli.add_command(server_group)
-cli.add_command(skill_group)
+cli.add_command(mcp_group)
 cli.add_command(state_group)
 cli.add_command(tags_group)
 cli.add_command(users_group)

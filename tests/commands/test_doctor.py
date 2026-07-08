@@ -147,31 +147,8 @@ def test_doctor_strict_warns_fail(mock_gc: MagicMock, mock_urllib: MagicMock) ->
 
 
 @patch("splunkctl.commands.doctor.urllib.request")
-@patch("splunkctl.commands.doctor._INSTALL_DIR", new_callable=lambda: Path)
 @patch(_PATCH)
-def test_doctor_skill_stale(
-    mock_gc: MagicMock, mock_dir: Path, mock_urllib: MagicMock, tmp_path: Path
-) -> None:
-    svc = _mock_service()
-    mock_gc.return_value.service = svc
-
-    mock_resp = MagicMock()
-    mock_resp.status = 200
-    mock_urllib.build_opener.return_value.open.return_value = mock_resp
-    mock_urllib.HTTPSHandler = MagicMock()
-
-    skill_dir = tmp_path / "skills" / "splunkctl"
-    skill_dir.mkdir(parents=True)
-    (skill_dir / "SKILL.md").write_text("old content")
-
-    with patch("splunkctl.commands.doctor._INSTALL_DIR", skill_dir):
-        result = CliRunner().invoke(cli, ["doctor"])
-    assert "stale" in result.stderr
-
-
-@patch("splunkctl.commands.doctor.urllib.request")
-@patch(_PATCH)
-def test_doctor_skill_not_installed(
+def test_doctor_mcp_not_registered(
     mock_gc: MagicMock, mock_urllib: MagicMock, tmp_path: Path
 ) -> None:
     svc = _mock_service()
@@ -182,11 +159,9 @@ def test_doctor_skill_not_installed(
     mock_urllib.build_opener.return_value.open.return_value = mock_resp
     mock_urllib.HTTPSHandler = MagicMock()
 
-    empty_dir = tmp_path / "nosuch"
-    empty_dir.mkdir()
-    with patch("splunkctl.commands.doctor._INSTALL_DIR", empty_dir):
+    with patch("splunkctl.commands.doctor.Path.cwd", return_value=tmp_path):
         result = CliRunner().invoke(cli, ["doctor"])
-    assert "not installed" in result.stderr
+    assert ".mcp.json not found" in result.stderr
 
 
 @patch("splunkctl.commands.doctor.urllib.request")

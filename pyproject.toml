@@ -29,6 +29,7 @@ dependencies = [
     "tabulate>=0.9",
     "requests>=2.32",
     "defusedxml>=0.7",
+    "mcp>=1.23",
 ]
 
 [project.optional-dependencies]
@@ -51,13 +52,13 @@ Repository = "https://github.com/dannyota/splunkctl"
 Issues = "https://github.com/dannyota/splunkctl/issues"
 
 [tool.setuptools]
-packages = ["splunkctl", "splunkctl.commands", "splunkctl.skill"]
+packages = ["splunkctl", "splunkctl.commands", "splunkctl.mcp"]
 
 [tool.setuptools.dynamic]
 version = { attr = "splunkctl.__version__" }
 
 [tool.setuptools.package-data]
-"splunkctl.skill" = ["SKILL.md"]
+"splunkctl.mcp" = ["py.typed"]
 
 # --- Ruff (lint + format) ---
 
@@ -100,6 +101,10 @@ warn_unused_configs = true
 
 [[tool.mypy.overrides]]
 module = "splunklib.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "mcp.*"
 ignore_missing_imports = true
 
 # --- pytest ---
