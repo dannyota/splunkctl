@@ -67,7 +67,7 @@ type ToolIndex = dict[str, "ToolEntry"]
 class ToolEntry:
     """A single tool derived from a Click command."""
 
-    __slots__ = ("name", "description", "schema", "cmd_path", "guarded")
+    __slots__ = ("name", "description", "schema", "cmd_path", "guarded", "positional")
 
     def __init__(  # noqa: D107
         self,
@@ -77,12 +77,14 @@ class ToolEntry:
         cmd_path: list[str],
         *,
         guarded: bool = False,
+        positional: frozenset[str] = frozenset(),
     ) -> None:
         self.name = name
         self.description = description
         self.schema = schema
         self.cmd_path = cmd_path
         self.guarded = guarded
+        self.positional = positional
 
 
 def _tool_name(path: list[str]) -> str:
@@ -104,6 +106,7 @@ def _walk_commands(
 
         properties: dict[str, Any] = {}
         required: list[str] = []
+        pos: set[str] = set()
         for p in cmd.params:
             if p.name is None:
                 continue
@@ -114,6 +117,7 @@ def _walk_commands(
             properties[pname] = prop
             if isinstance(p, click.Argument):
                 required.append(pname)
+                pos.add(pname)
             elif isinstance(p, click.Option) and p.required:
                 required.append(pname)
 
@@ -136,6 +140,7 @@ def _walk_commands(
             schema=schema,
             cmd_path=path,
             guarded=guarded,
+            positional=frozenset(pos),
         )
 
 
@@ -155,6 +160,7 @@ def build_tool_index(root: click.Group) -> ToolIndex:
             path = [name]
             properties: dict[str, Any] = {}
             required: list[str] = []
+            pos: set[str] = set()
             for p in cmd.params:
                 if p.name is None:
                     continue
@@ -165,6 +171,7 @@ def build_tool_index(root: click.Group) -> ToolIndex:
                 properties[pname] = prop
                 if isinstance(p, click.Argument):
                     required.append(pname)
+                    pos.add(pname)
                 elif isinstance(p, click.Option) and p.required:
                     required.append(pname)
             schema: dict[str, Any] = {
@@ -184,6 +191,7 @@ def build_tool_index(root: click.Group) -> ToolIndex:
                 schema=schema,
                 cmd_path=path,
                 guarded=guarded,
+                positional=frozenset(pos),
             )
     return index
 

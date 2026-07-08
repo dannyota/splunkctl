@@ -66,8 +66,14 @@ def _split_command(raw: str) -> list[str]:
 def _build_cli_args(entry: ToolEntry, params: dict[str, Any]) -> list[str]:
     """Convert typed tool parameters to CLI arg list."""
     args = list(entry.cmd_path)
+    positional_values: list[str] = []
     for pname, value in params.items():
         if pname in _STRIP_PARAMS:
+            if pname == "yes" and value:
+                args.append("--yes")
+            continue
+        if pname in entry.positional:
+            positional_values.append(str(value))
             continue
         flag = f"--{pname.replace('_', '-')}"
         if isinstance(value, bool):
@@ -78,6 +84,7 @@ def _build_cli_args(entry: ToolEntry, params: dict[str, Any]) -> list[str]:
                 args.extend([flag, str(item)])
         else:
             args.extend([flag, str(value)])
+    args.extend(positional_values)
     return args
 
 

@@ -105,6 +105,38 @@ def test_choice_params_have_enum() -> None:
     assert found_enum, "Expected at least one tool with enum params"
 
 
+def test_positional_args_tracked() -> None:
+    idx = build_tool_index(cli)
+    entry = idx["search_run"]
+    assert "spl" in entry.positional
+    assert "limit" not in entry.positional
+
+
+def test_build_cli_args_positional() -> None:
+    from splunkctl.mcp.server import _build_cli_args
+
+    idx = build_tool_index(cli)
+    entry = idx["search_run"]
+    args = _build_cli_args(entry, {"spl": "index=main", "limit": 5})
+    assert "--spl" not in args, "positional arg should not get a flag"
+    assert "index=main" in args
+    assert "--limit" in args
+
+
+def test_build_cli_args_yes_passed() -> None:
+    from splunkctl.mcp.server import _build_cli_args
+
+    idx = build_tool_index(cli)
+    guarded = [t for t in idx.values() if t.guarded]
+    assert guarded
+    entry = guarded[0]
+    args = _build_cli_args(entry, {"yes": True})
+    assert "--yes" in args
+
+    args_no = _build_cli_args(entry, {"yes": False})
+    assert "--yes" not in args_no
+
+
 def test_mcp_serve_command_exists() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["mcp", "--help"])
