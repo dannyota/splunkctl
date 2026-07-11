@@ -19,6 +19,7 @@ from splunkctl.commands.soar.cases import cases_group
 from splunkctl.commands.soar.containers import containers_group
 from splunkctl.commands.soar.functions import functions_group
 from splunkctl.commands.soar.indicators import evidence_group, indicators_group
+from splunkctl.commands.soar.ingest import ingest_cmd
 from splunkctl.commands.soar.lists import lists_group
 from splunkctl.commands.soar.notes import notes_group
 from splunkctl.commands.soar.playbooks import playbooks_group
@@ -58,3 +59,4 @@ soar_group.add_command(users_group)
 soar_group.add_command(roles_group)
 soar_group.add_command(audit_cmd)
 soar_group.add_command(search)
+soar_group.add_command(ingest_cmd)

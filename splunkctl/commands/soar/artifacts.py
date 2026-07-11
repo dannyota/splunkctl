@@ -11,36 +11,8 @@ import click
 from splunkctl import output
 from splunkctl.commands.soar._client import get_soar_client
 from splunkctl.guard import soar_check
+from splunkctl.soar.cimcef import CEF_CONTAINS_MAP
 from splunkctl.soar.client import SOARError
-
-# Built-in CEF contains-type map — derived from soar-ingest-map.md.
-# Maps CEF key -> list of contains types for cef_types auto-population.
-CEF_CONTAINS_MAP: dict[str, list[str]] = {
-    "destinationAddress": ["ip", "host name"],
-    "destinationMacAddress": ["mac address"],
-    "destinationNtDomain": ["domain"],
-    "destinationPort": ["port"],
-    "destinationTranslatedAddress": ["ip"],
-    "destinationTranslatedPort": ["port"],
-    "destinationDnsDomain": ["domain"],
-    "dvc": ["ip", "host name"],
-    "deviceAddress": ["ip"],
-    "deviceMacAddress": ["mac address"],
-    "fileHash": ["hash"],
-    "fileName": ["file name"],
-    "filePath": ["file path"],
-    "sourceAddress": ["ip", "host name"],
-    "sourceDnsDomain": ["domain"],
-    "sourceMacAddress": ["mac address"],
-    "sourceNtDomain": ["domain"],
-    "sourcePort": ["port"],
-    "sourceTranslatedAddress": ["ip"],
-    "sourceTranslatedPort": ["port"],
-    "sourceUserId": ["user name"],
-    "requestURL": ["url"],
-    "destinationUserName": ["user name"],
-    "destinationUserId": ["user name"],
-}
 
 
 def _parse_cef_pairs(raw: tuple[str, ...]) -> dict[str, str]:
