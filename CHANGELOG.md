@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.8.0
+
+SOAR automation wave (32): the CLI now drives apps, assets, playbooks,
+actions, and custom functions — including the first playbooks-as-code
+loop anywhere. Live-verified against SOAR 8.5.0.248.
+
+### Added
+- **`soar apps` / `soar assets`** — app inventory with config schemas and
+  per-app actions; asset CRUD that respects the server's full-replace
+  semantics (fetch-merge by default, `--replace` to opt out), password
+  fields masked in previews, `assets test` connectivity checks, and
+  `soar ingest-status` for polling-ingestion health.
+- **`soar playbooks`** — list/get/enable/disable/trigger plus the
+  as-code loop: `export` (tgz, `--unpack` to the json+py pair) and
+  `import` (dir or tgz), `repos`, and `sync` with the local-repo
+  limitation explained. Duplicate-name resolution errors instead of
+  guessing.
+- **`soar playbooks run` / `runs`** — run playbooks against containers
+  with `--scope`, `--input`, and `--wait` polling to terminal status;
+  inspect run history and per-block results; cancel in-progress runs.
+- **`soar actions`** — run any connector action (`--asset` name
+  resolution to app targets, `--param`), poll with `--wait`, inspect
+  per-asset `results`, cancel. Mid-poll server errors surface as real
+  errors, never fake timeouts.
+- **`soar functions`** — custom-function list/get/import/export/update/
+  delete; the export REST route was verified live; editing a Python 2.7
+  function warns before upgrading it to Python 3.
+- SOAR response normalization extended (`playbook_run_id` → `id`), and
+  all SOAR guides registered in the docs navigation.
+
+
 ## 0.7.0
 
 Splunk SOAR support arrives: splunkctl now operates Splunk Enterprise
