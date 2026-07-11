@@ -28,6 +28,9 @@
   - [Audit & RBAC](guides/audit.md)
   - [Server health](guides/server.md)
 
+- **SOAR**
+  - [Playbook runs](guides/soar-playbook-runs.md)
+
 - **Design**
   - [Architecture](design/architecture.md)
   - [Catalog & status](design/catalog.md)

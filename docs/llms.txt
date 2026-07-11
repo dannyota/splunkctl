@@ -35,6 +35,10 @@
 - [Audit & RBAC](https://splunkctl.danny.vn/#/guides/audit): Regulator-facing evidence for bank SOC operations: who changed what (audit changes) and who can do what (audit rbac). Both commands are read-only —
 - [Server health](https://splunkctl.danny.vn/#/guides/server): System health, license, KV store status, and topology health reads.
 
+## SOAR
+
+- [Playbook runs](https://splunkctl.danny.vn/#/guides/soar-playbook-runs): Run playbooks against containers, poll to completion, inspect run history and block results, cancel in-progress runs.
+
 ## Design
 
 - [Architecture](https://splunkctl.danny.vn/#/design/architecture): How splunkctl is built — the layers, the data flow, and the design decisions.

@@ -13,6 +13,7 @@ from splunkctl.commands.soar.assets import assets_group, ingest_status_cmd
 from splunkctl.commands.soar.containers import containers_group
 from splunkctl.commands.soar.functions import functions_group
 from splunkctl.commands.soar.notes import notes_group
+from splunkctl.commands.soar.playbook_runs import playbooks_group
 from splunkctl.commands.soar.playbooks import playbooks_group
 from splunkctl.commands.soar.system import health, info, license_cmd, test
 from splunkctl.commands.soar.vault import vault_group
