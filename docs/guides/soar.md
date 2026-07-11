@@ -402,6 +402,23 @@ Exits with a usage error explaining that SOAR comments are immutable and
 cannot be deleted. Comments are removed only when the parent container is
 deleted. No API call is made.
 
+## Search
+
+```bash
+splunkctl soar search dns                                 # cross-object search
+splunkctl soar search dns --categories app,container      # restrict to types
+splunkctl soar search dns --page-size 5 --page 2          # paginate (1-based)
+splunkctl soar search dns --json
+```
+
+Free-text search across all SOAR object types (apps, containers, artifacts,
+assets, ...) via `/rest/search`. Results include `category`, `name`, `id`,
+and `url` per hit.
+
+`--categories` takes a comma-separated list of object types to restrict
+results. Pagination is **1-based** (unlike other SOAR endpoints which are
+0-based); without `--page`, the server defaults to page 1.
+
 ## Error Handling
 
 All SOAR commands produce typed error envelopes on failure:

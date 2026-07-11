@@ -81,6 +81,7 @@ that are not SDK list surfaces (e.g. `audit rbac`) are exempt by design.
 | `soar users` | ✅ built | list (--type normal/automation; surfaces hidden system automation user), get, create (--username/--password/--type/--role/--allowed-ip/--first-name/--last-name; token-provisioning reality notice for automation type), update (--password masked/--add-role/--remove-role read-modify-write/--first-name/--last-name/--allowed-ip), delete (soft-delete is_active=False; dry-run explains semantics), token (hashed key + expiry; explicit NOT-usable-token notice) |
 | `soar roles` | ✅ built | list (permission matrix), get (single role with permissions) — 7 immutable built-in roles |
 | `soar audit` | ✅ built | query audit log (bare-array normalized; --user/--playbook/--container/--start/--end/--format csv/--limit) |
+| `soar search` | ✅ built | search QUERY (--categories comma-list, --page-size, --page; 1-based pagination; cross-object free-text via /rest/search); live-verified |
 
 ## SOAR infrastructure
 

@@ -269,11 +269,13 @@ class SOARClient:
         if not isinstance(body, dict):
             return body
 
-        # {results} envelope (search)
+        # {results} envelope (search) — server paginates (1-based pages)
+        # and returns real num_pages; forward it instead of hardcoding 1.
         if endpoint_root in _RESULTS_ENVELOPE_ENDPOINTS and "results" in body:
             results = body["results"]
             count = body.get("count", len(results))
-            return {"count": count, "num_pages": 1, "data": results}
+            num_pages = body.get("num_pages", 1)
+            return {"count": count, "num_pages": num_pages, "data": results}
 
         return body
 

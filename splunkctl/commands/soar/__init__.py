@@ -22,6 +22,7 @@ from splunkctl.commands.soar.indicators import evidence_group, indicators_group
 from splunkctl.commands.soar.lists import lists_group
 from splunkctl.commands.soar.notes import notes_group
 from splunkctl.commands.soar.playbooks import playbooks_group
+from splunkctl.commands.soar.search import search
 from splunkctl.commands.soar.system import health, info, license_cmd, test
 from splunkctl.commands.soar.vault import vault_group
 
@@ -56,3 +57,4 @@ soar_group.add_command(evidence_group)
 soar_group.add_command(users_group)
 soar_group.add_command(roles_group)
 soar_group.add_command(audit_cmd)
+soar_group.add_command(search)
