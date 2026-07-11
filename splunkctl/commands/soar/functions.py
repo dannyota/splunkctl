@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import base64
-import sys
 import tarfile
 from io import BytesIO
 from pathlib import Path
@@ -36,7 +35,7 @@ def _resolve_scm_id(client: Any) -> int | None:
         return None
     data = result.get("data", []) if isinstance(result, dict) else []
     for repo in data:
-        if isinstance(repo, dict):
+        if isinstance(repo, dict) and repo.get("id") is not None:
             return int(repo["id"])
     return None
 
@@ -168,7 +167,7 @@ def export_cmd(ctx: click.Context, *, function_id: int, out: str | None) -> None
         Path(out).write_bytes(raw)
         output.info(f"Written {len(raw):,} bytes to {out}")
     else:
-        sys.stdout.buffer.write(raw)
+        click.get_binary_stream("stdout").write(raw)
 
 
 @functions_group.command("update")
@@ -249,6 +248,10 @@ def update_cmd(
         # upgraded or the server rejects the update.
         if body.get("python_version") in ("2", "2.7"):
             body["python_version"] = "3"
+            output.warning(
+                "upgrading python_version 2.7 -> 3"
+                " (SOAR 8.x rejects editing py2 functions)"
+            )
 
     body["python"] = new_python
     body["commit_message"] = message

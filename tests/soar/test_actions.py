@@ -95,6 +95,69 @@ class TestActionList:
         assert args[0] == "action_run"
 
 
+class TestActionListPagination:
+    @patch(PATCH_CLIENT)
+    @patch(PATCH_RESOLVE)
+    def test_limit_offset(
+        self,
+        mock_resolve: MagicMock,
+        mock_cls: MagicMock,
+    ) -> None:
+        """--offset with --limit computes page = offset // limit."""
+        mock_resolve.return_value = soar_cfg()
+        client = MagicMock()
+        client.get.return_value = {"count": 0, "data": []}
+        mock_cls.return_value = client
+
+        CliRunner().invoke(
+            cli,
+            ["--json", "soar", "actions", "list", "--limit", "5", "--offset", "10"],
+        )
+        _, kwargs = client.get.call_args
+        params = kwargs.get("params", {})
+        assert params["page_size"] == 5
+        assert params["page"] == 2  # 10 // 5
+
+    @patch(PATCH_CLIENT)
+    @patch(PATCH_RESOLVE)
+    def test_offset_without_limit_errors(
+        self,
+        mock_resolve: MagicMock,
+        mock_cls: MagicMock,
+    ) -> None:
+        """--offset without --limit exits 1 with a usage error."""
+        mock_resolve.return_value = soar_cfg()
+        client = MagicMock()
+        mock_cls.return_value = client
+
+        result = CliRunner().invoke(
+            cli, ["--json", "soar", "actions", "list", "--offset", "20"]
+        )
+        assert result.exit_code == 1
+        assert "--offset requires --limit" in (result.output + (result.stderr or ""))
+        client.get.assert_not_called()
+
+    @patch(PATCH_CLIENT)
+    @patch(PATCH_RESOLVE)
+    def test_offset_not_multiple_of_limit_errors(
+        self,
+        mock_resolve: MagicMock,
+        mock_cls: MagicMock,
+    ) -> None:
+        """--offset must be a multiple of --limit."""
+        mock_resolve.return_value = soar_cfg()
+        client = MagicMock()
+        mock_cls.return_value = client
+
+        result = CliRunner().invoke(
+            cli,
+            ["--json", "soar", "actions", "list", "--limit", "5", "--offset", "7"],
+        )
+        assert result.exit_code == 1
+        assert "multiple" in (result.output + (result.stderr or ""))
+        client.get.assert_not_called()
+
+
 class TestActionStatus:
     @patch(PATCH_CLIENT)
     @patch(PATCH_RESOLVE)

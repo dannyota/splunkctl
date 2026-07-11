@@ -288,6 +288,12 @@ def update_cmd(
     elif "description" in existing:
         body["description"] = existing["description"]
 
+    # Preserve app association — the server exposes the field as "app" but
+    # POST accepts "app_id".
+    app_ref = existing.get("app")
+    if app_ref is not None:
+        body["app_id"] = app_ref
+
     # Mask secrets in dry-run preview
     app_id = existing.get("app") or existing.get("app_id")
     secret_keys: set[str] = set()

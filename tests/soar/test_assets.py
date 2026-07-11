@@ -212,6 +212,49 @@ class TestAssetsUpdate:
         # Must preserve existing dns_server AND add new_key
         assert body["configuration"]["dns_server"] == "8.8.8.8"
         assert body["configuration"]["new_key"] == "val"
+        # Must carry app association from the existing record
+        assert body["app_id"] == 5
+
+    @patch(PATCH_SOAR_RESOLVE)
+    @patch(PATCH_CLIENT)
+    @patch(PATCH_RESOLVE)
+    def test_update_merge_no_app_key(
+        self,
+        mock_resolve: MagicMock,
+        mock_cls: MagicMock,
+        mock_soar_resolve: MagicMock,
+    ) -> None:
+        """Update omits app_id when the existing record has no app key."""
+        mock_resolve.return_value = soar_cfg()
+        mock_soar_resolve.return_value = soar_cfg()
+        client = MagicMock()
+        no_app = {
+            "id": 2,
+            "name": "orphan",
+            "configuration": {"k": "v"},
+            "description": "no app",
+        }
+        client.get.return_value = no_app
+        client.post.return_value = {"success": True}
+        mock_cls.return_value = client
+
+        result = CliRunner().invoke(
+            cli,
+            [
+                "--json",
+                "--yes",
+                "soar",
+                "assets",
+                "update",
+                "2",
+                "--set",
+                "k=v2",
+            ],
+        )
+        assert result.exit_code == 0
+        _, kwargs = client.post.call_args
+        body = kwargs.get("body", {})
+        assert "app_id" not in body
 
     @patch(PATCH_SOAR_RESOLVE)
     @patch(PATCH_CLIENT)
@@ -358,115 +401,4 @@ class TestAssetsDelete:
         assert result.exit_code == 0
         client.delete.assert_called_once()
 
-
-# ---- test (connectivity) ----
-
-
-class TestAssetsTest:
-    @patch(PATCH_SOAR_RESOLVE)
-    @patch(PATCH_CLIENT)
-    @patch(PATCH_RESOLVE)
-    def test_test_dry_run(
-        self,
-        mock_resolve: MagicMock,
-        mock_cls: MagicMock,
-        mock_soar_resolve: MagicMock,
-    ) -> None:
-        mock_resolve.return_value = soar_cfg()
-        mock_soar_resolve.return_value = soar_cfg()
-
-        result = CliRunner().invoke(cli, ["--json", "soar", "assets", "test", "1"])
-        assert result.exit_code == 0
-        assert "[DRY RUN]" in result.stderr
-
-    @patch(PATCH_SOAR_RESOLVE)
-    @patch(PATCH_CLIENT)
-    @patch(PATCH_RESOLVE)
-    def test_test_triggers_and_polls(
-        self,
-        mock_resolve: MagicMock,
-        mock_cls: MagicMock,
-        mock_soar_resolve: MagicMock,
-    ) -> None:
-        """test posts to asset/<id>/test then polls app_status."""
-        mock_resolve.return_value = soar_cfg()
-        mock_soar_resolve.return_value = soar_cfg()
-        client = MagicMock()
-        client.post.return_value = {"success": True}
-        client.get.return_value = {
-            "count": 1,
-            "num_pages": 1,
-            "data": [
-                {
-                    "app_id": 5,
-                    "asset_id": 1,
-                    "status": "success",
-                    "message": "Connectivity test passed",
-                }
-            ],
-        }
-        mock_cls.return_value = client
-
-        result = CliRunner().invoke(
-            cli, ["--json", "--yes", "soar", "assets", "test", "1"]
-        )
-        assert result.exit_code == 0
-        client.post.assert_called_once()
-        post_args = client.post.call_args
-        assert "asset/1/test" in post_args[0] or post_args[0][0] == "asset/1/test"
-
-
-# ---- ingest-status ----
-
-
-class TestIngestStatus:
-    @patch(PATCH_CLIENT)
-    @patch(PATCH_RESOLVE)
-    def test_ingest_status(self, mock_resolve: MagicMock, mock_cls: MagicMock) -> None:
-        mock_resolve.return_value = soar_cfg()
-        client = MagicMock()
-        client.get.side_effect = [
-            {
-                "count": 1,
-                "num_pages": 1,
-                "data": [
-                    {
-                        "asset_id": 1,
-                        "asset_name": "google_dns",
-                        "app_id": 5,
-                        "status": "success",
-                        "message": "ok",
-                    }
-                ],
-            },
-            {
-                "count": 1,
-                "num_pages": 1,
-                "data": [
-                    {
-                        "app_id": 5,
-                        "asset_id": 1,
-                        "status": "success",
-                    }
-                ],
-            },
-        ]
-        mock_cls.return_value = client
-
-        result = CliRunner().invoke(cli, ["--json", "soar", "ingest-status"])
-        assert result.exit_code == 0
-        data = json.loads(result.output)
-        assert len(data) >= 1
-
-    @patch(PATCH_CLIENT)
-    @patch(PATCH_RESOLVE)
-    def test_ingest_status_error(
-        self, mock_resolve: MagicMock, mock_cls: MagicMock
-    ) -> None:
-        mock_resolve.return_value = soar_cfg()
-        client = MagicMock()
-        client.get.side_effect = SOARError("fail", kind="error")
-        mock_cls.return_value = client
-
-        result = CliRunner().invoke(cli, ["--json", "soar", "ingest-status"])
-        assert result.exit_code == 1
+    # test (connectivity) + ingest-status tests live in test_assets_ops.py

@@ -33,17 +33,39 @@ def actions_group() -> None:
     type=int,
     help="Container id to scope results.",
 )
-@click.option("--limit", default=None, type=int, help="Max results.")
-@click.option("--offset", default=0, type=int, help="Paging offset.")
+@click.option(
+    "--limit",
+    default=None,
+    type=click.IntRange(min=1),
+    help="Page size.",
+)
+@click.option(
+    "--offset",
+    default=None,
+    type=click.IntRange(min=0),
+    help="Row offset; requires --limit and must be a multiple of it.",
+)
 @click.pass_context
 def list_cmd(
     ctx: click.Context,
     *,
     container_id: int | None,
     limit: int | None,
-    offset: int,
+    offset: int | None,
 ) -> None:
     """List action runs (optionally scoped to a container)."""
+    if offset is not None and limit is None:
+        output.error("--offset requires --limit", kind="usage")
+        ctx.exit(1)
+        return
+    if offset is not None and limit is not None and offset % limit != 0:
+        output.error(
+            f"--offset ({offset}) must be a multiple of --limit ({limit})",
+            kind="usage",
+        )
+        ctx.exit(1)
+        return
+
     client = get_soar_client(ctx)
 
     if container_id is not None:
@@ -54,8 +76,8 @@ def list_cmd(
     params: dict[str, Any] = {"page": 0}
     if limit is not None:
         params["page_size"] = limit
-    if offset:
-        params["page"] = offset
+        if offset is not None and limit > 0:
+            params["page"] = offset // limit
 
     try:
         result = client.get(path, params=params)

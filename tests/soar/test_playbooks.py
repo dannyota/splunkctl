@@ -242,6 +242,31 @@ class TestPlaybooksExport:
 
     @patch(PATCH_CLIENT)
     @patch(PATCH_RESOLVE)
+    def test_export_name_ambiguous(
+        self, mock_resolve: MagicMock, mock_cls: MagicMock
+    ) -> None:
+        """Duplicate playbook names produce an ambiguity error."""
+        mock_resolve.return_value = soar_cfg()
+        client = MagicMock()
+        client.get.return_value = {
+            "count": 2,
+            "num_pages": 1,
+            "data": [
+                _playbook_data(pb_id=10, name="dup_pb"),
+                _playbook_data(pb_id=11, name="dup_pb"),
+            ],
+        }
+        mock_cls.return_value = client
+
+        result = CliRunner().invoke(
+            cli,
+            ["--json", "soar", "playbooks", "export", "dup_pb"],
+        )
+        assert result.exit_code == 1
+        assert "Ambiguous" in (result.output + (result.stderr or ""))
+
+    @patch(PATCH_CLIENT)
+    @patch(PATCH_RESOLVE)
     def test_export_name_not_found(
         self, mock_resolve: MagicMock, mock_cls: MagicMock
     ) -> None:

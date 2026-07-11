@@ -202,16 +202,17 @@ class TestFunctionsExport:
         mock_resolve: MagicMock,
         mock_cls: MagicMock,
     ) -> None:
-        """Export sends bytes to stdout when --out is omitted."""
+        """Export sends raw bytes to stdout when --out is omitted."""
         mock_resolve.return_value = soar_cfg()
         tgz_data = _make_tgz({"fn.json": "{}", "fn.py": "pass"})
         client = MagicMock()
         client.get_bytes.return_value = tgz_data
         mock_cls.return_value = client
 
-        result = CliRunner().invoke(cli, ["--json", "soar", "functions", "export", "1"])
+        result = CliRunner().invoke(cli, ["soar", "functions", "export", "1"])
         assert result.exit_code == 0
         client.get_bytes.assert_called_once_with("custom_function/1/export", params={})
+        assert result.output_bytes == tgz_data
 
     @patch(PATCH_CLIENT)
     @patch(PATCH_RESOLVE)
@@ -327,6 +328,59 @@ class TestFunctionsUpdate:
             ],
         )
         assert result.exit_code != 0
+
+    @patch(PATCH_GUARD_SOAR, return_value=True)
+    @patch(PATCH_CLIENT)
+    @patch(PATCH_RESOLVE)
+    def test_update_python_version_27_upgrade(
+        self,
+        mock_resolve: MagicMock,
+        mock_cls: MagicMock,
+        _guard: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """Legacy python_version 2.7 is upgraded to 3 with a warning."""
+        mock_resolve.return_value = soar_cfg()
+        client = MagicMock()
+        scm_resp: dict[str, Any] = {
+            "count": 1,
+            "num_pages": 1,
+            "data": [{"id": 1, "name": "local"}],
+        }
+        func_resp: dict[str, Any] = {
+            "id": 50,
+            "name": "old_func",
+            "python": "def main():\n    pass\n",
+            "module": "old_func",
+            "python_version": "2.7",
+            "draft_mode": False,
+        }
+        client.get.side_effect = [scm_resp, func_resp]
+        client.post.return_value = {"success": True}
+        mock_cls.return_value = client
+
+        py_file = tmp_path / "code.py"
+        py_file.write_text("def main():\n    return 'v3'\n")
+
+        result = CliRunner().invoke(
+            cli,
+            [
+                "--json",
+                "--yes",
+                "soar",
+                "functions",
+                "update",
+                "50",
+                "--python",
+                str(py_file),
+                "--message",
+                "upgrade test",
+            ],
+        )
+        assert result.exit_code == 0
+        body = client.post.call_args[1]["body"]
+        assert body["python_version"] == "3"
+        assert "upgrading python_version 2.7 -> 3" in (result.stderr or "")
 
     @patch(PATCH_GUARD_SOAR, return_value=False)
     @patch(PATCH_CLIENT)

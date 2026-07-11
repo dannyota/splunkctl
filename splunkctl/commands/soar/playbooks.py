@@ -197,7 +197,7 @@ def _resolve_playbook_id(
     try:
         result = client.get(
             "playbook",
-            params={"_filter_name": f'"{identifier}"', "page_size": 1},
+            params={"_filter_name": f'"{identifier}"', "page_size": 2},
         )
     except SOARError as exc:
         output.error(exc.message, kind=exc.kind, http_status=exc.http_status)
@@ -209,6 +209,13 @@ def _resolve_playbook_id(
         output.error(
             f"Playbook '{identifier}' not found.",
             kind="not_found",
+        )
+        ctx.exit(1)
+        return None
+    if len(data) >= 2:
+        output.error(
+            f"Ambiguous: multiple playbooks named '{identifier}'",
+            kind="ambiguous",
         )
         ctx.exit(1)
         return None

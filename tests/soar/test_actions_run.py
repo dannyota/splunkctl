@@ -16,6 +16,7 @@ _SLEEP = "splunkctl.commands.soar.actions.time.sleep"
 _MONO = "splunkctl.commands.soar.actions.time.monotonic"
 
 _ASSET = {"id": 10, "name": "google_dns", "app_id": 55}
+_ASSET_APP_FIELD = {"id": 10, "name": "google_dns", "app": 55}
 _RUN_RESP: dict[str, Any] = {"success": True, "id": 999}
 _S_PEND = {"id": 999, "status": "pending", "action": "lookup domain"}
 _S_RUN = {"id": 999, "status": "running", "action": "lookup domain"}
@@ -119,6 +120,33 @@ class TestActionRun:
         assert body["targets"][0]["parameters"] == [
             {"domain": "example.com"},
         ]
+
+    @patch(_SLEEP)
+    @patch(PATCH_SOAR_RESOLVE)
+    @patch(PATCH_CLIENT)
+    @patch(PATCH_RESOLVE)
+    def test_applies_app_field(
+        self,
+        res: MagicMock,
+        cls: MagicMock,
+        g: MagicMock,
+        _s: MagicMock,
+    ) -> None:
+        """Asset with 'app' (no 'app_id') resolves via the primary field."""
+        res.return_value = _WRITE_CFG
+        g.return_value = _guard_cfg()
+        c = MagicMock()
+        c.get.return_value = {"count": 1, "data": [_ASSET_APP_FIELD]}
+        c.post.return_value = _RUN_RESP
+        cls.return_value = c
+
+        r = CliRunner().invoke(
+            cli,
+            _run_args("--param", "domain=example.com"),
+        )
+        assert r.exit_code == 0
+        body = c.post.call_args[1]["body"]
+        assert body["targets"][0]["app_id"] == 55
 
     @patch(_SLEEP)
     @patch(PATCH_SOAR_RESOLVE)
