@@ -11,8 +11,8 @@ from click.testing import CliRunner
 
 from splunkctl.main import cli
 
-_PATCH_RESOLVE = "splunkctl.commands.soar.system.cfg_mod.resolve_soar"
-_PATCH_CLIENT = "splunkctl.commands.soar.system.SOARClient"
+_PATCH_RESOLVE = "splunkctl.commands.soar._client.cfg_mod.resolve_soar"
+_PATCH_CLIENT = "splunkctl.commands.soar._client.SOARClient"
 
 
 def _soar_cfg(

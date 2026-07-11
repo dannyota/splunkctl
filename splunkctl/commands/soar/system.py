@@ -2,54 +2,21 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 import click
 
-from splunkctl import config as cfg_mod
 from splunkctl import errors as err_mod
 from splunkctl import output
-from splunkctl.soar.client import SOARClient, SOARError
-
-
-def _get_soar_client(ctx: click.Context) -> SOARClient:
-    """Build a SOARClient from the resolved SOAR config.
-
-    Raises ``SystemExit(1)`` with a ``usage`` error envelope when no
-    SOAR host is configured.
-    """
-    obj: dict[str, Any] = ctx.obj or {}
-    cfg_path = obj.get("config")
-    profile = obj.get("profile")
-    config_path = Path(cfg_path) if cfg_path else None
-    cfg = cfg_mod.resolve_soar(config_path, profile=profile)
-
-    host = cfg.get("host")
-    if not host:
-        output.error(
-            "No SOAR host configured. Run 'splunkctl config init --soar' "
-            "or set SOAR_HOST.",
-            kind="usage",
-        )
-        ctx.exit(1)
-        raise SystemExit(1)  # unreachable after ctx.exit in real Click
-
-    return SOARClient(
-        host=host,
-        port=int(cfg.get("port", 8443)),
-        token=cfg.get("token"),
-        username=cfg.get("username"),
-        password=cfg.get("password"),
-        verify=bool(cfg.get("verify", False)),
-    )
+from splunkctl.commands.soar._client import get_soar_client
+from splunkctl.soar.client import SOARError
 
 
 @click.command("test")
 @click.pass_context
 def test(ctx: click.Context) -> None:
     """Verify connectivity and auth against the SOAR instance."""
-    client = _get_soar_client(ctx)
+    client = get_soar_client(ctx)
     try:
         ver = client.get("version")
     except (SOARError, Exception) as exc:
@@ -74,7 +41,7 @@ def test(ctx: click.Context) -> None:
 @click.pass_context
 def info(ctx: click.Context) -> None:
     """Show SOAR version and system info."""
-    client = _get_soar_client(ctx)
+    client = get_soar_client(ctx)
     ver = client.get("version")
     sys_info = client.get("system_info")
 
@@ -91,7 +58,7 @@ def info(ctx: click.Context) -> None:
 @click.pass_context
 def health(ctx: click.Context) -> None:
     """Show SOAR daemon health, standby, and cluster status."""
-    client = _get_soar_client(ctx)
+    client = get_soar_client(ctx)
     rows: list[dict[str, Any]] = []
 
     # Daemon health from /rest/health.
@@ -188,7 +155,7 @@ def health(ctx: click.Context) -> None:
 @click.pass_context
 def license_cmd(ctx: click.Context) -> None:
     """Show SOAR license info — type, action quota, usage."""
-    client = _get_soar_client(ctx)
+    client = get_soar_client(ctx)
     data = client.get("license")
 
     row: dict[str, Any] = {}

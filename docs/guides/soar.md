@@ -64,6 +64,50 @@ Surfaces `/rest/license`: license type (community/enterprise), daily
 action cap (`max_allowed_actions_per_day`), expiry, and today's action
 count. Community license caps at 100 actions/day.
 
+## Settings
+
+```bash
+splunkctl soar settings                   # all 37 sections
+splunkctl soar settings --section debug_settings
+splunkctl soar settings --json
+```
+
+Read-only dump of `/rest/system_settings`. Each row is
+`{section, settings}` where `settings` is the section's key-value map.
+Sections include `auth_settings`, `response_settings`, `debug_settings`,
+`email_settings`, `decided_runner_settings`, and 32 more.
+
+## Stats
+
+```bash
+splunkctl soar stats                      # default 4 SOC widgets
+splunkctl soar stats --widget roi_summary # single widget
+splunkctl soar stats --list               # all 17 widget names
+splunkctl soar stats --json
+```
+
+SOC metrics from `/rest/widget_data/<name>`. Defaults fetch
+`container_stats`, `containers_workload`, `sla_stats`, and
+`pending_approvals`. Use `--widget NAME` for any of the 17 widgets;
+unknown names return an error envelope. `--list` prints the catalog
+without hitting the API.
+
+## Meta (Vocabularies)
+
+```bash
+splunkctl soar meta severities            # high/medium/low + colors
+splunkctl soar meta statuses              # new/open/closed + status_type
+splunkctl soar meta labels                # container labels (UI-only creation)
+splunkctl soar meta tags                  # container tags
+splunkctl soar meta cef                   # CEF field vocabulary
+splunkctl soar meta features              # feature flags (enabled/disabled)
+```
+
+Read-only vocabulary lookups. `statuses` shows the name-to-id map needed
+for container updates (use the string name, not numeric id). `labels`
+notes that label creation has no REST endpoint (UI-only). `features`
+lists feature flags with their enabled state.
+
 ## Error Handling
 
 All SOAR commands produce typed error envelopes on failure:

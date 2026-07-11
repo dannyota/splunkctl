@@ -2,6 +2,7 @@
 
 import click
 
+from splunkctl.commands.soar.admin_views import meta, settings, stats
 from splunkctl.commands.soar.system import health, info, license_cmd, test
 
 
@@ -14,3 +15,6 @@ soar_group.add_command(test)
 soar_group.add_command(info)
 soar_group.add_command(health)
 soar_group.add_command(license_cmd)
+soar_group.add_command(settings)
+soar_group.add_command(stats)
+soar_group.add_command(meta)
