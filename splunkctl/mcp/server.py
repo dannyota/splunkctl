@@ -172,7 +172,8 @@ def create_server() -> FastMCP:
         if len(parts) == 1 and has_subgroups(cli, parts[0]):
             grp = parts[0]
             top_cmd = cli.commands.get(grp)
-            assert isinstance(top_cmd, click.Group)  # guaranteed by has_subgroups
+            if not isinstance(top_cmd, click.Group):  # guaranteed by has_subgroups
+                raise TypeError(f"expected group for {grp!r}")
             sg = subgroup_names(cli, grp)
             dc = direct_commands(cli, grp)
             lines = [f'{grp} subgroups (focus "{grp} <subgroup>"):']
