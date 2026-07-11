@@ -62,9 +62,50 @@ def test_global_flags_stripped() -> None:
     idx = build_tool_index(cli)
     for entry in idx.values():
         props = entry.schema.get("properties", {})
-        assert "yes" not in props, f"{entry.name} exposes 'yes'"
+        if not entry.guarded:
+            assert "yes" not in props, f"{entry.name} exposes 'yes'"
         assert "json" not in props, f"{entry.name} exposes 'json'"
         assert "debug" not in props, f"{entry.name} exposes 'debug'"
+
+
+def test_guarded_schemas_expose_yes() -> None:
+    idx = build_tool_index(cli)
+    for entry in idx.values():
+        props = entry.schema.get("properties", {})
+        if entry.guarded:
+            assert "yes" in props, f"{entry.name} missing 'yes'"
+            assert props["yes"]["type"] == "boolean"
+            assert props["yes"]["default"] is False
+            assert "yes" not in entry.schema.get("required", [])
+
+
+def test_schemas_reject_additional_properties() -> None:
+    idx = build_tool_index(cli)
+    for entry in idx.values():
+        assert entry.schema.get("additionalProperties") is False, entry.name
+
+
+def test_prompt_options_marked_required() -> None:
+    import click
+
+    from splunkctl.mcp.tools import _make_entry
+
+    @click.command()
+    @click.option("--secret", prompt=True, help="Prompted when absent.")
+    def fake(secret: str) -> None:
+        """Fake command."""
+
+    entry = _make_entry(fake, ["fake"])
+    assert "secret" in entry.schema.get("required", [])
+
+
+def test_server_reports_splunkctl_version() -> None:
+    from splunkctl import __version__
+    from splunkctl.mcp.server import create_server
+
+    server = create_server()
+    opts = server._mcp_server.create_initialization_options()  # noqa: SLF001
+    assert opts.server_version == __version__
 
 
 def test_group_names_returns_groups() -> None:

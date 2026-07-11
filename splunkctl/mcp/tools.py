@@ -6,12 +6,13 @@ import click
 
 from splunkctl.guard import is_guarded
 
-_SKIP_FLAGS = frozenset(
+SKIP_PARAMS = frozenset(
     {
         "help",
         "json",
         "use_json",
         "fmt",
+        "format",
         "fields",
         "out",
         "debug",
@@ -22,10 +23,16 @@ _SKIP_FLAGS = frozenset(
     }
 )
 
+_YES_PROP: dict[str, Any] = {
+    "type": "boolean",
+    "default": False,
+    "description": "Apply the mutation (omit or false = dry-run preview).",
+}
+
 
 def _param_schema(p: click.Parameter) -> dict[str, Any] | None:
     """Convert a Click parameter to a JSON Schema property."""
-    if p.name in _SKIP_FLAGS or p.name == "help":
+    if p.name in SKIP_PARAMS or p.name == "help":
         return None
     if isinstance(p, click.Option) and p.hidden:
         return None
@@ -124,17 +131,23 @@ def _make_entry(cmd: click.Command, path: list[str]) -> ToolEntry:
         if isinstance(p, click.Argument):
             required.append(pname)
             pos.append(pname)
-        elif isinstance(p, click.Option) and p.required:
+        elif isinstance(p, click.Option) and (p.required or p.prompt):
+            # prompt=True options would hang the MCP subprocess waiting
+            # for TTY input, so force callers to always supply them.
             required.append(pname)
+
+    guarded = is_guarded(cmd)
+    if guarded:
+        properties["yes"] = dict(_YES_PROP)
 
     schema: dict[str, Any] = {
         "type": "object",
         "properties": properties,
+        "additionalProperties": False,
     }
     if required:
         schema["required"] = required
 
-    guarded = is_guarded(cmd)
     desc = (cmd.help or "").split("\n")[0]
     if guarded:
         desc += " [guarded: dry-run by default, pass yes=true to apply]"

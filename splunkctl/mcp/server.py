@@ -13,8 +13,10 @@ from mcp.server.fastmcp.utilities.func_metadata import ArgModelBase, FuncMetadat
 from mcp.types import ToolAnnotations
 from pydantic import ConfigDict
 
+from splunkctl import __version__
 from splunkctl.mcp.resources import load_guides
 from splunkctl.mcp.tools import (
+    SKIP_PARAMS,
     ToolEntry,
     ToolIndex,
     build_tool_index,
@@ -34,9 +36,7 @@ pass yes=true to apply (dry-run by default)."""
 
 _FORCE_FLAGS = ["--json"]
 
-_STRIP_PARAMS = frozenset(
-    {"yes", "json", "debug", "format", "fields", "out", "config", "profile", "timeout"}
-)
+_STRIP_PARAMS = SKIP_PARAMS
 
 
 def _exec_cli(args: list[str]) -> str:
@@ -120,6 +120,7 @@ def create_server() -> FastMCP:
         name="splunkctl",
         instructions=_INSTRUCTIONS,
     )
+    mcp._mcp_server.version = __version__
 
     from mcp.server.lowlevel.server import NotificationOptions
 
@@ -171,7 +172,7 @@ def create_server() -> FastMCP:
         if entry is None:
             return f"Unknown command: {command}"
 
-        if tool_name not in focused.get("_usage", []):
+        if not any(tool_name in names for names in focused.values()):
             _register_tool(mcp, entry)
             focused.setdefault("_usage", []).append(tool_name)
             await ctx.session.send_tool_list_changed()

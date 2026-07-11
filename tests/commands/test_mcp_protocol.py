@@ -187,6 +187,29 @@ def test_error_paths() -> None:
     anyio.run(main)
 
 
+def test_usage_after_focus_and_unfocus_reregisters() -> None:
+    """usage on a focused tool must not leave a stale registration behind.
+
+    Sequence: focus registers the tool; usage on the same command must not
+    double-track it, so a later unfocus + usage round-trip still yields a
+    callable tool.
+    """
+
+    async def main() -> None:
+        server = create_server()
+        async with create_connected_server_and_client_session(server) as session:
+            await session.call_tool("focus", {"group": "indexes"})
+            await session.call_tool("usage", {"command": "indexes list"})
+            await session.call_tool("unfocus", {"group": "indexes"})
+            tools = {t.name for t in (await session.list_tools()).tools}
+            assert "indexes_list" not in tools
+            await session.call_tool("usage", {"command": "indexes list"})
+            tools = {t.name for t in (await session.list_tools()).tools}
+            assert "indexes_list" in tools
+
+    anyio.run(main)
+
+
 def test_focused_tool_missing_required_arg_yields_cli_usage_error() -> None:
     """Bad args reach Click, which reports a usage error (real subprocess)."""
 
