@@ -11,7 +11,7 @@ import click
 
 from splunkctl import output
 from splunkctl.commands.soar._client import get_soar_client
-from splunkctl.guard import soar_check
+from splunkctl.guard import guarded, soar_check
 from splunkctl.soar.client import SOARError
 
 _WARN_SIZE_BYTES: int = 30 * 1024 * 1024  # 30 MB
@@ -82,6 +82,7 @@ def get_cmd(ctx: click.Context, *, vault_id: str) -> None:
 
 
 @vault_group.command("upload")
+@guarded
 @click.option(
     "--container",
     required=True,
@@ -167,6 +168,7 @@ def download_cmd(ctx: click.Context, *, vault_id: str, out: str | None) -> None:
 
 
 @vault_group.command("delete")
+@guarded
 @click.argument("attachment_id", type=int)
 @click.pass_context
 def delete_cmd(ctx: click.Context, *, attachment_id: int) -> None:

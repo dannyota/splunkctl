@@ -102,8 +102,8 @@ def artifacts_group() -> None:
     type=int,
     help="Container ID to list artifacts for.",
 )
-@click.option("--limit", default=None, type=int, help="Page size.")
-@click.option("--offset", default=None, type=int, help="Row offset.")
+@click.option("--limit", default=None, type=click.IntRange(min=1), help="Page size.")
+@click.option("--offset", default=None, type=click.IntRange(min=0), help="Row offset.")
 @click.pass_context
 def list_cmd(
     ctx: click.Context,
@@ -245,8 +245,10 @@ def create_cmd(
                     f"SDI '{sdi}' already exists as artifact {eid} "
                     f"in container {container_id} (server does not dedup)"
                 )
-        except SOARError:
-            pass  # Best-effort check; proceed if lookup fails
+        except SOARError as exc:
+            output.warning(
+                f"could not verify SDI uniqueness ({exc.message}); proceeding"
+            )
 
     # Build payload
     payload: dict[str, Any] = {

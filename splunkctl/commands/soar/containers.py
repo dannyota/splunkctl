@@ -63,13 +63,13 @@ def containers_group() -> None:
 @click.option(
     "--limit",
     default=None,
-    type=int,
+    type=click.IntRange(min=1),
     help="Page size.",
 )
 @click.option(
     "--offset",
     default=None,
-    type=int,
+    type=click.IntRange(min=0),
     help="Row offset; requires --limit and must be a multiple of it.",
 )
 @click.pass_context
@@ -268,7 +268,7 @@ def _extract_payload(
             return inner
         if isinstance(inner, dict):
             return inner
-        return {}
+        return []
     if isinstance(result, list):
         return result
-    return {}
+    return []

@@ -72,6 +72,7 @@ def list_cmd(
 
 
 @notes_group.command("add")
+@guarded
 @click.option(
     "--container",
     required=True,
@@ -94,7 +95,6 @@ def list_cmd(
 )
 @click.argument("content", required=False, default=None)
 @click.pass_context
-@guarded
 def add_cmd(
     ctx: click.Context,
     *,
@@ -158,9 +158,9 @@ def add_cmd(
 
 
 @notes_group.command("delete")
+@guarded
 @click.argument("note_id", type=int)
 @click.pass_context
-@guarded
 def delete_cmd(ctx: click.Context, *, note_id: int) -> None:
     """Delete a note by ID."""
     if not soar_check(ctx, f"Delete note {note_id}"):
@@ -183,10 +183,10 @@ def delete_cmd(ctx: click.Context, *, note_id: int) -> None:
 
 
 @notes_group.command("comment")
+@guarded
 @click.argument("container_id", type=int)
 @click.argument("text")
 @click.pass_context
-@guarded
 def comment_cmd(ctx: click.Context, *, container_id: int, text: str) -> None:
     """Add a comment to a container (immutable — cannot be deleted)."""
     details = (

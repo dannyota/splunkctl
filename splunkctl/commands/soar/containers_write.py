@@ -21,7 +21,8 @@ def _sdi_precheck(
     params = {"_filter_source_data_identifier": f'"{sdi}"', "page_size": 1}
     try:
         result = client.get("container", params=params)
-    except SOARError:
+    except SOARError as exc:
+        output.warning(f"could not verify SDI uniqueness ({exc.message}); proceeding")
         return None
     data = result.get("data", []) if isinstance(result, dict) else []
     if data and isinstance(data[0], dict):

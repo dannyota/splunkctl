@@ -151,8 +151,7 @@ splunkctl soar containers get 42 --json
 
 Without a sub-view flag, returns the full container object. Each flag
 fetches the corresponding pseudo-field endpoint
-(`/rest/container/<id>/<suffix>`). Sub-view flags are mutually exclusive
-(last wins).
+(`/rest/container/<id>/<suffix>`). When multiple sub-view flags are given, the last one takes effect.
 
 ### Create
 
@@ -217,6 +216,80 @@ Cascading delete (artifacts, vault, comments, notes, phases, tasks).
 Requires Basic auth credentials (username/password in profile); SOAR
 refuses automation tokens on DELETE. Token-only profiles get a clear
 `kind: auth` error.
+
+## Artifacts
+
+### List
+
+```bash
+splunkctl soar artifacts list --container 42
+splunkctl soar artifacts list --container 42 --limit 10 --offset 20
+splunkctl soar artifacts list --container 42 --json
+```
+
+Lists artifacts in a container. `--container` is required. `--limit`
+and `--offset` paginate (page = offset / limit).
+
+### Get
+
+```bash
+splunkctl soar artifacts get 77
+splunkctl soar artifacts get 77 --json
+```
+
+Returns a single artifact by ID.
+
+### Create
+
+```bash
+splunkctl soar artifacts create --container 42 --name "Suspicious IP" \
+  --cef sourceAddress=10.0.0.5 --yes
+splunkctl soar artifacts create --container 42 --name "Malware" \
+  --cef-file ./cef.json --cef-type myField="custom type" --yes
+splunkctl soar artifacts create --container 42 --name "DNS hit" \
+  --cef destinationDnsDomain=evil.example \
+  --severity high --type network --yes
+splunkctl soar artifacts create --container 42 --name "Alert" \
+  --cef sourceAddress=1.2.3.4 --sdi "SDI-001" --no-automation --yes
+```
+
+CEF fields come from `--cef key=value` (repeatable) and/or `--cef-file`
+(JSON file); when both are given, `--cef` keys override `--cef-file`.
+`cef_types` (contains-type annotations) are auto-populated from a
+built-in CEF-to-contains map (e.g. `sourceAddress` -> `["ip",
+"host name"]`); `--cef-type field=type` overrides specific entries.
+
+When `--sdi` is given, the CLI queries for an existing artifact with
+that `source_data_identifier` in the same container first and warns if
+found -- SOAR does not deduplicate artifacts by SDI server-side, so
+duplicates are silently accepted without this check. If the precheck
+query itself fails, a warning is emitted and the create proceeds.
+
+`--no-automation` sets `run_automation: false` to suppress playbook
+triggers on the new artifact.
+
+Guarded: dry-run by default, `--yes` to apply.
+
+### Update
+
+```bash
+splunkctl soar artifacts update 77 --cef sourceAddress=9.9.9.9 --yes
+splunkctl soar artifacts update 77 --cef sourceAddress=9.9.9.9 --replace-cef --yes
+splunkctl soar artifacts update 77 --name "Renamed" --yes
+```
+
+By default, `--cef` keys are merged into the artifact's existing CEF
+dict (fetch-merge-write). Pass `--replace-cef` to replace the CEF dict
+wholesale instead of merging. `--name`, `--severity`, and `--type`
+update their respective fields.
+
+### Delete
+
+```bash
+splunkctl --yes soar artifacts delete 77
+```
+
+Deletes an artifact by ID. Guarded.
 
 ## Vault
 
@@ -298,8 +371,8 @@ splunkctl soar notes add --container 42 --title "Report" --file ./report.md --ye
 splunkctl soar notes add --container 42 --title "Task note" --task-id 7 "Task analysis" --yes
 ```
 
-Content comes from the positional argument or `--file` (mutually
-exclusive). `--task-id` makes the note a task note instead of a general
+Content comes from the positional argument or `--file`; when both are
+given, `--file` takes precedence. `--task-id` makes the note a task note instead of a general
 container note. Guarded: dry-run by default, `--yes` to apply.
 
 ### Delete
