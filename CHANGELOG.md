@@ -1,5 +1,72 @@
 # Changelog
 
+## 0.6.0
+
+MCP hardening + SIEM polish, driven by a protocol-level MCP verification
+and a live SIEM audit (2026-07-11).
+
+### Fixed
+- **MCP focused tools work again** — every focused typed-tool call
+  failed argument validation (the runner's auto-generated Pydantic
+  model expected a literal `kwargs` field no client could send). Tools
+  now pass arguments through to the CLI, where Click validates for
+  real; only the `run` escape hatch worked before.
+- **MCP array parameters** — variadic arguments (`conf set` pairs,
+  `es notables update` event ids) and repeatable options
+  (`rules export --name`, `--set`) advertised `string` schemas; they
+  are arrays now. Positional values are emitted in Click argument
+  order instead of client dict order (multi-positional commands like
+  `conf set FILE STANZA PAIRS...` were order-sensitive), and
+  JSON-encoded array strings from sloppy clients are tolerated.
+- **MCP `usage` re-registration** — `usage` on a command already loaded
+  via `focus` left a stale tracking entry that blocked re-loading the
+  tool after `unfocus`.
+- **server cluster/shcluster/deployment** disabled-state `detail` now
+  carries the REST message text instead of `str(exc)` with an embedded
+  `b'...'` bytes literal.
+- **tags list/get** URL-decode stanza names
+  (`eventtype=cim:audit_account`, not `...cim%3Aaudit_account`);
+  `tags get` accepts either form.
+
+### Added
+- **server health** — component-level splunkd health report
+  (scheduler, disk, KV store, ingestion latency...) flattened to one
+  row per component with reason text for unhealthy nodes; reports
+  without gating (red still exits 0).
+- **server license --usage** — today's indexed volume vs licensed
+  daily quota, valid-license count, soonest expiry.
+- **server search-peers** — distributed-search peer status/replication/
+  version; clean empty on standalone.
+- **MCP protocol test suite** — in-memory client/server integration
+  tests covering the initialize handshake, focus/unfocus lifecycle
+  with list_changed notifications, usage auto-registration, resources,
+  and error paths.
+- **MCP schema polish** — `serverInfo.version` reports the splunkctl
+  version; guarded tool schemas carry an explicit `yes` boolean;
+  `additionalProperties: false` rejects typo'd params; `prompt=True`
+  options are forced required so the subprocess can never hang.
+
+### Docs
+- SOAR REST API discovery reference
+  ([docs/design/soar-api.md](docs/design/soar-api.md)) — live-verified
+  endpoint inventory, auth model, query semantics, and recipes for the
+  upcoming `splunkctl soar` arc (waves 30–34).
+- Catalog refresh: `rules test` row, new server subcommands,
+  alert-actions SDK entity marked not-needed.
+
+## 0.5.0
+
+- **Built-in MCP server** — `splunkctl mcp serve` (stdio transport):
+  5 meta-tools (`help`, `focus`, `unfocus`, `run`, `usage`) with
+  progressive discovery; typed tools auto-generated from the Click
+  command tree; `guide://` resources served from `docs/guides/`.
+  `mcp install` registers the server in `.mcp.json`.
+- **SKILL.md removed** — the embedded skill and `skill` command are
+  replaced by the MCP server; `doctor` drops the skill-freshness check
+  and gains a KV store health check.
+- **vmlab** — reusable unattended provisioning scripts for the
+  SIEM + SOAR VMware lab (`installers/vmlab/`).
+
 ## 0.4.1
 
 Cleanup pass after v0.4.0.

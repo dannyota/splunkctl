@@ -22,10 +22,15 @@ Phase 7 (18–20) reliability ─► SOC bug fixes, errors, paging, profiles
 Phase 8 (21–23) bank SOC ─► ES notables, audit pack, KV store
 Phase 9 (24–25) detection depth ─► conf editor, macros, data models
 Phase 10 (26–27) change control ─► config-as-code state, topology health
+Phase 11 (28–29) hardening ─► MCP server fixes, SIEM polish
+Phase 12 (30–34) SOAR ─► second target product: containers, playbooks, actions
 ```
 
-Phases 7–10 come from the 2026-07 bank-SOC gap analysis; task-level detail
-is in [PLAN.md](PLAN.md) (phases E–I).
+Phases 7–10 came from the 2026-07 bank-SOC gap analysis (shipped as
+v0.3.1/v0.4.x). Phases 11–12 come from the 2026-07-11 MCP verification +
+SIEM audit + SOAR discovery; task-level detail is in [PLAN.md](PLAN.md)
+(phases J–P), API discovery in
+[docs/design/soar-api.md](docs/design/soar-api.md).
 
 ---
 
@@ -158,71 +163,46 @@ Extends the read-only `list`/`get` from Wave 4:
 
 ## Upcoming waves
 
-Sequenced from the 2026-07 bank-SOC gap analysis (live CLI evaluation +
-REST surface audit). Detail per task in [PLAN.md](PLAN.md). Wave 18 ships
-as v0.3.1; waves 19–27 ship together as v0.4.0.
+From the 2026-07-11 MCP verification, SIEM audit, and SOAR discovery.
+Detail per task in [PLAN.md](PLAN.md) (phases J–P), API discovery in
+[docs/design/soar-api.md](docs/design/soar-api.md). Waves 30–34 are the
+SOAR arc (v0.7.0 → v0.9.0).
 
-### Wave 18 — SOC bug fixes & docs *(→ v0.3.1)*
+### Wave 30 — SOAR foundation *(phase L)*
 
-Defects confirmed live: `rules list` blind to app-private detections
-(`--app` scoping), `search jobs` empty owner, `rules get` hiding
-`action.*` params, blank `server kvstore` on failure, dry-run not
-validating required action fields, truncated non-JSON import diff. Plus
-SKILL.md ES recipes (notables/risk read, `--set action.notable.*`) and the
-`sid` → `search job` alert-investigation pivot.
+`soar:` profile section + `SOAR_*` env overlay; `SOARClient` on requests
+(ph-auth-token/Basic, Django filters, pagination, error mapping);
+`soar info/health/license/test`.
 
-### Wave 19 — Structured errors & pagination
+### Wave 31 — SOAR containers & artifacts *(phase M, → v0.7.0)*
 
-JSON error envelope (kind/http-status) under `--json`; `--limit`/
-`--offset`/`--all` and uniform `--filter` on every list command — no
-silent truncation of detection or user inventories.
+`soar containers` CRUD + close (status-id resolution, SDI dedup),
+`soar artifacts` with CEF payloads, notes/comments, vault upload/list.
 
-### Wave 20 — Multi-instance profiles
+### Wave 32 — SOAR automation *(phase N, → v0.8.0)*
 
-`config use <profile>` for dev/UAT/prod; active profile + host in every
-dry-run banner as a prod-safety control.
+`soar playbooks` (list/enable/sync/run with `--wait` polling),
+`soar actions` (run/status/results/cancel), `soar apps`/`soar assets`.
 
-### Wave 21 — ES notable triage
+### Wave 33 — SOAR case management & admin *(phase O)*
 
-`es notables list/get/update` — the SOC incident-review loop (status,
-owner, urgency, disposition, comment) via ES `notable_update`;
-feature-detected, clean error without ES.
+`soar cases` (promote, workbooks, task updates), custom `soar lists`
+with CSV/JSON round-trip, `soar users/roles/audit`, `soar meta`
+vocabulary reads, `soar search`.
 
-### Wave 22 — Audit & RBAC pack
+### Wave 34 — SIEM↔SOAR integration *(phase P, → v0.9.0)*
 
-`audit changes` normalizing both `_audit` event shapes; `audit rbac`
-users × roles × capabilities attestation export — regulator evidence.
-
-### Wave 23 — KV store
-
-Collections + data CRUD + JSONL import/export — allowlists, threat intel,
-ES asset/identity.
-
-### Wave 24 — Generic conf editor & knowledge objects
-
-`conf files/list/get/set/unset/reload` over any conf file; thin
-`macros`/`eventtypes`/`tags` verbs on top.
-
-### Wave 25 — Detection depth
-
-`datamodels` (list/acceleration/rebuild), lookup definitions + automatic
-lookups, first-class alert-action flags (`--email-to`, `--webhook-url`).
-
-### Wave 26 — Config-as-code state
-
-`state pull/push/diff` across rules, parsers, dashboards, lookups, macros;
-push writes a before→after diff artifact for change tickets.
-
-### Wave 27 — Topology health *(→ v0.4.0)*
-
-Read-only `server cluster`/`shcluster`/`deployment` — distinguish "no
-threat" from "an indexer is down".
+`soar ingest` — Splunk search results → container + CEF artifacts with
+dedup and batch `run_automation`; MCP coverage for the nested soar tree
+(subgroup-granular focus); docs/catalog/release.
 
 ## Deferred
 
-- Forwarder fleet / deployment-server management (health read is Wave 27)
+- Forwarder fleet / deployment-server management
 - ES governance surfaces (incident-review settings, threat-intel framework)
 - Workflow actions CRUD; auth-token minting; JSON `schemaVersion`
+- SOAR app install/dev (owned by the official `soarapps` SDK), clustering,
+  automation broker, multi-tenant, webhooks, token minting via REST
 
 ## Done post v0.1.0
 
@@ -231,3 +211,13 @@ threat" from "an indexer is down".
   actions folded into Wave 25 as CLI flags (no fork work needed)
 - **Doctor & Web UI workarounds** — lookup upload, app install, data
   upload (v0.2.0–v0.3.0)
+- **Waves 18–27** — bank-SOC readiness arc: SOC bug fixes, structured
+  errors + pagination, profiles, ES notable triage, audit/RBAC pack, KV
+  store, conf editor + knowledge objects, detection depth, config-as-code
+  state, topology health (v0.3.1–v0.4.1)
+- **Built-in MCP server** — 5 meta-tools + progressive discovery,
+  replacing SKILL.md distribution (v0.5.0)
+- **Waves 28–29** — MCP hardening (focused-tool invocation fix, array
+  schemas, protocol test suite, schema polish) + SIEM polish (`server
+  health`/`search-peers`/`license --usage`, clean disabled details,
+  tags URL-decode, catalog refresh) (v0.6.0)
