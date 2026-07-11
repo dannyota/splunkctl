@@ -3458,6 +3458,7 @@ that are not SDK list surfaces (e.g. `audit rbac`) are exempt by design.
 | `soar functions` | ✅ built | list (--limit/--offset), get, import (dir or tgz, base64 POST import_custom_function, force:true), export (tgz via GET custom_function/<id>/export, --out), update (--python/--message, auto SCM id resolution, fetch-merge-post, auto Python 2.7→3 upgrade), delete (Basic auth) |
 | `soar cases` | ✅ built | promote (--template name or id; resolves via workbook_template; atomic container_type+template POST), workbook (phases + nested tasks view), phase add (--container/--name/--order), task add (--phase-id/--name/--description/--order), task update (--status incomplete/in_progress/complete mapped to integer codes 0/1/2, --owner, --note; client-side closing-note enforcement for in_progress); live-verified: NIST 800-61 promote creates 5 phases/19 tasks, 0→2 works, 0→1 without note blocked |
 | `soar approvals` | ✅ built | list (--container/--pending), get (detail_summary_view), respond (approve/deny, --message; guarded; POST external_prompt) |
+| `soar lists` | ✅ built | list (--limit), get (name or id), create (--name, --file JSON/CSV; CSV parsed client-side), update (full-replace via --file), add-row (--values; fetch-modify-replace), remove-row (--index; fetch-modify-replace), delete (token auth OK), export (--format json/csv; CSV via formatted_content route, --out), import (--name --file; create-or-update) |
 
 ## SOAR infrastructure
 

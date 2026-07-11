@@ -17,6 +17,7 @@ from splunkctl.commands.soar.assets import assets_group, ingest_status_cmd
 from splunkctl.commands.soar.cases import cases_group
 from splunkctl.commands.soar.containers import containers_group
 from splunkctl.commands.soar.functions import functions_group
+from splunkctl.commands.soar.lists import lists_group
 from splunkctl.commands.soar.notes import notes_group
 from splunkctl.commands.soar.playbooks import playbooks_group
 from splunkctl.commands.soar.system import health, info, license_cmd, test
@@ -47,3 +48,4 @@ soar_group.add_command(playbooks_group)
 soar_group.add_command(actions_group)
 soar_group.add_command(functions_group)
 soar_group.add_command(approvals_group)
+soar_group.add_command(lists_group)
