@@ -65,17 +65,36 @@ def _split_command(raw: str) -> list[str]:
         return raw.split()
 
 
+def _coerce_array(entry: ToolEntry, pname: str, value: Any) -> Any:
+    """Parse a JSON-encoded array string for array-typed params.
+
+    Some MCP clients serialize list arguments as JSON strings; the
+    pass-through arg model does no pre-parsing, so unwrap here.
+    """
+    prop = entry.schema.get("properties", {}).get(pname, {})
+    if prop.get("type") == "array" and isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return value
+        if isinstance(parsed, list):
+            return parsed
+    return value
+
+
 def _build_cli_args(entry: ToolEntry, params: dict[str, Any]) -> list[str]:
     """Convert typed tool parameters to CLI arg list."""
     args = list(entry.cmd_path)
-    positional_values: list[str] = []
-    for pname, value in params.items():
+    positional: dict[str, list[str]] = {}
+    for pname, raw in params.items():
         if pname in _STRIP_PARAMS:
-            if pname == "yes" and value:
+            if pname == "yes" and raw:
                 args.append("--yes")
             continue
+        value = _coerce_array(entry, pname, raw)
         if pname in entry.positional:
-            positional_values.append(str(value))
+            items = value if isinstance(value, list) else [value]
+            positional[pname] = [str(v) for v in items]
             continue
         flag = f"--{pname.replace('_', '-')}"
         if isinstance(value, bool):
@@ -86,7 +105,10 @@ def _build_cli_args(entry: ToolEntry, params: dict[str, Any]) -> list[str]:
                 args.extend([flag, str(item)])
         else:
             args.extend([flag, str(value)])
-    args.extend(positional_values)
+    for pname in entry.arg_order:
+        args.extend(positional.pop(pname, []))
+    for leftovers in positional.values():
+        args.extend(leftovers)
     return args
 
 

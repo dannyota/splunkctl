@@ -45,6 +45,12 @@ def _param_schema(p: click.Parameter) -> dict[str, Any] | None:
     else:
         prop["type"] = "string"
 
+    multi = (isinstance(p, click.Option) and p.multiple) or (
+        isinstance(p, click.Argument) and p.nargs == -1
+    )
+    if multi:
+        prop = {"type": "array", "items": prop}
+
     if isinstance(p, click.Option) and p.help:
         prop["description"] = p.help
     elif isinstance(p, click.Argument) and p.type.name != "TEXT":
@@ -67,7 +73,15 @@ type ToolIndex = dict[str, "ToolEntry"]
 class ToolEntry:
     """A single tool derived from a Click command."""
 
-    __slots__ = ("name", "description", "schema", "cmd_path", "guarded", "positional")
+    __slots__ = (
+        "name",
+        "description",
+        "schema",
+        "cmd_path",
+        "guarded",
+        "positional",
+        "arg_order",
+    )
 
     def __init__(  # noqa: D107
         self,
@@ -78,6 +92,7 @@ class ToolEntry:
         *,
         guarded: bool = False,
         positional: frozenset[str] = frozenset(),
+        arg_order: tuple[str, ...] = (),
     ) -> None:
         self.name = name
         self.description = description
@@ -85,11 +100,54 @@ class ToolEntry:
         self.cmd_path = cmd_path
         self.guarded = guarded
         self.positional = positional
+        self.arg_order = arg_order
 
 
 def _tool_name(path: list[str]) -> str:
     """Build an underscore-separated tool name from a command path."""
     return "_".join(seg.replace("-", "_") for seg in path)
+
+
+def _make_entry(cmd: click.Command, path: list[str]) -> ToolEntry:
+    """Build a ToolEntry (schema, positional order, guard) for one command."""
+    properties: dict[str, Any] = {}
+    required: list[str] = []
+    pos: list[str] = []
+    for p in cmd.params:
+        if p.name is None:
+            continue
+        prop = _param_schema(p)
+        if prop is None:
+            continue
+        pname = p.name.replace("-", "_")
+        properties[pname] = prop
+        if isinstance(p, click.Argument):
+            required.append(pname)
+            pos.append(pname)
+        elif isinstance(p, click.Option) and p.required:
+            required.append(pname)
+
+    schema: dict[str, Any] = {
+        "type": "object",
+        "properties": properties,
+    }
+    if required:
+        schema["required"] = required
+
+    guarded = is_guarded(cmd)
+    desc = (cmd.help or "").split("\n")[0]
+    if guarded:
+        desc += " [guarded: dry-run by default, pass yes=true to apply]"
+
+    return ToolEntry(
+        name=_tool_name(path),
+        description=desc,
+        schema=schema,
+        cmd_path=path,
+        guarded=guarded,
+        positional=frozenset(pos),
+        arg_order=tuple(pos),
+    )
 
 
 def _walk_commands(
@@ -103,45 +161,8 @@ def _walk_commands(
         if isinstance(cmd, click.Group):
             _walk_commands(cmd, path, index)
             continue
-
-        properties: dict[str, Any] = {}
-        required: list[str] = []
-        pos: set[str] = set()
-        for p in cmd.params:
-            if p.name is None:
-                continue
-            prop = _param_schema(p)
-            if prop is None:
-                continue
-            pname = p.name.replace("-", "_")
-            properties[pname] = prop
-            if isinstance(p, click.Argument):
-                required.append(pname)
-                pos.add(pname)
-            elif isinstance(p, click.Option) and p.required:
-                required.append(pname)
-
-        schema: dict[str, Any] = {
-            "type": "object",
-            "properties": properties,
-        }
-        if required:
-            schema["required"] = required
-
-        guarded = is_guarded(cmd)
-        desc = (cmd.help or "").split("\n")[0]
-        if guarded:
-            desc += " [guarded: dry-run by default, pass yes=true to apply]"
-
-        tool_name = _tool_name(path)
-        index[tool_name] = ToolEntry(
-            name=tool_name,
-            description=desc,
-            schema=schema,
-            cmd_path=path,
-            guarded=guarded,
-            positional=frozenset(pos),
-        )
+        entry = _make_entry(cmd, path)
+        index[entry.name] = entry
 
 
 def build_tool_index(root: click.Group) -> ToolIndex:
@@ -157,42 +178,8 @@ def build_tool_index(root: click.Group) -> ToolIndex:
         if isinstance(cmd, click.Group):
             _walk_commands(cmd, [name], index)
         else:
-            path = [name]
-            properties: dict[str, Any] = {}
-            required: list[str] = []
-            pos: set[str] = set()
-            for p in cmd.params:
-                if p.name is None:
-                    continue
-                prop = _param_schema(p)
-                if prop is None:
-                    continue
-                pname = p.name.replace("-", "_")
-                properties[pname] = prop
-                if isinstance(p, click.Argument):
-                    required.append(pname)
-                    pos.add(pname)
-                elif isinstance(p, click.Option) and p.required:
-                    required.append(pname)
-            schema: dict[str, Any] = {
-                "type": "object",
-                "properties": properties,
-            }
-            if required:
-                schema["required"] = required
-            guarded = is_guarded(cmd)
-            desc = (cmd.help or "").split("\n")[0]
-            if guarded:
-                desc += " [guarded: dry-run by default, pass yes=true to apply]"
-            tool_name = _tool_name(path)
-            index[tool_name] = ToolEntry(
-                name=tool_name,
-                description=desc,
-                schema=schema,
-                cmd_path=path,
-                guarded=guarded,
-                positional=frozenset(pos),
-            )
+            entry = _make_entry(cmd, [name])
+            index[entry.name] = entry
     return index
 
 

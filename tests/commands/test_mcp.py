@@ -137,6 +137,63 @@ def test_build_cli_args_yes_passed() -> None:
     assert "--yes" not in args_no
 
 
+def test_variadic_argument_schema_is_array() -> None:
+    idx = build_tool_index(cli)
+    pairs = idx["conf_set"].schema["properties"]["pairs"]
+    assert pairs["type"] == "array"
+    assert pairs["items"]["type"] == "string"
+    event_ids = idx["es_notables_update"].schema["properties"]["event_ids"]
+    assert event_ids["type"] == "array"
+
+
+def test_multiple_option_schema_is_array() -> None:
+    idx = build_tool_index(cli)
+    name = idx["rules_export"].schema["properties"]["name"]
+    assert name["type"] == "array"
+    assert name["items"]["type"] == "string"
+    set_pairs = idx["hec_create"].schema["properties"]["set_pairs"]
+    assert set_pairs["type"] == "array"
+
+
+def test_build_cli_args_positional_array_in_order() -> None:
+    from splunkctl.mcp.server import _build_cli_args
+
+    idx = build_tool_index(cli)
+    entry = idx["conf_set"]
+    args = _build_cli_args(
+        entry,
+        {"pairs": ["a=1", "b=2"], "stanza": "mystanza", "file": "props"},
+    )
+    assert args[: len(entry.cmd_path)] == entry.cmd_path
+    tail = args[len(entry.cmd_path) :]
+    non_flags = [a for a in tail if not a.startswith("--")]
+    assert non_flags == ["props", "mystanza", "a=1", "b=2"]
+
+
+def test_build_cli_args_multiple_option_repeats_flag() -> None:
+    from splunkctl.mcp.server import _build_cli_args
+
+    idx = build_tool_index(cli)
+    entry = idx["rules_export"]
+    args = _build_cli_args(entry, {"name": ["r1", "r2"]})
+    assert args.count("--name") == 2
+    assert "r1" in args
+    assert "r2" in args
+
+
+def test_build_cli_args_json_string_array_coerced() -> None:
+    from splunkctl.mcp.server import _build_cli_args
+
+    idx = build_tool_index(cli)
+    entry = idx["conf_set"]
+    args = _build_cli_args(
+        entry,
+        {"file": "props", "stanza": "s", "pairs": '["a=1", "b=2"]'},
+    )
+    non_flags = [a for a in args[len(entry.cmd_path) :] if not a.startswith("--")]
+    assert non_flags == ["props", "s", "a=1", "b=2"]
+
+
 def test_mcp_serve_command_exists() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["mcp", "--help"])
