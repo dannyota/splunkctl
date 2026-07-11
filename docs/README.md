@@ -1,20 +1,25 @@
 # splunkctl
 
-CLI tool for Splunk Enterprise SIEM operations — query, inspect, and manage a
-remote Splunk instance from your laptop. Built on the
+CLI tool for Splunk Enterprise and Splunk SOAR operations -- query, inspect,
+and manage remote Splunk instances from your laptop. SIEM commands are built
+on the
 [splunk-sdk-python](https://github.com/dannyota/splunk-sdk-python/tree/splunkctl)
-fork with [Click](https://click.palletsprojects.com/).
+fork with [Click](https://click.palletsprojects.com/); SOAR commands use
+`SOARClient`, a requests-based Django REST client with dual auth.
 
-> All write operations are **dry-run by default** — nothing changes until you
+> All write operations are **dry-run by default** -- nothing changes until you
 > pass `--yes`.
 
 ## Quick start
 
 ```bash
 pip install git+https://github.com/dannyota/splunkctl
-splunkctl config init                    # interactive setup
-splunkctl doctor                         # check connection, auth, permissions
+splunkctl config init                    # interactive SIEM setup
+splunkctl config init --soar             # add SOAR credentials
+splunkctl doctor                         # check SIEM connection
+splunkctl soar test                      # check SOAR connection
 splunkctl search run 'index=main | head 10'
+splunkctl soar containers list
 ```
 
 ## Commands
@@ -22,21 +27,29 @@ splunkctl search run 'index=main | head 10'
 | Group | Description |
 |---|---|
 | `doctor` | Connection, auth, health, and permissions check |
-| `config` | Setup, show config, test connectivity |
+| `config` | Setup, profiles (dev/UAT/prod), test connectivity |
 | `info` | Server info (version, OS, license) |
 | `search` | Run, export, oneshot, upload, job management |
-| `rules` | Detection rules — CRUD, import/export (YAML) |
+| `rules` | Detection rules -- CRUD, import/export (YAML), alert-action flags |
 | `alerts` | Fired alerts, alert actions, suppression |
-| `dashboards` | Dashboard CRUD (XML) |
+| `dashboards` | Dashboard CRUD (XML/JSON) |
 | `indexes` | Index management |
 | `inputs` | Data inputs (monitor, tcp, udp, script, http) |
-| `lookups` | Lookup table CRUD (CSV, mmdb) |
+| `lookups` | Lookup tables, definitions, automatic lookups |
 | `hec` | HEC token management |
-| `parsers` | Source types and field extractions |
+| `parsers` | Source types, field extractions, import/export |
+| `conf` | Generic conf file/stanza editor (any .conf) |
+| `macros` | Search macros -- list, get, set |
 | `apps` | App install (.spl/.tar.gz), uninstall, update |
 | `users` | User and role management |
+| `server` | Messages, license, KV store, cluster/SHC/deployment health |
+| `es` | ES notable-event triage (feature-detected) |
+| `audit` | Change audit + RBAC attestation |
+| `kvstore` | KV store collection + document CRUD |
+| `state` | Config-as-code pull/diff/push with change-evidence reports |
+| `soar` | SOAR: containers, artifacts, vault, playbooks, actions, cases, ingest |
 | `commands` | Machine-readable command tree (JSON) |
-| `skill` | Embedded agent operating guide |
+| `mcp` | Built-in MCP server for AI agent integration |
 
 ## Key features
 
@@ -48,6 +61,22 @@ Export rules to YAML, version control them, deploy across instances:
 splunkctl rules export --path detections.yml
 splunkctl rules import --path detections.yml        # dry-run preview
 splunkctl --yes rules import --path detections.yml  # apply
+```
+
+### Config-as-code
+
+```bash
+splunkctl state pull --dir config/            # snapshot live state
+splunkctl state diff --dir config/            # structured drift report
+splunkctl state push --dir config/ --report r.json --yes  # deploy + evidence
+```
+
+### SOAR operations
+
+```bash
+splunkctl soar containers list --label events
+splunkctl soar playbooks export my-playbook --unpack --out ./playbooks/
+splunkctl soar ingest --spl 'index=notable | head 5' --yes
 ```
 
 ### Remote file operations
@@ -77,6 +106,7 @@ splunkctl doctor --json      # machine-readable output
 --yes / -y          Apply mutations (skip dry-run preview)
 --timeout N         Request timeout in seconds (default 30)
 --config FILE       Config file path
+--profile NAME      Named profile (dev/UAT/prod)
 --debug             HTTP request/response logging
 ```
 
@@ -101,12 +131,12 @@ that adds entity classes missing from the upstream SDK:
 | `LookupTableFile` | `service.lookup_table_files` | Lookup table metadata + download |
 | `HECToken` | `service.hec_tokens` | HEC token management |
 
-## Agent integration
+## Agent integration (MCP)
 
-splunkctl ships with an embedded operating guide for AI agents:
+splunkctl ships with a built-in MCP server with 237 auto-generated tools:
 
 ```bash
-splunkctl skill                           # print the guide
-splunkctl skill install                   # install to ~/.claude/skills/
-splunkctl commands                        # JSON command tree for discovery
+splunkctl mcp install              # register in .mcp.json
+splunkctl mcp serve                # start stdio MCP server
+splunkctl commands --json          # JSON command tree for discovery
 ```

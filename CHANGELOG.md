@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.9.0
+
+SOAR case-management, response ops, and SIEM-to-SOAR integration
+(waves 33-34): the CLI now covers the full SOAR operational surface
+and bridges SIEM data into SOAR containers. Live-verified against
+SOAR 8.5.0.248.
+
+### Added
+- **`soar cases`** -- promote containers to cases with workbook templates
+  (NIST 800-61 etc.), view phases and tasks, add phases/tasks, update
+  task status with integer-code transitions (0/1/2) and client-side
+  closing-note enforcement.
+- **`soar approvals`** -- list pending/all approvals, get detail summary,
+  approve/deny external prompts to unblock paused automation.
+- **`soar lists`** -- custom decided-list CRUD: create (JSON/CSV),
+  update (full replace), add-row/remove-row, export (JSON or CSV via
+  `formatted_content`), import (create-or-update).
+- **`soar indicators`** / **`soar evidence`** -- IOC pivot (by value,
+  common containers, stats); evidence add/remove on containers.
+  Indicators are feature-flag gated (`use_indicators`); commands exit 1
+  with an actionable message when the flag is off.
+- **`soar users`** / **`soar roles`** / **`soar audit`** -- user CRUD
+  (password reset, role read-modify-write, soft-delete semantics),
+  automation-user creation with token-reality notice (plaintext is
+  UI-only), role permission matrix (7 immutable built-in roles), and
+  audit log queries (bare-array normalized, CSV export).
+- **`soar search`** -- cross-object free-text search via `/rest/search`
+  with 1-based pagination (page=0 returns empty -- discovered live) and
+  comma-separated category filtering.
+- **`soar ingest`** -- SIEM search results to SOAR containers + typed
+  CEF artifacts: `--spl` or `--sid` source, built-in CIM-to-CEF field
+  map (upstream `butesIn` typo fixed), auto severity from
+  severity/urgency, SDI dedup (container + artifact), last-artifact-true
+  automation batching, dry-run preview with mapping table and sample CEF.
+  Notable-event recipe: `event_id` SDI, `rule_name` container naming.
+- **MCP subgroup focus** -- `focus soar containers` now loads only that
+  subgroup's tools instead of the entire soar tree, keeping the agent's
+  tool context narrow.
+
 ## 0.8.0
 
 SOAR automation wave (32): the CLI now drives apps, assets, playbooks,

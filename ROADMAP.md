@@ -23,7 +23,7 @@ Phase 8 (21–23) bank SOC ─► ES notables, audit pack, KV store
 Phase 9 (24–25) detection depth ─► conf editor, macros, data models
 Phase 10 (26–27) change control ─► config-as-code state, topology health
 Phase 11 (28–29) hardening ─► MCP server fixes, SIEM polish
-Phase 12 (30–34) SOAR ─► second target product: containers, playbooks, actions
+Phase 12 (30–34) SOAR ─► dual-product: containers, playbooks, cases, ingest
 ```
 
 Phases 7–10 came from the 2026-07 bank-SOC gap analysis (shipped as
@@ -161,58 +161,6 @@ Extends the read-only `list`/`get` from Wave 4:
 
 ---
 
-## Upcoming waves
-
-From the 2026-07-11 MCP verification, SIEM audit, and SOAR discovery.
-Detail per task in [PLAN.md](PLAN.md) (phases J–P), API discovery in
-[docs/design/soar-api.md](docs/design/soar-api.md). Waves 30–34 are the
-SOAR arc (v0.7.0 → v0.9.0).
-
-### Wave 30 — SOAR foundation *(phase L)*
-
-`soar:` profile section + `SOAR_*` env overlay; `SOARClient` on requests
-(dual auth — token preferred, Basic fallback since DELETE refuses
-tokens; Django filters with Python-style booleans; four response
-envelopes normalized); `soar test/info/health/license` +
-`soar settings/stats/meta` admin visibility (system_settings sections,
-widget_data SOC metrics, vocabularies).
-
-### Wave 31 — SOAR containers & artifacts *(phase M, → v0.7.0)*
-
-`soar containers` reads with sub-views (artifacts/notes/audit/activity/
-playbook-runs) and writes with **bulk array-POST** (create/update/close/
-assign/tag/delete; status by name, SDI dedup precheck); `soar artifacts`
-with typed CEF payloads (client-side dedup — server has none);
-notes/comments (comments immutable); vault upload/**download**
-(`download_attachment`)/delete.
-
-### Wave 32 — SOAR automation *(phase N, → v0.8.0)*
-
-`soar apps/assets` (fetch-merge updates, `assets test` connectivity,
-`ingest-status` polling health); **playbooks-as-code** — tgz
-export/import (first such tool anywhere), repos + external-repo sync,
-enable/disable/trigger; `playbooks run --wait` + runs/blocks/cancel;
-`soar actions run` (asset-name targets) + results; custom functions
-list/import/update.
-
-### Wave 33 — SOAR case management & response ops *(phase O)*
-
-`soar cases` (atomic promote+template, workbook views, phase/task
-create, integer task-status transitions), `soar approvals`
-(list/respond — unblock paused automation), custom `soar lists`
-(CSV↔JSON round-trip), `soar indicators` (IOC pivots) + evidence,
-`soar users/roles/audit` (user CRUD incl. password reset; token
-plaintext is UI-only — verified), `soar search`.
-
-### Wave 34 — SIEM↔SOAR integration *(phase P, → v0.9.0)*
-
-`soar ingest` — SIEM search/notable results → containers + typed CEF
-artifacts following the official connector conventions
-([soar-ingest-map.md](docs/design/soar-ingest-map.md): CIM→CEF map,
-severity/urgency mapping, event_id SDI, grouping, run_automation
-batching); MCP subgroup-granular focus for the nested soar tree;
-docs/catalog/release.
-
 ## Deferred
 
 - Forwarder fleet / deployment-server management
@@ -220,6 +168,8 @@ docs/catalog/release.
 - Workflow actions CRUD; auth-token minting; JSON `schemaVersion`
 - SOAR app install/dev (owned by the official `soarapps` SDK), clustering,
   automation broker, multi-tenant, webhooks, token minting via REST
+  (plaintext unobtainable — UI-only), severity/status/CEF vocabulary
+  writes, backup/restore (`phenv` only), label creation (UI-only)
 
 ## Done post v0.1.0
 
@@ -238,3 +188,9 @@ docs/catalog/release.
   schemas, protocol test suite, schema polish) + SIEM polish (`server
   health`/`search-peers`/`license --usage`, clean disabled details,
   tags URL-decode, catalog refresh) (v0.6.0)
+- **Waves 30–34** — SOAR arc: `SOARClient` (dual auth, Django filters,
+  response normalization), containers/artifacts/vault/notes (v0.7.0);
+  apps/assets/playbooks-as-code/actions/functions (v0.8.0);
+  cases/approvals/lists/indicators/evidence/users/roles/audit/search,
+  SIEM-to-SOAR ingest (CIM→CEF map, SDI dedup, automation batching),
+  MCP subgroup focus (v0.9.0)

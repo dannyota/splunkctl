@@ -79,8 +79,9 @@ GET /rest/<type>?page=0&page_size=10&sort=<field>&order=asc|desc
   source_data_identifier, description, run_automation:false}` →
   `{"success": true, "id": N, "new_artifact_ids": []}`. Duplicate SDI →
   400 `{"failed": true, "existing_container_id": N}`.
-- Update `POST /rest/container/<id>` — status by **name**, `owner_id`,
-  `role_id`, `sensitivity`, `tags[]` (read-modify-write), `custom_fields{}`.
+- Update `POST /rest/container/<id>` — status by **name**, `owner_name`
+  (verified; doc said `owner_id` — both work), `role_id`, `sensitivity`,
+  `tags[]` (read-modify-write), `custom_fields{}`.
 - Promote + workbook in one call:
   `{"container_type": "case", "template": <workbook_template_id>}` —
   atomic; phases/tasks instantiate immediately.
@@ -128,7 +129,8 @@ GET /rest/<type>?page=0&page_size=10&sort=<field>&order=asc|desc
 ### Assets & apps
 
 - Create `POST /rest/asset` `{name*, app_id*, configuration{},
-  description}`; config keys/schema from `GET /rest/app/<id>`
+  description}`; GET exposes `app` (name) but POST takes `app_id`
+  (integer) — verified. Config keys/schema from `GET /rest/app/<id>`
   `.configuration` (data_type/required/default per key).
 - **Asset POST is full-replace** *(docs)* — update must fetch-merge-post.
 - Test connectivity: `POST /rest/asset/<id>/test` → 200 immediately, runs
@@ -152,10 +154,11 @@ GET /rest/<type>?page=0&page_size=10&sort=<field>&order=asc|desc
 ### Playbooks & runs
 
 - `POST /rest/playbook_run` `{container_id*, playbook_id*, scope:
-  "all"|"new", run: true, inputs?}` *(docs; bogus playbook_id → 404
-  `Playbook "N" not found` verified — endpoint validates first)*. Poll
-  `GET /rest/playbook_run/<id>`; block detail `.../block_results`
-  *(docs)*; cancel POST `{"cancel": true}` *(docs)*.
+  "all"|"new", run: true, inputs?}` → `{"playbook_run_id": "<str>"}` —
+  note the id is a **string** (client normalizes to int); bogus
+  playbook_id → 404 `Playbook "N" not found` (validates first). Poll
+  `GET /rest/playbook_run/<id>`; block detail `.../block_results`;
+  cancel POST `{"cancel": true}`. All verified live.
 - Metadata mutations `POST /rest/playbook/<id>` `{active, cancel_runs,
   playbook_trigger}` *(docs)*. Triggers: default = label match on ingest
   (`labels: ["*"]` = all), `"artifact_created"`, `"container_resolved"`.
@@ -205,7 +208,7 @@ github.com/phantomcyber/playbooks.
 |---|---|
 | `/rest/version`, `/rest/system_info`, `/rest/license`, `/rest/health` | Platform basics; health = per-daemon time-series |
 | `/rest/system_settings` | 37 sections (auth, SLAs/response, debug log levels, password policy, concurrency) — read-only surface for a CLI |
-| `/rest/feature_flag` | 70 flags (webhooks/indicators/ES off on lab); toggle POST *(docs)* |
+| `/rest/feature_flag` | 10 flags on lab (not 70 — verified); toggle POST *(docs)* |
 | `/rest/widget_data/<name>` | 17 SOC-metric widgets (container_stats, containers_workload, sla_stats, pending_approvals, top_playbooks_actions, roi_summary, ...) |
 | `/rest/indicator`, `indicator_by_value`, `indicator_common_container`, `indicator_artifact`, `indicator_stats_*` | IOC pivots (needs indicators flag) |
 | `/rest/evidence` | GET/POST/DELETE *(writes docs)* |
@@ -237,6 +240,35 @@ cron — polling assets are the scheduler), label creation.
 3. `action_run` POST returns `action_run_id`; everything else returns `id`.
 4. `/rest/audit` bare array; `/rest/search` `{results}` envelope.
 5. Artifact DELETE returns `id` as a **string**.
+
+## Live-verified corrections (waves 30-34)
+
+Corrections to the original discovery doc, all verified during the build:
+
+- **Health/license response shapes** differ from the original doc
+  sketches; actual shapes reflected in `SOARClient` normalization.
+- **Feature flags**: lab ships **10** flags (not 70).
+- **Asset record**: GET exposes `app` (name string); POST takes `app_id`
+  (integer). Both verified.
+- **`playbook_run` POST return**: `{"playbook_run_id": "<string>"}` —
+  client normalizes the string to int.
+- **Custom function export route**: `GET /rest/custom_function/<id>/export`
+  returns `x-gzip` — **confirmed live**.
+- **Task notes**: invisible on `container/<id>/notes` pseudo-field; must
+  query `/rest/note` with `_filter_task_id` — verified.
+- **Vault**: `container_attachment` lacks `vault_id` in the create
+  response on older paths; vault lookup goes through `vault_document` +
+  `_filter_hash`.
+- **`/rest/search` pagination**: **1-based** (page=0 returns empty set;
+  page=1 is the first page). `categories` is comma-separated only.
+- **`/rest/audit` CSV**: `format=csv` returns raw CSV
+  (`Content-Type: application/csv`).
+- **`decided_list` create**: empty `content` → server 500; always provide
+  at least `content: []`.
+- **`external_prompt` respond**: shape remains docs-only (no live
+  approval prompts exercised on the lab).
+- **Container owner update**: `owner_name` works live (doc originally
+  said `owner_id` only).
 
 ## Prior art & versions
 

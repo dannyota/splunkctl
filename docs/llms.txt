@@ -1,8 +1,8 @@
 # splunkctl
 
-> CLI tool to operate Splunk Enterprise as code — for SOC teams, detection engineers, and AI agents. Python, Click, REST API. Every mutation is dry-run by default; nothing changes until you pass --yes.
+> CLI tool to operate Splunk Enterprise and Splunk SOAR as code — for SOC teams, detection engineers, and AI agents. Python, Click, REST API. Every mutation is dry-run by default; nothing changes until you pass --yes.
 
-- [Home](https://splunkctl.danny.vn/#/): CLI tool for Splunk Enterprise SIEM operations — query, inspect, and manage a remote Splunk instance from your laptop. Built on the fork with Click.
+- [Home](https://splunkctl.danny.vn/#/): CLI tool for Splunk Enterprise and Splunk SOAR operations -- query, inspect, and manage remote Splunk instances from your laptop. SIEM commands are
 
 ## Getting started
 
@@ -47,6 +47,7 @@
 - [Custom lists](https://splunkctl.danny.vn/#/guides/soar-lists): Manage SOAR custom lists (the decided_list API). Custom lists are simple tabular data structures stored as an array of rows, where each row is an
 - [Indicators & evidence](https://splunkctl.danny.vn/#/guides/soar-indicators): IOC indicator lookups and evidence management on Splunk SOAR.
 - [Users, roles & audit](https://splunkctl.danny.vn/#/guides/soar-admin): Manage SOAR platform users, inspect role permissions, and query the audit trail. User mutations are guarded (dry-run by default, --yes to apply).
+- [Ingest (SIEM to SOAR)](https://splunkctl.danny.vn/#/guides/soar-ingest): Ingest SIEM search results into Splunk SOAR as containers and artifacts, using the official CIM-to-CEF field mapping and connector conventions.
 
 ## Design
 

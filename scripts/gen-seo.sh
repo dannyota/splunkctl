@@ -79,7 +79,7 @@ llms="$outdir/llms.txt"
 {
   echo "# splunkctl"
   echo ""
-  echo "> CLI tool to operate Splunk Enterprise as code — for SOC teams, detection engineers, and AI agents. Python, Click, REST API. Every mutation is dry-run by default; nothing changes until you pass --yes."
+  echo "> CLI tool to operate Splunk Enterprise and Splunk SOAR as code — for SOC teams, detection engineers, and AI agents. Python, Click, REST API. Every mutation is dry-run by default; nothing changes until you pass --yes."
   echo ""
 
   while IFS= read -r line; do
@@ -134,7 +134,7 @@ llmsfull="$outdir/llms-full.txt"
 {
   echo "# splunkctl — full documentation"
   echo ""
-  echo "> CLI tool to operate Splunk Enterprise as code — for SOC teams, detection engineers, and AI agents."
+  echo "> CLI tool to operate Splunk Enterprise and Splunk SOAR as code — for SOC teams, detection engineers, and AI agents."
   echo ""
   echo "---"
 
