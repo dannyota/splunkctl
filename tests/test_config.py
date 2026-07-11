@@ -472,6 +472,7 @@ def test_siem_profile_unaffected_by_soar_section(tmp_path: Path) -> None:
     )
     siem = config.resolve(p)
     assert siem["cfg"]["host"] == "siem-host"
-    assert "soar" not in siem["cfg"] or siem["cfg"].get("soar") is not None
-    # Specifically: SIEM resolve must NOT have soar keys at top level
-    assert siem["cfg"].get("token") is None or siem["cfg"].get("token") == ""
+    # SIEM resolve must strip the nested soar: map entirely.
+    assert "soar" not in siem["cfg"]
+    # And SOAR credentials must not leak into the SIEM top-level config.
+    assert "token" not in siem["cfg"]
