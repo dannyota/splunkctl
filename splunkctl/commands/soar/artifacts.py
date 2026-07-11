@@ -10,7 +10,7 @@ import click
 
 from splunkctl import output
 from splunkctl.commands.soar._client import get_soar_client
-from splunkctl.guard import soar_check
+from splunkctl.guard import guarded, soar_check
 from splunkctl.soar.cimcef import CEF_CONTAINS_MAP
 from splunkctl.soar.client import SOARError
 
@@ -138,6 +138,7 @@ def get_cmd(ctx: click.Context, *, artifact_id: int) -> None:
 
 
 @artifacts_group.command("create")
+@guarded
 @click.option(
     "--container",
     "container_id",
@@ -260,6 +261,7 @@ def create_cmd(
 
 
 @artifacts_group.command("update")
+@guarded
 @click.argument("artifact_id", type=int)
 @click.option("--name", default=None, help="New artifact name.")
 @click.option(
@@ -358,6 +360,7 @@ def update_cmd(
 
 
 @artifacts_group.command("delete")
+@guarded
 @click.argument("artifact_id", type=int)
 @click.pass_context
 def delete_cmd(ctx: click.Context, *, artifact_id: int) -> None:

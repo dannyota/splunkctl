@@ -191,3 +191,36 @@ def test_check_missing_profile_propagates(tmp_path: Path) -> None:
 
     with pytest.raises(cfg_mod.ProfileNotFoundError):
         guard.check(ctx, "Delete index 'main'")
+
+
+def test_every_checked_command_is_marked_guarded() -> None:
+    """A callback that calls the guard check must carry the @guarded marker.
+
+    The MCP layer derives the tool's `yes` parameter and [guarded] tag from
+    the marker alone — a command that dry-runs at runtime but lacks the
+    marker can never be applied through its typed MCP tool.
+    """
+    import inspect
+    import re
+
+    from splunkctl.main import cli
+
+    check_call = re.compile(r"\b(?:guard\.check|soar_check|check)\(ctx")
+    unmarked: list[str] = []
+
+    def walk(group: click.Group, path: list[str]) -> None:
+        for name, cmd in group.commands.items():
+            if isinstance(cmd, click.Group):
+                walk(cmd, [*path, name])
+                continue
+            if cmd.callback is None:
+                continue
+            try:
+                src = inspect.getsource(inspect.unwrap(cmd.callback))
+            except (OSError, TypeError):
+                continue
+            if check_call.search(src) and not guard.is_guarded(cmd):
+                unmarked.append(" ".join([*path, name]))
+
+    walk(cli, [])
+    assert not unmarked, f"guard-checked commands missing @guarded: {unmarked}"

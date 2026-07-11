@@ -18,7 +18,7 @@ from splunkctl.commands.soar._ingest_helpers import (
     load_map_file,
     validate_label,
 )
-from splunkctl.guard import soar_check
+from splunkctl.guard import guarded, soar_check
 from splunkctl.soar.cimcef import (
     CEF_CONTAINS_MAP,
     CIM_CEF_MAP,
@@ -33,6 +33,7 @@ from splunkctl.soar.client import SOARError
 
 
 @click.command("ingest")
+@guarded
 @click.option(
     "--spl",
     default=None,
