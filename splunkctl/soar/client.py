@@ -376,7 +376,8 @@ class SOARClient:
         - All other endpoints: 0-based pages.
         """
         endpoint_root = path.lstrip("/").split("/")[0]
-        page = 1 if endpoint_root in _RESULTS_ENVELOPE_ENDPOINTS else 0
+        origin = 1 if endpoint_root in _RESULTS_ENVELOPE_ENDPOINTS else 0
+        page = origin
         while True:
             page_params = dict(params or {})
             page_params["page"] = page
@@ -388,5 +389,5 @@ class SOARClient:
 
             num_pages = result.get("num_pages", 1)
             page += 1
-            if page >= num_pages or not data:
+            if page - origin >= num_pages or not data:
                 break

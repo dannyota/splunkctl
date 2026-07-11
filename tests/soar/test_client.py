@@ -377,6 +377,9 @@ class TestPagination:
             items = list(c.iter_pages("container", page_size=2))
         assert len(items) == 3
         assert [i["id"] for i in items] == [1, 2, 3]
+        # 0-based endpoints fetch pages 0..num_pages-1.
+        pages = [call[1]["params"]["page"] for call in sess.request.call_args_list]
+        assert pages == [0, 1]
 
     def test_single_page_no_extra_request(self) -> None:
         c = _client()
@@ -414,6 +417,30 @@ class TestPagination:
         # Verify the request used page=1, not page=0
         call_params = sess.request.call_args[1]["params"]
         assert call_params["page"] == 1
+
+    def test_search_iter_pages_fetches_last_page(self) -> None:
+        """1-based search with num_pages=2 fetches BOTH pages 1 and 2."""
+        c = _client()
+        page1 = {
+            "results": [{"id": 1}, {"id": 2}],
+            "count": 3,
+            "num_pages": 2,
+        }
+        page2 = {
+            "results": [{"id": 3}],
+            "count": 3,
+            "num_pages": 2,
+        }
+        responses = [
+            _mock_response(json_data=page1),
+            _mock_response(json_data=page2),
+        ]
+        with patch.object(c, "_session") as sess:
+            sess.request.side_effect = responses
+            items = list(c.iter_pages("search", page_size=2))
+        assert [i["id"] for i in items] == [1, 2, 3]
+        pages = [call[1]["params"]["page"] for call in sess.request.call_args_list]
+        assert pages == [1, 2]
 
 
 # -------------------------------------------------------------------
