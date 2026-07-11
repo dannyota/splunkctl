@@ -9,6 +9,7 @@ from splunkctl.commands.soar import (
     playbook_runs as _pr,  # noqa: F401  # register run/runs
 )
 from splunkctl.commands.soar.actions import actions_group
+from splunkctl.commands.soar.admin import audit_cmd, roles_group, users_group
 from splunkctl.commands.soar.admin_views import meta, settings, stats
 from splunkctl.commands.soar.approvals import approvals_group
 from splunkctl.commands.soar.apps import apps_group
@@ -52,3 +53,6 @@ soar_group.add_command(approvals_group)
 soar_group.add_command(lists_group)
 soar_group.add_command(indicators_group)
 soar_group.add_command(evidence_group)
+soar_group.add_command(users_group)
+soar_group.add_command(roles_group)
+soar_group.add_command(audit_cmd)
