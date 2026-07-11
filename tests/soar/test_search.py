@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 from click.testing import CliRunner
 
 from splunkctl.main import cli
+from splunkctl.soar.client import SOARError
 from tests.soar.conftest import PATCH_CLIENT, PATCH_RESOLVE, soar_cfg
 
 # Sample search results mimicking the normalized {count, num_pages, data}
@@ -164,6 +165,25 @@ class TestSoarSearch:
             cli, ["--json", "soar", "search", "test", "--page", "0"]
         )
         assert result.exit_code == 2
+
+    @patch(PATCH_CLIENT)
+    @patch(PATCH_RESOLVE)
+    def test_soar_error_exits_1(
+        self, mock_resolve: MagicMock, mock_cls: MagicMock
+    ) -> None:
+        """SOARError (e.g. auth failure) exits 1 with typed envelope."""
+        mock_resolve.return_value = soar_cfg()
+        client = MagicMock()
+        client.get.side_effect = SOARError(
+            "Unauthorized", kind="auth", http_status=401
+        )
+        mock_cls.return_value = client
+
+        result = CliRunner().invoke(cli, ["--json", "soar", "search", "dns"])
+        assert result.exit_code == 1
+        last = result.stderr.strip().splitlines()[-1]
+        payload = json.loads(last)
+        assert payload["error"]["kind"] == "auth"
 
     @patch(PATCH_RESOLVE)
     def test_no_host_exits_1(self, mock_resolve: MagicMock) -> None:

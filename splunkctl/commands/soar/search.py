@@ -8,6 +8,7 @@ import click
 
 from splunkctl import output
 from splunkctl.commands.soar._client import get_soar_client
+from splunkctl.soar.client import SOARError
 
 
 @click.command("search")
@@ -56,7 +57,15 @@ def search(
     if page is not None:
         params["page"] = page
 
-    result = client.get("search", params=params)
-    data: list[dict[str, Any]] = result.get("data", [])
+    try:
+        result = client.get("search", params=params)
+    except SOARError as exc:
+        output.error(exc.message, kind=exc.kind, http_status=exc.http_status)
+        ctx.exit(1)
+        return
+
+    data: list[dict[str, Any]] = (
+        result.get("data", []) if isinstance(result, dict) else []
+    )
 
     output.render(ctx, data, empty="No results.")
