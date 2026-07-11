@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.7.0
+
+Splunk SOAR support arrives: splunkctl now operates Splunk Enterprise
+**and** Splunk SOAR from one CLI. Foundation + containers/artifacts
+waves (30-31), live-verified against SOAR 8.5.0.248.
+
+### Added
+- **SOAR profiles** — `soar:` section per profile (host, port, token,
+  username, password, verify) with `SOAR_*` env overlay; secrets
+  redacted in `config show`; `config init --soar` prompts. SIEM-only
+  profiles unaffected.
+- **`SOARClient`** — requests-based Django REST client: token auth with
+  automatic Basic fallback for DELETE (tokens are refused there),
+  Django-style filter builder (quoted strings, `__op`, Python booleans,
+  `__in`), pagination, bulk array POST, binary downloads, and response
+  normalization for every server quirk (`succeeded`/`success`,
+  `failed:true` on HTTP 200, `action_run_id`/`id`, bare-array audit,
+  `{results}` search envelope).
+- **`soar test/info/health/license`** — platform reads; health rolls up
+  daemons + warm standby + cluster with graceful empties; license
+  surfaces the community 100 actions/day cap.
+- **`soar settings/stats/meta`** — system_settings dump, SOC widget
+  metrics (17 widgets), and vocabulary reads (severities, statuses,
+  labels, tags, CEF fields, feature flags).
+- **`soar containers`** — list with composable filters (label, status
+  by name, severity, owner, --since, type) and offset/limit contract;
+  get with artifact/note/comment/audit/activity/playbook-run/phase
+  sub-views; create/update/close/assign/delete with dry-run guard,
+  bulk single-array-POST, SDI dedup precheck, per-container tag merge.
+- **`soar artifacts`** — CRUD with typed CEF (`--cef`, `--cef-file`,
+  `--cef-type`), built-in CEF contains map, client-side SDI dedup
+  warning (the server does not dedup), fetch-merge updates with
+  `--replace-cef` for wholesale replacement.
+- **`soar notes`** — container and task notes (markdown from arg or
+  file), comments, and honest immutability UX for comment deletion.
+- **`soar vault`** — upload (base64, size warning), byte-identical
+  download, list/get/delete with the vault_document 405 explained.
+- All SOAR mutations are dry-run by default with the SOAR host in the
+  guard banner; `--yes` applies. Every command doubles as an MCP tool.
+
+
 ## 0.6.0
 
 MCP hardening + SIEM polish, driven by a protocol-level MCP verification
