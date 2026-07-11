@@ -10,28 +10,7 @@ import requests
 from click.testing import CliRunner
 
 from splunkctl.main import cli
-
-_PATCH_RESOLVE = "splunkctl.commands.soar._client.cfg_mod.resolve_soar"
-_PATCH_CLIENT = "splunkctl.commands.soar._client.SOARClient"
-
-
-def _soar_cfg(
-    *,
-    host: str = "soar.test",
-    port: int = 8443,
-    token: str = "tok123",  # noqa: S107
-    verify: bool = False,
-) -> dict[str, Any]:
-    return {"host": host, "port": port, "token": token, "verify": verify}
-
-
-def _mock_client(responses: dict[str, Any] | None = None) -> MagicMock:
-    """Return a mock SOARClient whose .get() returns from *responses*."""
-    client = MagicMock()
-    if responses:
-        client.get.side_effect = lambda path, **kw: responses.get(path, {})
-    return client
-
+from tests.soar.conftest import PATCH_CLIENT, PATCH_RESOLVE, mock_client, soar_cfg
 
 # -------------------------------------------------------------------
 # soar test
@@ -39,11 +18,11 @@ def _mock_client(responses: dict[str, Any] | None = None) -> MagicMock:
 
 
 class TestSoarTest:
-    @patch(_PATCH_CLIENT)
-    @patch(_PATCH_RESOLVE)
+    @patch(PATCH_CLIENT)
+    @patch(PATCH_RESOLVE)
     def test_success(self, mock_resolve: MagicMock, mock_cls: MagicMock) -> None:
-        mock_resolve.return_value = _soar_cfg()
-        client = _mock_client({"version": {"version": "8.5.0.248", "build": "abcdef"}})
+        mock_resolve.return_value = soar_cfg()
+        client = mock_client({"version": {"version": "8.5.0.248", "build": "abcdef"}})
         mock_cls.return_value = client
 
         result = CliRunner().invoke(cli, ["--json", "soar", "test"])
@@ -52,13 +31,13 @@ class TestSoarTest:
         assert data[0]["version"] == "8.5.0.248"
         assert data[0]["status"] == "ok"
 
-    @patch(_PATCH_CLIENT)
-    @patch(_PATCH_RESOLVE)
+    @patch(PATCH_CLIENT)
+    @patch(PATCH_RESOLVE)
     def test_connection_error(
         self, mock_resolve: MagicMock, mock_cls: MagicMock
     ) -> None:
-        mock_resolve.return_value = _soar_cfg()
-        client = _mock_client()
+        mock_resolve.return_value = soar_cfg()
+        client = mock_client()
         client.get.side_effect = requests.exceptions.ConnectionError("refused")
         mock_cls.return_value = client
 
@@ -68,7 +47,7 @@ class TestSoarTest:
         payload = json.loads(last)
         assert payload["error"]["kind"] == "connection"
 
-    @patch(_PATCH_RESOLVE)
+    @patch(PATCH_RESOLVE)
     def test_no_host_configured(self, mock_resolve: MagicMock) -> None:
         mock_resolve.return_value = {"port": 8443, "verify": False}
 
@@ -85,11 +64,11 @@ class TestSoarTest:
 
 
 class TestSoarInfo:
-    @patch(_PATCH_CLIENT)
-    @patch(_PATCH_RESOLVE)
+    @patch(PATCH_CLIENT)
+    @patch(PATCH_RESOLVE)
     def test_success(self, mock_resolve: MagicMock, mock_cls: MagicMock) -> None:
-        mock_resolve.return_value = _soar_cfg()
-        client = _mock_client(
+        mock_resolve.return_value = soar_cfg()
+        client = mock_client(
             {
                 "version": {"version": "8.5.0.248", "build": "abcdef"},
                 "system_info": {
@@ -114,12 +93,12 @@ class TestSoarInfo:
 
 
 class TestSoarHealth:
-    @patch(_PATCH_CLIENT)
-    @patch(_PATCH_RESOLVE)
+    @patch(PATCH_CLIENT)
+    @patch(PATCH_RESOLVE)
     def test_healthy_daemons(
         self, mock_resolve: MagicMock, mock_cls: MagicMock
     ) -> None:
-        mock_resolve.return_value = _soar_cfg()
+        mock_resolve.return_value = soar_cfg()
         health_data: dict[str, Any] = {
             "status": {
                 "decided": "running",
@@ -137,7 +116,7 @@ class TestSoarHealth:
             "warm_standby": {"status": "off"},
             "cluster_node": {"count": 0, "data": []},
         }
-        client = _mock_client(responses)
+        client = mock_client(responses)
         mock_cls.return_value = client
 
         result = CliRunner().invoke(cli, ["--json", "soar", "health"])
@@ -147,12 +126,12 @@ class TestSoarHealth:
         daemons = [r for r in data if r.get("type") == "daemon"]
         assert len(daemons) >= 3
 
-    @patch(_PATCH_CLIENT)
-    @patch(_PATCH_RESOLVE)
+    @patch(PATCH_CLIENT)
+    @patch(PATCH_RESOLVE)
     def test_warm_standby_off(
         self, mock_resolve: MagicMock, mock_cls: MagicMock
     ) -> None:
-        mock_resolve.return_value = _soar_cfg()
+        mock_resolve.return_value = soar_cfg()
         from splunkctl.soar.client import SOARError
 
         def side_effect(path: str, **kw: Any) -> Any:
@@ -175,13 +154,13 @@ class TestSoarHealth:
         assert len(standby_rows) == 1
         assert standby_rows[0]["status"] == "off"
 
-    @patch(_PATCH_CLIENT)
-    @patch(_PATCH_RESOLVE)
+    @patch(PATCH_CLIENT)
+    @patch(PATCH_RESOLVE)
     def test_cluster_graceful_empty(
         self, mock_resolve: MagicMock, mock_cls: MagicMock
     ) -> None:
         """cluster_node errors are swallowed (lab is unclustered)."""
-        mock_resolve.return_value = _soar_cfg()
+        mock_resolve.return_value = soar_cfg()
         from splunkctl.soar.client import SOARError
 
         def side_effect(path: str, **kw: Any) -> Any:
@@ -207,17 +186,17 @@ class TestSoarHealth:
 
 
 class TestSoarLicense:
-    @patch(_PATCH_CLIENT)
-    @patch(_PATCH_RESOLVE)
+    @patch(PATCH_CLIENT)
+    @patch(PATCH_RESOLVE)
     def test_license_data(self, mock_resolve: MagicMock, mock_cls: MagicMock) -> None:
-        mock_resolve.return_value = _soar_cfg()
+        mock_resolve.return_value = soar_cfg()
         license_data: dict[str, Any] = {
             "license_type": "community",
             "max_allowed_actions_per_day": 100,
             "valid_until": "2027-01-01T00:00:00Z",
             "actions_used_today": 5,
         }
-        client = _mock_client({"license": license_data})
+        client = mock_client({"license": license_data})
         mock_cls.return_value = client
 
         result = CliRunner().invoke(cli, ["--json", "soar", "license"])
@@ -247,13 +226,13 @@ class TestCommandsJson:
 
 
 class TestSOARErrorHandler:
-    @patch(_PATCH_CLIENT)
-    @patch(_PATCH_RESOLVE)
+    @patch(PATCH_CLIENT)
+    @patch(PATCH_RESOLVE)
     def test_soar_error_classified(
         self, mock_resolve: MagicMock, mock_cls: MagicMock
     ) -> None:
         """SOARError with kind=auth produces an auth error envelope."""
-        mock_resolve.return_value = _soar_cfg()
+        mock_resolve.return_value = soar_cfg()
         from splunkctl.soar.client import SOARError
 
         client = MagicMock()

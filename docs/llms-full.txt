@@ -2421,7 +2421,8 @@ that are not SDK list surfaces (e.g. `audit rbac`) are exempt by design.
 
 | Group | Status | Subcommands |
 |---|---|---|
-| `soar` | ✅ built | test (connectivity/auth), info (version/system_info), health (daemon rollup + warm_standby + cluster_node, graceful empties), license (type/quota/usage), settings (--section, 37 sections flat dict), stats (--widget/--list, 17 SOC metric widgets), meta (severities/statuses/labels/tags/cef/features vocabularies) — reads via `SOARClient` (requests, dual auth, envelope normalization); typed error envelopes; live-verified against lab SOAR 8.5.0.248 |
+| `soar` | ✅ built | test, info, health, license, settings, stats, meta — platform reads via `SOARClient`; typed error envelopes; live-verified against lab SOAR 8.5.0.248 |
+| `soar containers` | ✅ built | list (--label/--status/--severity/--owner/--since/--type/--filter/--limit/--offset; status validated via container_status), get (--artifacts/--notes/--comments/--audit/--activity/--playbook-runs/--phases sub-views) |
 
 ## SOAR infrastructure
 

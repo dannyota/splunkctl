@@ -108,6 +108,49 @@ for container updates (use the string name, not numeric id). `labels`
 notes that label creation has no REST endpoint (UI-only). `features`
 lists feature flags with their enabled state.
 
+## Containers
+
+### List
+
+```bash
+splunkctl soar containers list                          # all containers
+splunkctl soar containers list --label events            # by label
+splunkctl soar containers list --status open              # by status name
+splunkctl soar containers list --severity high            # by severity
+splunkctl soar containers list --owner admin              # by owner
+splunkctl soar containers list --since 2026-07-01         # created after date
+splunkctl soar containers list --type event               # events only
+splunkctl soar containers list --type case                # cases only
+splunkctl soar containers list --limit 10 --offset 20     # pagination
+splunkctl soar containers list --filter '_filter_name__icontains="dns"'
+splunkctl soar containers list --json
+```
+
+Filters compose (AND). `--status` validates the name against
+`/rest/container_status` before querying; unknown names exit 1 with a
+usage error. `--type event` maps to API `container_type=default`.
+`--since` maps to `_filter_create_time__gt`. `--filter` passes a raw
+Django-style filter for advanced queries.
+
+### Get
+
+```bash
+splunkctl soar containers get 42                        # full container
+splunkctl soar containers get 42 --artifacts             # artifacts
+splunkctl soar containers get 42 --notes                 # notes
+splunkctl soar containers get 42 --comments              # comments
+splunkctl soar containers get 42 --audit                 # audit log
+splunkctl soar containers get 42 --activity              # activity feed
+splunkctl soar containers get 42 --playbook-runs         # playbook runs
+splunkctl soar containers get 42 --phases                # case phases
+splunkctl soar containers get 42 --json
+```
+
+Without a sub-view flag, returns the full container object. Each flag
+fetches the corresponding pseudo-field endpoint
+(`/rest/container/<id>/<suffix>`). Sub-view flags are mutually exclusive
+(last wins).
+
 ## Error Handling
 
 All SOAR commands produce typed error envelopes on failure:
