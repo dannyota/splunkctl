@@ -100,16 +100,22 @@ class TestAudit:
 
     @patch(PATCH_CLIENT)
     @patch(PATCH_RESOLVE)
-    def test_audit_csv_format(
+    def test_audit_csv_format_passthrough(
         self, mock_resolve: MagicMock, mock_cls: MagicMock
     ) -> None:
+        """--format csv fetches raw bytes and prints CSV text verbatim."""
         mock_resolve.return_value = soar_cfg()
         client = MagicMock()
-        client.get.return_value = {"count": 0, "data": []}
+        csv_body = b"COL1,COL2\r\nval1,val2\r\n"
+        client.get_bytes.return_value = csv_body
         mock_cls.return_value = client
-        result = CliRunner().invoke(cli, ["--json", "soar", "audit", "--format", "csv"])
+        result = CliRunner().invoke(cli, ["soar", "audit", "--format", "csv"])
         assert result.exit_code == 0
-        params = client.get.call_args[1]["params"]
+        assert "COL1,COL2" in result.output
+        assert "val1,val2" in result.output
+        # Should call get_bytes, not get
+        client.get_bytes.assert_called_once()
+        params = client.get_bytes.call_args[1]["params"]
         assert params["format"] == "csv"
 
     @patch(PATCH_CLIENT)

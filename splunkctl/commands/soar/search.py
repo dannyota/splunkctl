@@ -25,7 +25,7 @@ from splunkctl.commands.soar._client import get_soar_client
 )
 @click.option(
     "--page",
-    type=int,
+    type=click.IntRange(min=1),
     default=None,
     help="Page number (1-based; server default is 1).",
 )

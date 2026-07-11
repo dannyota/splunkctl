@@ -399,6 +399,22 @@ class TestPagination:
             items = list(c.iter_pages("container"))
         assert items == []
 
+    def test_search_iter_pages_starts_at_1(self) -> None:
+        """iter_pages('search', ...) starts at page=1 (1-based endpoint)."""
+        c = _client()
+        page1 = {
+            "results": [{"id": 1}],
+            "count": 1,
+            "num_pages": 1,
+        }
+        with patch.object(c, "_session") as sess:
+            sess.request.return_value = _mock_response(json_data=page1)
+            items = list(c.iter_pages("search", page_size=10))
+        assert len(items) == 1
+        # Verify the request used page=1, not page=0
+        call_params = sess.request.call_args[1]["params"]
+        assert call_params["page"] == 1
+
 
 # -------------------------------------------------------------------
 # URL construction

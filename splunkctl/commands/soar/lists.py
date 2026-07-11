@@ -142,10 +142,17 @@ def create_cmd(
     name: str,
     file_path: str | None,
 ) -> None:
-    """Create a custom list. Content via --file (JSON or CSV) or empty."""
-    content: list[list[str]] = []
-    if file_path is not None:
-        content = _parse_content_file(Path(file_path))
+    """Create a custom list. Content via --file (JSON or CSV; at least one row)."""
+    if file_path is None:
+        raise click.UsageError(
+            "SOAR requires at least one row — pass --file with at least one row."
+        )
+
+    content = _parse_content_file(Path(file_path))
+    if not content:
+        raise click.UsageError(
+            "SOAR requires at least one row — pass --file with at least one row."
+        )
 
     body: dict[str, Any] = {"name": name, "content": content}
     details = f"  name: {name}\n  rows: {len(content)}"
@@ -215,7 +222,11 @@ def update_cmd(
 @click.option(
     "--values",
     required=True,
-    help="Comma-separated values for the new row.",
+    help=(
+        'Comma-separated values for the new row (e.g. "a,b,c"). '
+        "For values containing commas, pass a JSON array "
+        '(e.g. \'["a, with comma","b"]\').'
+    ),
 )
 @click.pass_context
 def add_row_cmd(
@@ -225,7 +236,16 @@ def add_row_cmd(
     values: str,
 ) -> None:
     """Append a row to a custom list (fetch-modify-replace)."""
-    row = [v.strip() for v in values.split(",")]
+    if values.startswith("["):
+        try:
+            parsed = json.loads(values)
+        except json.JSONDecodeError as exc:
+            raise click.UsageError(f"Invalid JSON array in --values: {exc}") from exc
+        if not isinstance(parsed, list):
+            raise click.UsageError("--values JSON must be an array.")
+        row = [str(v) for v in parsed]
+    else:
+        row = [v.strip() for v in values.split(",")]
 
     details = f"  list: {ref}\n  new row: {row}"
     if not soar_check(ctx, f"Add row to custom list {ref}", details=details):
@@ -316,14 +336,18 @@ def remove_row_cmd(
 
 @lists_group.command("delete")
 @guarded
-@click.argument("list_id", type=int)
+@click.argument("ref")
 @click.pass_context
-def delete_cmd(ctx: click.Context, *, list_id: int) -> None:
-    """Delete a custom list (token auth allowed)."""
-    if not soar_check(ctx, f"Delete custom list {list_id}"):
+def delete_cmd(ctx: click.Context, *, ref: str) -> None:
+    """Delete a custom list by name or id (token auth allowed)."""
+    if not soar_check(ctx, f"Delete custom list {ref}"):
         return
 
     client = get_soar_client(ctx)
+    list_id = _resolve_list_id(ctx, client, ref)
+    if list_id is None:
+        return
+
     try:
         client.delete(f"{_EP}/{list_id}")
     except SOARError as exc:
@@ -371,7 +395,7 @@ def export_cmd(
 
         text = raw.decode("utf-8")
         if out:
-            Path(out).write_text(text)
+            Path(out).write_text(text, encoding="utf-8")
             output.info(f"CSV exported to {out}")
         else:
             click.echo(text, nl=False)
@@ -388,7 +412,7 @@ def export_cmd(
     content = result.get("content", []) if isinstance(result, dict) else []
     text = json.dumps(content, indent=2)
     if out:
-        Path(out).write_text(text + "\n")
+        Path(out).write_text(text + "\n", encoding="utf-8")
         output.info(f"JSON exported to {out}")
     else:
         click.echo(text)

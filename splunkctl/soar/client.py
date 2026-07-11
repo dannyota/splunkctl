@@ -370,8 +370,13 @@ class SOARClient:
 
         Yields individual items from each page, transparently fetching
         subsequent pages as needed.
+
+        Pagination origin varies by endpoint:
+        - ``search`` (``_RESULTS_ENVELOPE_ENDPOINTS``): 1-based pages.
+        - All other endpoints: 0-based pages.
         """
-        page = 0
+        endpoint_root = path.lstrip("/").split("/")[0]
+        page = 1 if endpoint_root in _RESULTS_ENVELOPE_ENDPOINTS else 0
         while True:
             page_params = dict(params or {})
             page_params["page"] = page

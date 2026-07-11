@@ -174,6 +174,38 @@ class TestUsersCreate:
     @patch(PATCH_SOAR_RESOLVE)
     @patch(PATCH_CLIENT)
     @patch(PATCH_RESOLVE)
+    def test_create_password_prompted(
+        self,
+        mock_resolve: MagicMock,
+        mock_cls: MagicMock,
+        mock_guard: MagicMock,
+    ) -> None:
+        """Password is prompted when --password is omitted."""
+        mock_resolve.return_value = _WRITE_CFG
+        mock_guard.return_value = _guard_cfg()
+        client = MagicMock()
+        client.post.return_value = {"id": 15}
+        mock_cls.return_value = client
+        result = CliRunner().invoke(
+            cli,
+            [
+                "--yes",
+                "soar",
+                "users",
+                "create",
+                "--username",
+                "promptuser",
+            ],
+            input="SecretPrompted!\n",
+        )
+        assert result.exit_code == 0
+        body = client.post.call_args[1]["body"]
+        assert body["password"] == "SecretPrompted!"
+        assert body["username"] == "promptuser"
+
+    @patch(PATCH_SOAR_RESOLVE)
+    @patch(PATCH_CLIENT)
+    @patch(PATCH_RESOLVE)
     def test_create_with_roles(
         self,
         mock_resolve: MagicMock,

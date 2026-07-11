@@ -152,6 +152,19 @@ class TestSoarSearch:
         result = CliRunner().invoke(cli, ["--json", "soar", "search"])
         assert result.exit_code != 0
 
+    @patch(PATCH_CLIENT)
+    @patch(PATCH_RESOLVE)
+    def test_page_0_rejected(
+        self, mock_resolve: MagicMock, mock_cls: MagicMock
+    ) -> None:
+        """--page 0 exits with code 2 (Click validation)."""
+        mock_resolve.return_value = soar_cfg()
+        mock_cls.return_value = MagicMock()
+        result = CliRunner().invoke(
+            cli, ["--json", "soar", "search", "test", "--page", "0"]
+        )
+        assert result.exit_code == 2
+
     @patch(PATCH_RESOLVE)
     def test_no_host_exits_1(self, mock_resolve: MagicMock) -> None:
         mock_resolve.return_value = {"port": 8443, "verify": False}

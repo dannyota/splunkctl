@@ -15,9 +15,6 @@ splunkctl soar lists list --limit 10
 splunkctl soar lists get blocklist
 splunkctl soar lists get 42
 
-# Create an empty list
-splunkctl soar lists create --name my_list
-
 # Create with initial content from a JSON file
 # JSON format: [["col1","col2"],["a","b"],["c","d"]]
 splunkctl soar lists create --name my_list --file rows.json
@@ -31,11 +28,15 @@ splunkctl soar lists update my_list --file new_rows.json
 # Add a single row (fetch-modify-replace)
 splunkctl soar lists add-row my_list --values "val1,val2,val3"
 
+# Add a row with values that contain commas (JSON array form)
+splunkctl soar lists add-row my_list --values '["val, with comma","val2"]'
+
 # Remove a row by 0-based index (fetch-modify-replace)
 splunkctl soar lists remove-row my_list --index 2
 
-# Delete a list (token auth is allowed for this endpoint)
+# Delete a list by name or ID (token auth is allowed for this endpoint)
 splunkctl soar lists delete 42
+splunkctl soar lists delete blocklist
 
 # Export as JSON (content array only)
 splunkctl soar lists export my_list
@@ -68,8 +69,8 @@ current content, modify it, and POST the full replacement.
 
 ### Name resolution
 
-The `get`, `update`, `add-row`, `remove-row`, and `export` commands
-accept either a numeric ID or a list name. Names are resolved via a
+The `get`, `update`, `add-row`, `remove-row`, `delete`, and `export`
+commands accept either a numeric ID or a list name. Names are resolved via a
 `_filter_name` query against the API.
 
 ### Token auth on DELETE

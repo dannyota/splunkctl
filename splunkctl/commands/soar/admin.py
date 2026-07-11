@@ -72,7 +72,13 @@ def users_get(ctx: click.Context, *, user_id: int) -> None:
 @users_group.command("create")
 @guard.guarded
 @click.option("--username", required=True, help="Username.")
-@click.option("--password", required=True, help="Password (prompted if omitted).")
+@click.option(
+    "--password",
+    prompt=True,
+    hide_input=True,
+    confirmation_prompt=False,
+    help="Password (prompted securely if omitted).",
+)
 @click.option(
     "--type",
     "user_type",
@@ -435,10 +441,21 @@ def audit_cmd(
         params["start"] = start
     if end is not None:
         params["end"] = end
-    if out_format == "csv":
-        params["format"] = "csv"
     if limit is not None:
         params["page_size"] = limit
+
+    # CSV: the server returns raw CSV text (Content-Type: application/csv),
+    # not JSON. Fetch as bytes and print directly.
+    if out_format == "csv":
+        params["format"] = "csv"
+        try:
+            raw = client.get_bytes("audit", params=params)
+        except SOARError as exc:
+            output.error(exc.message, kind=exc.kind, http_status=exc.http_status)
+            ctx.exit(1)
+            return
+        click.echo(raw.decode("utf-8"), nl=False)
+        return
 
     try:
         result = client.get("audit", params=params)
