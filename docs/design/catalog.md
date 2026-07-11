@@ -58,6 +58,19 @@ that are not SDK list surfaces (e.g. `audit rbac`) are exempt by design.
 | `commands` | ✅ built | Machine-readable JSON tree with guard markers, global options |
 | `mcp` | ✅ built | serve (stdio MCP server), install (.mcp.json registration) |
 
+## SOAR command groups
+
+| Group | Status | Subcommands |
+|---|---|---|
+| `soar` | ✅ built | test (connectivity/auth), info (version/system_info), health (daemon rollup + warm_standby + cluster_node, graceful empties), license (type/quota/usage) — reads via `SOARClient` (requests, dual auth, envelope normalization); typed error envelopes; live-verified against lab SOAR 8.5.0.248 |
+
+## SOAR infrastructure
+
+| Module | Status | Notes |
+|---|---|---|
+| `soar/client.py` | ✅ built | SOARClient — requests-based, lazy, normalizing; dual auth (token + Basic fallback for DELETE) |
+| `config.py` SOAR | ✅ built | `resolve_soar`, `redact_soar`, `SOAR_*` env overlay, profile `soar:` section |
+
 ## Agent integration
 
 | Feature | Status | Notes |

@@ -30,6 +30,7 @@ from splunkctl.commands.parsers import parsers_group
 from splunkctl.commands.rules import rules_group
 from splunkctl.commands.search import search_group
 from splunkctl.commands.server import server_group
+from splunkctl.commands.soar import soar_group
 from splunkctl.commands.state import state_group
 from splunkctl.commands.users import users_group
 
@@ -199,6 +200,7 @@ cli.add_command(parsers_group)
 cli.add_command(rules_group)
 cli.add_command(search_group)
 cli.add_command(server_group)
+cli.add_command(soar_group)
 cli.add_command(mcp_group)
 cli.add_command(state_group)
 cli.add_command(tags_group)

@@ -44,6 +44,12 @@ def classify(exc: Exception) -> Classified | None:
     callers should fall back to their own default handling (e.g. an
     unclassified ``error`` kind, or re-raising).
     """
+    # SOARError carries kind/http_status natively — pass through.
+    from splunkctl.soar.client import SOARError
+
+    if isinstance(exc, SOARError):
+        return Classified(exc.message, exc.kind, exc.http_status)
+
     name = type(exc).__name__
     if name == "HTTPError":
         status: int | None = getattr(exc, "status", None)
