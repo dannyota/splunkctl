@@ -110,7 +110,7 @@ def stats(ctx: click.Context, *, widget: str | None, list_widgets: bool) -> None
     for name in _DEFAULT_WIDGETS:
         try:
             data = client.get(f"widget_data/{name}")
-        except (SOARError, Exception):
+        except Exception:
             data = {"error": "unavailable"}
         rows.append({"widget": name, "data": data})
     output.render(ctx, rows)

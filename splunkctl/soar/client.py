@@ -180,7 +180,8 @@ class SOARClient:
         """Execute a request and return the parsed, normalized JSON."""
         auth_kw = self._auth_kwargs(method=method, path=path)
         headers: dict[str, str] = auth_kw.get("headers", {})
-        headers["Content-Type"] = "application/json"
+        if data is not None:
+            headers["Content-Type"] = "application/json"
 
         kwargs: dict[str, Any] = {
             "method": method,

@@ -9,7 +9,6 @@ import click
 from splunkctl import errors as err_mod
 from splunkctl import output
 from splunkctl.commands.soar._client import get_soar_client
-from splunkctl.soar.client import SOARError
 
 
 @click.command("test")
@@ -19,7 +18,7 @@ def test(ctx: click.Context) -> None:
     client = get_soar_client(ctx)
     try:
         ver = client.get("version")
-    except (SOARError, Exception) as exc:
+    except Exception as exc:
         classified = err_mod.classify(exc)
         if classified is not None:
             output.error(
@@ -27,8 +26,6 @@ def test(ctx: click.Context) -> None:
                 kind=classified.kind,
                 http_status=classified.http_status,
             )
-        elif isinstance(exc, SOARError):
-            output.error(exc.message, kind=exc.kind, http_status=exc.http_status)
         else:
             output.error(str(exc))
         ctx.exit(1)
@@ -116,7 +113,7 @@ def health(ctx: click.Context) -> None:
         if isinstance(standby, dict):
             status = str(standby.get("status", standby.get("warm_standby", "unknown")))
         rows.append({"type": "warm_standby", "name": "warm_standby", "status": status})
-    except (SOARError, Exception):
+    except Exception:
         rows.append(
             {"type": "warm_standby", "name": "warm_standby", "status": "unavailable"}
         )
@@ -143,7 +140,7 @@ def health(ctx: click.Context) -> None:
                         "status": "unclustered",
                     }
                 )
-    except (SOARError, Exception):
+    except Exception:
         rows.append(
             {"type": "cluster_node", "name": "cluster", "status": "unclustered"}
         )
