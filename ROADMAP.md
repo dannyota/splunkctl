@@ -28,8 +28,8 @@ Phase 12 (30–34) SOAR ─► dual-product: containers, playbooks, cases, inges
 
 Phases 7–10 came from the 2026-07 bank-SOC gap analysis (shipped as
 v0.3.1/v0.4.x). Phases 11–12 come from the 2026-07-11 MCP verification +
-SIEM audit + SOAR discovery; task-level detail is in [PLAN.md](PLAN.md)
-(phases J–P), API discovery in
+SIEM audit + SOAR discovery (plan phases J–P, tracked locally); API
+discovery in
 [docs/design/soar-api.md](docs/design/soar-api.md).
 
 ---
