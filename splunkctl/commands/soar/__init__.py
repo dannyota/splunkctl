@@ -13,6 +13,7 @@ from splunkctl.commands.soar.admin_views import meta, settings, stats
 from splunkctl.commands.soar.apps import apps_group
 from splunkctl.commands.soar.artifacts import artifacts_group
 from splunkctl.commands.soar.assets import assets_group, ingest_status_cmd
+from splunkctl.commands.soar.cases import cases_group
 from splunkctl.commands.soar.containers import containers_group
 from splunkctl.commands.soar.functions import functions_group
 from splunkctl.commands.soar.notes import notes_group
@@ -34,6 +35,7 @@ soar_group.add_command(settings)
 soar_group.add_command(stats)
 soar_group.add_command(meta)
 soar_group.add_command(containers_group)
+soar_group.add_command(cases_group)
 soar_group.add_command(notes_group)
 soar_group.add_command(vault_group)
 soar_group.add_command(artifacts_group)
