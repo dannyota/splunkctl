@@ -72,6 +72,7 @@ that are not SDK list surfaces (e.g. `audit rbac`) are exempt by design.
 | `soar ingest-status` | ✅ built | /rest/ingestion_status + app_status rollup; per-poller records with app health |
 | `soar playbooks` | ✅ built | list (--active/--label/--repo), get, enable (guarded; draft_mode caveat), disable (--cancel-runs), trigger (--on label/artifact_created/container_resolved), export (by id or name; --unpack json+py; --out), import (dir or tgz; --scm/--force; base64 POST import_playbook), repos (scm list), sync (pull+force; local-repo 500 explained); first playbooks-as-code loop; splunkctl_seed_noop fixture for round-trip testing |
 | `soar actions` | ✅ built | run (--action/--asset/--app/--container/--param/--type/--name/--wait/--timeout; app_id resolved from asset record; targets[].assets carry names; dry-run previews exact payload), list (--container/--limit/--offset), status (action_run_id), results (per-asset app_runs detail), cancel (guarded) |
+| `soar functions` | ✅ built | list (--limit/--offset), get, import (dir or tgz, base64 POST import_custom_function, force:true), export (tgz via GET custom_function/<id>/export, --out), update (--python/--message, auto SCM id resolution, fetch-merge-post, auto Python 2.7→3 upgrade), delete (Basic auth) |
 
 ## SOAR infrastructure
 

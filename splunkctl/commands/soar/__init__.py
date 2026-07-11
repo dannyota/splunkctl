@@ -11,6 +11,7 @@ from splunkctl.commands.soar.apps import apps_group
 from splunkctl.commands.soar.artifacts import artifacts_group
 from splunkctl.commands.soar.assets import assets_group, ingest_status_cmd
 from splunkctl.commands.soar.containers import containers_group
+from splunkctl.commands.soar.functions import functions_group
 from splunkctl.commands.soar.notes import notes_group
 from splunkctl.commands.soar.playbooks import playbooks_group
 from splunkctl.commands.soar.system import health, info, license_cmd, test
@@ -38,3 +39,4 @@ soar_group.add_command(assets_group)
 soar_group.add_command(ingest_status_cmd)
 soar_group.add_command(playbooks_group)
 soar_group.add_command(actions_group)
+soar_group.add_command(functions_group)
