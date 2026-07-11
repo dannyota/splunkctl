@@ -41,10 +41,12 @@ class SOARError(Exception):
         *,
         kind: str = "error",
         http_status: int | None = None,
+        data: dict[str, Any] | None = None,
     ) -> None:
         self.message = message
         self.kind = kind
         self.http_status = http_status
+        self.data = data or {}
         super().__init__(message)
 
 
@@ -226,7 +228,12 @@ class SOARClient:
                 # Logical failure on HTTP 200 — not an HTTP error
                 kind = "error"
                 http_status = None
-            raise SOARError(msg, kind=kind, http_status=http_status)
+            raise SOARError(
+                msg,
+                kind=kind,
+                http_status=http_status,
+                data=body,
+            )
 
         # HTTP errors without failed:true
         if resp.status_code >= 400:

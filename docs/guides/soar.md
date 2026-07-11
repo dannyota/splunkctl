@@ -154,6 +154,67 @@ fetches the corresponding pseudo-field endpoint
 (`/rest/container/<id>/<suffix>`). Sub-view flags are mutually exclusive
 (last wins).
 
+### Create
+
+```bash
+splunkctl soar containers create --name "DNS Alert" --label events --yes
+splunkctl soar containers create --name "Alert" --label events \
+  --severity high --sensitivity white --sdi "SDI-001" \
+  --description "Probe" --tag malware --field priority=P1 --yes
+```
+
+Creates a container with `run_automation: false`. When `--sdi` is given,
+the CLI queries for an existing container with that SDI first; if found,
+it exits 1 with `kind: conflict` and the existing container id. The
+server also returns `existing_container_id` on a 400 duplicate, which the
+CLI surfaces. Tags and custom fields are passed inline. All mutations are
+dry-run by default (pass `--yes` to apply); the guard banner shows the
+SOAR host.
+
+### Update
+
+```bash
+splunkctl soar containers update 42 --severity critical --yes
+splunkctl soar containers update 42 --status closed --yes
+splunkctl soar containers update 1 2 3 --severity low --yes   # bulk
+splunkctl soar containers update 42 --tag new_tag --yes       # read-modify-write
+```
+
+Updates one or more containers. Multiple ids use a single bulk array POST
+to `/rest/container`. Status must be a name (`closed`, not `2`) -- numeric
+ids are rejected with a `usage` error. Tags are read-modify-write: existing
+tags are fetched first, new tags merged, duplicates removed.
+
+### Close
+
+```bash
+splunkctl soar containers close 42 --yes
+splunkctl soar containers close 1 2 3 --yes                   # bulk
+```
+
+Sugar for `update --status closed`. Multiple ids use one array POST.
+
+### Assign
+
+```bash
+splunkctl soar containers assign 42 --owner analyst --yes
+splunkctl soar containers assign 1 2 --owner admin --role analyst --yes
+```
+
+Sets owner and/or role on containers. Multiple ids use one array POST.
+
+### Delete
+
+```bash
+splunkctl soar containers delete 42 --yes
+splunkctl soar containers delete 1 2 3 --yes
+```
+
+Cascading delete (artifacts, vault, comments, notes, phases, tasks).
+Requires Basic auth credentials (username/password in profile); SOAR
+refuses automation tokens on DELETE. Token-only profiles get a clear
+`kind: auth` error.
+
 ## Error Handling
 
 All SOAR commands produce typed error envelopes on failure:

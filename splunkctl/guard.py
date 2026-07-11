@@ -8,6 +8,36 @@ import click
 from splunkctl import config as cfg_mod
 
 
+def soar_banner(ctx: click.Context) -> str:
+    """Build ``(SOAR @ host:port)`` guard banner for SOAR mutations.
+
+    Reads SOAR config via :func:`splunkctl.config.resolve_soar` — no
+    network I/O. Safe for dry-run previews and ``--yes`` confirmations.
+    """
+    obj: dict[str, Any] = ctx.obj or {}
+    config_path = Path(obj["config"]) if obj.get("config") else None
+    cfg = cfg_mod.resolve_soar(config_path, profile=obj.get("profile"))
+    host = cfg.get("host", "unknown")
+    port = cfg.get("port", 8443)
+    return f"(SOAR @ {host}:{port})"
+
+
+def soar_check(ctx: click.Context, action: str, *, details: str = "") -> bool:
+    """SOAR mutation guard — same as :func:`check` but with the SOAR banner."""
+    obj: dict[str, Any] = ctx.obj or {}
+    tag = soar_banner(ctx)
+
+    if not obj.get("dry_run", True):
+        click.echo(f"Applying: {action} {tag}", err=True)
+        return True
+
+    click.echo(f"[DRY RUN] {action} {tag}", err=True)
+    if details:
+        click.echo(details, err=True)
+    click.echo("Pass --yes to apply.", err=True)
+    return False
+
+
 def banner(ctx: click.Context, *, overrides: dict[str, Any] | None = None) -> str:
     """Build the ``(source: name @ host:port)`` guard banner.
 
