@@ -1,4 +1,4 @@
-"""Tests for soar containers — list and get with sub-views."""
+"""Tests for soar containers list — filters, pagination, validation."""
 
 from __future__ import annotations
 
@@ -11,10 +11,6 @@ from click.testing import CliRunner
 from splunkctl.main import cli
 from splunkctl.soar.client import SOARError
 from tests.soar.conftest import PATCH_CLIENT, PATCH_RESOLVE, soar_cfg
-
-# -------------------------------------------------------------------
-# soar containers list
-# -------------------------------------------------------------------
 
 
 class TestContainersList:
@@ -212,6 +208,7 @@ class TestContainersList:
     def test_list_limit_offset(
         self, mock_resolve: MagicMock, mock_cls: MagicMock
     ) -> None:
+        """--offset with --limit computes page = offset // limit."""
         mock_resolve.return_value = soar_cfg()
         client = MagicMock()
         client.get.return_value = {"count": 0, "num_pages": 1, "data": []}
@@ -234,6 +231,56 @@ class TestContainersList:
         params = kwargs.get("params", {})
         assert params["page_size"] == 5
         assert params["page"] == 2  # offset 10 / page_size 5 = page 2
+
+    @patch(PATCH_CLIENT)
+    @patch(PATCH_RESOLVE)
+    def test_list_offset_without_limit_errors(
+        self, mock_resolve: MagicMock, mock_cls: MagicMock
+    ) -> None:
+        """--offset without --limit exits 1 with a usage error."""
+        mock_resolve.return_value = soar_cfg()
+        client = MagicMock()
+        mock_cls.return_value = client
+
+        result = CliRunner().invoke(
+            cli, ["--json", "soar", "containers", "list", "--offset", "20"]
+        )
+        assert result.exit_code == 1
+        last = result.stderr.strip().splitlines()[-1]
+        payload = json.loads(last)
+        assert payload["error"]["kind"] == "usage"
+        assert "--offset requires --limit" in payload["error"]["message"]
+        client.get.assert_not_called()
+
+    @patch(PATCH_CLIENT)
+    @patch(PATCH_RESOLVE)
+    def test_list_offset_not_multiple_of_limit_errors(
+        self, mock_resolve: MagicMock, mock_cls: MagicMock
+    ) -> None:
+        """--offset must be a multiple of --limit."""
+        mock_resolve.return_value = soar_cfg()
+        client = MagicMock()
+        mock_cls.return_value = client
+
+        result = CliRunner().invoke(
+            cli,
+            [
+                "--json",
+                "soar",
+                "containers",
+                "list",
+                "--limit",
+                "5",
+                "--offset",
+                "7",
+            ],
+        )
+        assert result.exit_code == 1
+        last = result.stderr.strip().splitlines()[-1]
+        payload = json.loads(last)
+        assert payload["error"]["kind"] == "usage"
+        assert "multiple" in payload["error"]["message"]
+        client.get.assert_not_called()
 
     @patch(PATCH_CLIENT)
     @patch(PATCH_RESOLVE)
@@ -277,223 +324,31 @@ class TestContainersList:
         )
         assert result.exit_code == 1
 
-
-# -------------------------------------------------------------------
-# soar containers get
-# -------------------------------------------------------------------
-
-
-class TestContainersGet:
     @patch(PATCH_CLIENT)
     @patch(PATCH_RESOLVE)
-    def test_get_basic(self, mock_resolve: MagicMock, mock_cls: MagicMock) -> None:
-        mock_resolve.return_value = soar_cfg()
-        container: dict[str, Any] = {
-            "id": 42,
-            "name": "DNS Alert",
-            "label": "events",
-            "status": "new",
-            "severity": "high",
-        }
-        client = MagicMock()
-        client.get.return_value = container
-        mock_cls.return_value = client
-
-        result = CliRunner().invoke(cli, ["--json", "soar", "containers", "get", "42"])
-        assert result.exit_code == 0
-        data = json.loads(result.output)
-        assert data[0]["id"] == 42
-        assert data[0]["name"] == "DNS Alert"
-        client.get.assert_called_once_with("container/42", params={})
-
-    @patch(PATCH_CLIENT)
-    @patch(PATCH_RESOLVE)
-    def test_get_artifacts(self, mock_resolve: MagicMock, mock_cls: MagicMock) -> None:
-        mock_resolve.return_value = soar_cfg()
-        client = MagicMock()
-        artifacts = {
-            "count": 1,
-            "num_pages": 1,
-            "data": [
-                {"id": 100, "name": "IP artifact", "cef": {"sourceAddress": "1.2.3.4"}},
-            ],
-        }
-        client.get.return_value = artifacts
-        mock_cls.return_value = client
-
-        result = CliRunner().invoke(
-            cli, ["--json", "soar", "containers", "get", "42", "--artifacts"]
-        )
-        assert result.exit_code == 0
-        data = json.loads(result.output)
-        assert len(data) == 1
-        assert data[0]["name"] == "IP artifact"
-        client.get.assert_called_once_with("container/42/artifacts", params={})
-
-    @patch(PATCH_CLIENT)
-    @patch(PATCH_RESOLVE)
-    def test_get_notes(self, mock_resolve: MagicMock, mock_cls: MagicMock) -> None:
-        mock_resolve.return_value = soar_cfg()
-        client = MagicMock()
-        notes = {
-            "count": 1,
-            "num_pages": 1,
-            "data": [{"id": 10, "title": "Analysis", "content": "Malicious"}],
-        }
-        client.get.return_value = notes
-        mock_cls.return_value = client
-
-        result = CliRunner().invoke(
-            cli, ["--json", "soar", "containers", "get", "42", "--notes"]
-        )
-        assert result.exit_code == 0
-        data = json.loads(result.output)
-        assert data[0]["title"] == "Analysis"
-        client.get.assert_called_once_with("container/42/notes", params={})
-
-    @patch(PATCH_CLIENT)
-    @patch(PATCH_RESOLVE)
-    def test_get_comments(self, mock_resolve: MagicMock, mock_cls: MagicMock) -> None:
-        mock_resolve.return_value = soar_cfg()
-        client = MagicMock()
-        comments = {
-            "count": 1,
-            "num_pages": 1,
-            "data": [{"id": 5, "comment": "Looks bad"}],
-        }
-        client.get.return_value = comments
-        mock_cls.return_value = client
-
-        result = CliRunner().invoke(
-            cli, ["--json", "soar", "containers", "get", "42", "--comments"]
-        )
-        assert result.exit_code == 0
-        data = json.loads(result.output)
-        assert data[0]["comment"] == "Looks bad"
-        client.get.assert_called_once_with("container/42/comments", params={})
-
-    @patch(PATCH_CLIENT)
-    @patch(PATCH_RESOLVE)
-    def test_get_audit(self, mock_resolve: MagicMock, mock_cls: MagicMock) -> None:
-        mock_resolve.return_value = soar_cfg()
-        client = MagicMock()
-        # /rest/container/<id>/audit returns bare array, normalized by client
-        audit = {
-            "count": 2,
-            "num_pages": 1,
-            "data": [
-                {"message": "Created", "time": "2026-07-01"},
-                {"message": "Updated", "time": "2026-07-02"},
-            ],
-        }
-        client.get.return_value = audit
-        mock_cls.return_value = client
-
-        result = CliRunner().invoke(
-            cli, ["--json", "soar", "containers", "get", "42", "--audit"]
-        )
-        assert result.exit_code == 0
-        data = json.loads(result.output)
-        assert len(data) == 2
-        client.get.assert_called_once_with("container/42/audit", params={})
-
-    @patch(PATCH_CLIENT)
-    @patch(PATCH_RESOLVE)
-    def test_get_activity(self, mock_resolve: MagicMock, mock_cls: MagicMock) -> None:
-        mock_resolve.return_value = soar_cfg()
-        client = MagicMock()
-        activity = {
-            "count": 1,
-            "num_pages": 1,
-            "data": [{"message": "Playbook started", "time": "2026-07-01"}],
-        }
-        client.get.return_value = activity
-        mock_cls.return_value = client
-
-        result = CliRunner().invoke(
-            cli, ["--json", "soar", "containers", "get", "42", "--activity"]
-        )
-        assert result.exit_code == 0
-        data = json.loads(result.output)
-        assert data[0]["message"] == "Playbook started"
-        client.get.assert_called_once_with("container/42/activity_feed", params={})
-
-    @patch(PATCH_CLIENT)
-    @patch(PATCH_RESOLVE)
-    def test_get_playbook_runs(
+    def test_list_status_lookup_failure_warns(
         self, mock_resolve: MagicMock, mock_cls: MagicMock
     ) -> None:
+        """A failed container_status lookup warns and passes through."""
         mock_resolve.return_value = soar_cfg()
         client = MagicMock()
-        runs = {
-            "count": 1,
-            "num_pages": 1,
-            "data": [{"id": 7, "playbook": 3, "status": "success"}],
-        }
-        client.get.return_value = runs
+
+        def get_side(path: str, **kw: Any) -> Any:
+            if path == "container_status":
+                raise SOARError("boom", kind="http", http_status=500)
+            return {"count": 0, "num_pages": 1, "data": []}
+
+        client.get.side_effect = get_side
         mock_cls.return_value = client
 
         result = CliRunner().invoke(
-            cli, ["--json", "soar", "containers", "get", "42", "--playbook-runs"]
+            cli, ["--json", "soar", "containers", "list", "--status", "open"]
         )
         assert result.exit_code == 0
-        data = json.loads(result.output)
-        assert data[0]["status"] == "success"
-        client.get.assert_called_once_with("container/42/playbook_runs", params={})
-
-    @patch(PATCH_CLIENT)
-    @patch(PATCH_RESOLVE)
-    def test_get_phases(self, mock_resolve: MagicMock, mock_cls: MagicMock) -> None:
-        mock_resolve.return_value = soar_cfg()
-        client = MagicMock()
-        phases = {
-            "count": 1,
-            "num_pages": 1,
-            "data": [{"id": 1, "name": "Identification", "order": 0}],
-        }
-        client.get.return_value = phases
-        mock_cls.return_value = client
-
-        result = CliRunner().invoke(
-            cli, ["--json", "soar", "containers", "get", "42", "--phases"]
-        )
-        assert result.exit_code == 0
-        data = json.loads(result.output)
-        assert data[0]["name"] == "Identification"
-        client.get.assert_called_once_with("container/42/phases", params={})
-
-    @patch(PATCH_CLIENT)
-    @patch(PATCH_RESOLVE)
-    def test_get_not_found(self, mock_resolve: MagicMock, mock_cls: MagicMock) -> None:
-        mock_resolve.return_value = soar_cfg()
-        client = MagicMock()
-        client.get.side_effect = SOARError(
-            "Not found", kind="not_found", http_status=404
-        )
-        mock_cls.return_value = client
-
-        result = CliRunner().invoke(cli, ["--json", "soar", "containers", "get", "999"])
-        assert result.exit_code == 1
-        last = result.stderr.strip().splitlines()[-1]
-        payload = json.loads(last)
-        assert payload["error"]["kind"] == "not_found"
-
-    @patch(PATCH_CLIENT)
-    @patch(PATCH_RESOLVE)
-    def test_get_multiple_flags_last_wins(
-        self, mock_resolve: MagicMock, mock_cls: MagicMock
-    ) -> None:
-        """When multiple sub-view flags are given, the last one wins."""
-        mock_resolve.return_value = soar_cfg()
-        client = MagicMock()
-        client.get.return_value = {"count": 0, "num_pages": 1, "data": []}
-        mock_cls.return_value = client
-
-        result = CliRunner().invoke(
-            cli,
-            ["--json", "soar", "containers", "get", "42", "--notes", "--comments"],
-        )
-        assert result.exit_code == 0
-        # Should have called with the last sub-view flag
-        call_path = client.get.call_args[0][0]
-        assert call_path in ("container/42/notes", "container/42/comments")
+        assert "could not validate status name" in result.stderr
+        # The container query still went out with the status filter.
+        calls = client.get.call_args_list
+        container_call = [c for c in calls if c[0][0] == "container"]
+        assert len(container_call) == 1
+        params = container_call[0][1].get("params", {})
+        assert params.get("_filter_status") == '"open"'

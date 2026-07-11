@@ -70,7 +70,7 @@ def containers_group() -> None:
     "--offset",
     default=None,
     type=int,
-    help="Row offset.",
+    help="Row offset; requires --limit and must be a multiple of it.",
 )
 @click.pass_context
 def list_cmd(
@@ -87,6 +87,18 @@ def list_cmd(
     offset: int | None,
 ) -> None:
     """List containers with optional filters."""
+    if offset is not None and limit is None:
+        output.error("--offset requires --limit", kind="usage")
+        ctx.exit(1)
+        return
+    if offset is not None and limit is not None and offset % limit != 0:
+        output.error(
+            f"--offset ({offset}) must be a multiple of --limit ({limit})",
+            kind="usage",
+        )
+        ctx.exit(1)
+        return
+
     client = get_soar_client(ctx)
 
     # Validate status name if provided.
@@ -125,8 +137,11 @@ def _validate_status(ctx: click.Context, client: SOARClient, status: str) -> boo
     """
     try:
         statuses_resp = client.get("container_status")
-    except SOARError:
-        # Can't validate — let the server reject it.
+    except SOARError as exc:
+        # Can't validate — warn and pass the name through to the server.
+        output.warning(
+            f"could not validate status name ({exc.message}); passing through"
+        )
         return True
 
     known: list[str] = []
@@ -181,10 +196,9 @@ def _build_list_params(
 
     if limit is not None:
         params["page_size"] = limit
-    if offset is not None and limit is not None and limit > 0:
-        params["page"] = offset // limit
-    elif offset is not None:
-        params["page"] = offset
+        # Offset is validated upstream: requires limit, multiple of limit.
+        if offset is not None and limit > 0:
+            params["page"] = offset // limit
 
     return params
 

@@ -128,9 +128,12 @@ splunkctl soar containers list --json
 
 Filters compose (AND). `--status` validates the name against
 `/rest/container_status` before querying; unknown names exit 1 with a
-usage error. `--type event` maps to API `container_type=default`.
-`--since` maps to `_filter_create_time__gt`. `--filter` passes a raw
-Django-style filter for advanced queries.
+usage error (if the lookup itself fails, a warning is printed and the
+name passes through to the server). `--type event` maps to API
+`container_type=default`. `--since` maps to `_filter_create_time__gt`.
+`--filter` passes a raw Django-style filter for advanced queries.
+`--offset` requires `--limit` and must be a multiple of it (the API
+pages by page number: `page = offset / limit`).
 
 ### Get
 
