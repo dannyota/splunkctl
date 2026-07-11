@@ -72,3 +72,130 @@ def test_focused_tool_args_passthrough(captured_cli: list[list[str]]) -> None:
     assert "index=main" in args
     assert "--limit" in args
     assert "5" in args
+
+
+def test_capabilities_and_meta_tools() -> None:
+    """Handshake declares listChanged + resources; 5 meta-tools listed."""
+
+    async def main() -> None:
+        server = create_server()
+        async with create_connected_server_and_client_session(server) as session:
+            caps = session.get_server_capabilities()
+            assert caps is not None
+            assert caps.tools is not None
+            assert caps.tools.listChanged is True
+            assert caps.resources is not None
+            tools = await session.list_tools()
+            names = {t.name for t in tools.tools}
+            assert names == {"help", "focus", "unfocus", "run", "usage"}
+
+    anyio.run(main)
+
+
+def test_focus_unfocus_lifecycle_with_notifications() -> None:
+    """focus registers tools + notifies; unfocus removes them + notifies."""
+    notifications: list[str] = []
+
+    async def handler(message: Any) -> None:
+        root = getattr(message, "root", None)
+        method = getattr(root, "method", None)
+        if method:
+            notifications.append(method)
+
+    async def main() -> None:
+        server = create_server()
+        async with create_connected_server_and_client_session(
+            server, message_handler=handler
+        ) as session:
+            await session.call_tool("focus", {"group": "indexes"})
+            tools = {t.name for t in (await session.list_tools()).tools}
+            assert "indexes_list" in tools
+            assert "indexes_create" in tools
+
+            res = await session.call_tool("unfocus", {"group": "indexes"})
+            assert "Unloaded" in _text(res)
+            tools = {t.name for t in (await session.list_tools()).tools}
+            assert "indexes_list" not in tools
+
+            await session.call_tool("focus", {"group": "indexes"})
+            await session.call_tool("focus", {"group": "search"})
+            res = await session.call_tool("unfocus", {})
+            assert "all focused tools" in _text(res)
+            tools = {t.name for t in (await session.list_tools()).tools}
+            assert tools == {"help", "focus", "unfocus", "run", "usage"}
+
+    anyio.run(main)
+    assert notifications.count("notifications/tools/list_changed") >= 5
+
+
+def test_usage_auto_registers_tool() -> None:
+    async def main() -> None:
+        server = create_server()
+        async with create_connected_server_and_client_session(server) as session:
+            res = await session.call_tool("usage", {"command": "indexes list"})
+            payload = _text(res)
+            assert '"inputSchema"' in payload
+            assert '"indexes_list"' in payload
+            tools = {t.name for t in (await session.list_tools()).tools}
+            assert "indexes_list" in tools
+
+    anyio.run(main)
+
+
+def test_resources_listed_and_readable() -> None:
+    async def main() -> None:
+        server = create_server()
+        async with create_connected_server_and_client_session(server) as session:
+            resources = (await session.list_resources()).resources
+            assert len(resources) > 10
+            uris = [str(r.uri) for r in resources]
+            assert all(u.startswith("guide://") for u in uris)
+            content = await session.read_resource(resources[0].uri)
+            first = content.contents[0]
+            assert isinstance(first, types.TextResourceContents)
+            assert len(first.text) > 100
+
+    anyio.run(main)
+
+
+def test_run_tool_executes_command(captured_cli: list[list[str]]) -> None:
+    async def main() -> None:
+        server = create_server()
+        async with create_connected_server_and_client_session(server) as session:
+            res = await session.call_tool("run", {"command": "indexes list"})
+            assert not res.isError
+
+    anyio.run(main)
+    assert ["indexes", "list"] in captured_cli
+
+
+def test_error_paths() -> None:
+    async def main() -> None:
+        server = create_server()
+        async with create_connected_server_and_client_session(server) as session:
+            res = await session.call_tool("nonexistent_tool", {})
+            assert res.isError
+            assert "Unknown tool" in _text(res)
+
+            res = await session.call_tool("focus", {"group": "nope"})
+            assert "No tools found" in _text(res)
+            assert "Available:" in _text(res)
+
+            res = await session.call_tool("usage", {"command": "bogus cmd"})
+            assert "Unknown command" in _text(res)
+
+    anyio.run(main)
+
+
+def test_focused_tool_missing_required_arg_yields_cli_usage_error() -> None:
+    """Bad args reach Click, which reports a usage error (real subprocess)."""
+
+    async def main() -> None:
+        server = create_server()
+        async with create_connected_server_and_client_session(server) as session:
+            await session.call_tool("focus", {"group": "search"})
+            res = await session.call_tool("search_run", {})
+            text = _text(res)
+            assert "Missing argument" in text or "Usage" in text
+
+    anyio.run(main)
