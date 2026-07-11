@@ -44,6 +44,7 @@ class TestPlaybooksRun:
         )
         assert result.exit_code == 0
         assert "[DRY RUN]" in result.stderr
+        assert "<name: my_playbook>" in result.stderr
         client.post.assert_not_called()
 
     @patch(PATCH_SOAR_RESOLVE)
@@ -257,7 +258,7 @@ class TestPlaybooksRunWait:
         mock_guard_resolve.return_value = _soar_guard_cfg()
         mock_monotonic.side_effect = [0.0, 1.0, 2.0]
         client = MagicMock()
-        client.post.return_value = {"received": True, "playbook_run_id": "201"}
+        client.post.return_value = {"received": True, "id": 201}
         client.get.side_effect = [
             {"status": "running", "id": 201},
             {"status": "success", "id": 201, "message": '{"msg": "ok"}'},
@@ -301,7 +302,7 @@ class TestPlaybooksRunWait:
         mock_guard_resolve.return_value = _soar_guard_cfg()
         mock_monotonic.side_effect = [0.0, 1.0, 100.0]
         client = MagicMock()
-        client.post.return_value = {"received": True, "playbook_run_id": "202"}
+        client.post.return_value = {"received": True, "id": 202}
         client.get.side_effect = [
             {"status": "running", "id": 202},
             {"status": "running", "id": 202},
@@ -345,7 +346,7 @@ class TestPlaybooksRunWait:
         mock_guard_resolve.return_value = _soar_guard_cfg()
         mock_monotonic.side_effect = [0.0, 1.0]
         client = MagicMock()
-        client.post.return_value = {"received": True, "playbook_run_id": "203"}
+        client.post.return_value = {"received": True, "id": 203}
         client.get.return_value = {
             "status": "success",
             "id": 203,
@@ -388,7 +389,7 @@ class TestPlaybooksRunWait:
         mock_guard_resolve.return_value = _soar_guard_cfg()
         mock_monotonic.side_effect = [0.0, 1.0]
         client = MagicMock()
-        client.post.return_value = {"received": True, "playbook_run_id": "204"}
+        client.post.return_value = {"received": True, "id": 204}
         client.get.return_value = {
             "status": "failed",
             "id": 204,

@@ -164,7 +164,11 @@ def run_cmd(
         scope=scope,
         inputs=inputs,
     )
-    details = json.dumps(body, indent=2)
+    # Show meaningful placeholder in preview for name-based runs.
+    preview_body = body.copy()
+    if playbook_id == -1:
+        preview_body["playbook_id"] = f"<name: {playbook}>"
+    details = json.dumps(preview_body, indent=2)
     if not guard.soar_check(
         ctx,
         f"Run {playbook_label} on container {container_id}",
@@ -194,10 +198,10 @@ def run_cmd(
         ctx.exit(1)
         return
 
-    # POST returns playbook_run_id (not id).
+    # SOARClient normalizes playbook_run_id -> id.
     run_id: int | str = "?"
     if isinstance(result, dict):
-        raw = result.get("playbook_run_id", result.get("id", "?"))
+        raw = result.get("id", "?")
         if isinstance(raw, str) and raw.isdigit():
             run_id = int(raw)
         elif isinstance(raw, int):

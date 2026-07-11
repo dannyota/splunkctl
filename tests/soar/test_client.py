@@ -201,6 +201,16 @@ class TestEnvelopeNormalization:
         assert result["id"] == 42
         assert "action_run_id" not in result
 
+    def test_playbook_run_id_normalized(self) -> None:
+        c = _client()
+        body = {"received": True, "playbook_run_id": "99"}
+        resp = _mock_response(json_data=body)
+        with patch.object(c, "_session") as sess:
+            sess.request.return_value = resp
+            result = c.post("playbook_run", body={"playbook_id": 1})
+        assert result["id"] == "99"
+        assert "playbook_run_id" not in result
+
 
 # -------------------------------------------------------------------
 # Error handling

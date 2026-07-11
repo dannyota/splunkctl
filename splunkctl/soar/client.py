@@ -279,11 +279,19 @@ class SOARClient:
 
     @staticmethod
     def _normalize_post_keys(body: dict[str, Any]) -> dict[str, Any]:
-        """Normalize ``succeeded`` -> ``success`` and ``action_run_id`` -> ``id``."""
+        """Normalize response keys to canonical forms.
+
+        Mappings:
+            ``succeeded`` -> ``success``
+            ``action_run_id`` -> ``id``
+            ``playbook_run_id`` -> ``id``
+        """
         if "succeeded" in body and "success" not in body:
             body["success"] = body.pop("succeeded")
         if "action_run_id" in body and "id" not in body:
             body["id"] = body.pop("action_run_id")
+        if "playbook_run_id" in body and "id" not in body:
+            body["id"] = body.pop("playbook_run_id")
         return body
 
     # -- Public API ---------------------------------------------------------
