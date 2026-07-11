@@ -1,0 +1,54 @@
+{
+  "blockly": false,
+  "blockly_color": "#000000",
+  "category": "Uncategorized",
+  "coa": {
+    "data": {
+      "edges": [
+        {
+          "id": "edge_start_end",
+          "source": "start",
+          "sourceHandle": "out",
+          "target": "end",
+          "targetHandle": "in"
+        }
+      ],
+      "hash": "seed_noop_hash_001",
+      "nodes": [
+        {
+          "data": {
+            "num_inputs": 0,
+            "num_outputs": 1,
+            "output_pins": [{"name": "out"}]
+          },
+          "id": "start",
+          "type": "start"
+        },
+        {
+          "data": {
+            "num_inputs": 1,
+            "num_outputs": 0,
+            "input_pins": [{"name": "in"}]
+          },
+          "id": "end",
+          "type": "end"
+        }
+      ],
+      "schema_version": "0.0.1"
+    }
+  },
+  "create_time": "2026-07-11T00:00:00.000000+00:00",
+  "custom_function": null,
+  "description": "Minimal no-op playbook for splunkctl seed and round-trip testing.",
+  "draft_mode": false,
+  "input_spec": null,
+  "labels": ["events"],
+  "log_level": "info",
+  "modify_time": "2026-07-11T00:00:00.000000+00:00",
+  "name": "splunkctl_seed_noop",
+  "output_spec": null,
+  "playbook_type": "automation",
+  "python_version": "3",
+  "tags": [],
+  "version": 1
+}
