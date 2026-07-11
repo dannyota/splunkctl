@@ -285,3 +285,125 @@ def test_global_profile_flag_selects_profile_for_read_commands(
         )
     call_kwargs = mock_connect.call_args.kwargs
     assert call_kwargs["host"] == "prod-host"
+
+
+# --- SOAR profile section (L1) ---
+
+
+def test_config_show_includes_soar_section(tmp_path: Path) -> None:
+    """config show renders the SOAR section when present."""
+    cfg = tmp_path / "config.yaml"
+    _v2_config(
+        cfg,
+        {
+            "lab": {
+                "host": "siem-host",
+                "soar": {"host": "soar-host", "port": 8443, "token": "tok123"},
+            }
+        },
+        current="lab",
+    )
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--json", "--config", str(cfg), "config", "show"])
+    assert result.exit_code == 0
+    data = json.loads(result.stdout)[0]
+    assert "soar" in data
+    assert data["soar"]["host"] == "soar-host"
+    assert data["soar"]["token"] == "****"
+
+
+def test_config_show_no_soar_section(tmp_path: Path) -> None:
+    """config show without soar: does not include a soar key."""
+    cfg = tmp_path / "config.yaml"
+    _v2_config(cfg, {"lab": {"host": "siem-host"}}, current="lab")
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--json", "--config", str(cfg), "config", "show"])
+    assert result.exit_code == 0
+    data = json.loads(result.stdout)[0]
+    assert "soar" not in data
+
+
+def test_config_show_soar_redacts_password(tmp_path: Path) -> None:
+    """config show redacts SOAR password."""
+    cfg = tmp_path / "config.yaml"
+    _v2_config(
+        cfg,
+        {
+            "lab": {
+                "host": "siem-host",
+                "soar": {"host": "s", "username": "u", "password": "s3cret"},
+            }
+        },
+        current="lab",
+    )
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--json", "--config", str(cfg), "config", "show"])
+    assert result.exit_code == 0
+    data = json.loads(result.stdout)[0]
+    assert data["soar"]["password"] == "****"
+    assert "s3cret" not in result.stdout
+
+
+def test_config_init_soar_prompts_and_saves(tmp_path: Path) -> None:
+    """config init --soar prompts for SOAR fields and saves them."""
+    cfg = tmp_path / "config.yaml"
+    # Pre-create a SIEM profile so --soar can add to it.
+    _v2_config(cfg, {"default": {"host": "siem-host", "port": 8089}})
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["config", "init", "--soar", "--path", str(cfg)],
+        input="soar-host\n8443\ntok123\nsoar-admin\nsoarpass\n",
+    )
+    assert result.exit_code == 0, result.output
+    raw = yaml.safe_load(cfg.read_text())
+    soar = raw["profiles"]["default"]["soar"]
+    assert soar["host"] == "soar-host"
+    assert soar["port"] == 8443
+    assert soar["token"] == "tok123"
+    assert soar["username"] == "soar-admin"
+    assert soar["password"] == "soarpass"
+
+
+def test_config_init_soar_with_profile_flag(tmp_path: Path) -> None:
+    """config init --soar --profile <name> saves to the right profile."""
+    cfg = tmp_path / "config.yaml"
+    _v2_config(
+        cfg,
+        {"lab": {"host": "siem-host"}, "prod": {"host": "prod-siem"}},
+        current="lab",
+    )
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["config", "init", "--soar", "--path", str(cfg), "--profile", "lab"],
+        input="soar-lab\n8443\ntok-lab\n\n\n",
+    )
+    assert result.exit_code == 0, result.output
+    raw = yaml.safe_load(cfg.read_text())
+    assert raw["profiles"]["lab"]["soar"]["host"] == "soar-lab"
+    # Verify sibling profile untouched.
+    assert "soar" not in raw["profiles"]["prod"]
+
+
+def test_config_init_soar_preserves_siem_fields(tmp_path: Path) -> None:
+    """config init --soar must not clobber existing SIEM fields."""
+    cfg = tmp_path / "config.yaml"
+    _v2_config(
+        cfg,
+        {"lab": {"host": "siem-host", "port": 8089, "username": "admin"}},
+        current="lab",
+    )
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["config", "init", "--soar", "--path", str(cfg)],
+        input="soar-host\n8443\ntok\n\n\n",
+    )
+    assert result.exit_code == 0, result.output
+    raw = yaml.safe_load(cfg.read_text())
+    # SIEM fields intact.
+    assert raw["profiles"]["lab"]["host"] == "siem-host"
+    assert raw["profiles"]["lab"]["port"] == 8089
+    # SOAR added.
+    assert raw["profiles"]["lab"]["soar"]["host"] == "soar-host"

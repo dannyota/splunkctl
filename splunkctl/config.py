@@ -36,6 +36,17 @@ _ENV_MAP: dict[str, str] = {
     "SPLUNK_VERIFY": "verify",
 }
 
+_SOAR_ENV_MAP: dict[str, str] = {
+    "SOAR_HOST": "host",
+    "SOAR_PORT": "port",
+    "SOAR_TOKEN": "token",
+    "SOAR_USER": "username",
+    "SOAR_PASS": "password",
+    "SOAR_VERIFY": "verify",
+}
+
+_SOAR_SECRETS: frozenset[str] = frozenset({"token", "password"})
+
 type ConfigSource = Literal["profile", "env", "flags"]
 
 
@@ -68,6 +79,11 @@ def defaults() -> dict[str, Any]:
     }
 
 
+def soar_defaults() -> dict[str, Any]:
+    """Return default SOAR configuration values (port and verify only)."""
+    return {"port": 8443, "verify": False}
+
+
 def _read_raw(path: Path) -> dict[str, Any]:
     """Read a config file as a plain dict; {} if missing or empty."""
     if not path.exists():
@@ -94,20 +110,37 @@ def _active_profile_name(raw: dict[str, Any], profile: str | None) -> str:
 
 
 def _profile_config(raw: dict[str, Any], name: str) -> dict[str, Any]:
-    """Return one profile's fields, or raise if ``name`` is unknown.
+    """Return one profile's SIEM fields, or raise if ``name`` is unknown.
 
     A v2 file requires an explicit ``profiles.<name>`` entry. A legacy
     (flat) or missing file only ever has the implicit ``default`` profile.
+    The nested ``soar:`` key is stripped — use ``_soar_profile_config``
+    to read it.
     """
     if _is_v2(raw):
         profiles = raw.get(PROFILES_KEY) or {}
         prof = profiles.get(name)
         if not isinstance(prof, dict):
             raise ProfileNotFoundError(name)
-        return prof
+        return {k: v for k, v in prof.items() if k != "soar"}
     if name != _DEFAULT_PROFILE:
         raise ProfileNotFoundError(name)
-    return raw
+    return {k: v for k, v in raw.items() if k != "soar"}
+
+
+def _soar_profile_config(raw: dict[str, Any], name: str) -> dict[str, Any]:
+    """Return the ``soar:`` nested map from a profile, or {} if absent."""
+    if _is_v2(raw):
+        profiles = raw.get(PROFILES_KEY) or {}
+        prof = profiles.get(name)
+        if not isinstance(prof, dict):
+            raise ProfileNotFoundError(name)
+        soar = prof.get("soar")
+        return dict(soar) if isinstance(soar, dict) else {}
+    if name != _DEFAULT_PROFILE:
+        raise ProfileNotFoundError(name)
+    soar = raw.get("soar")
+    return dict(soar) if isinstance(soar, dict) else {}
 
 
 def is_v2_file(path: Path | None = None) -> bool:
@@ -262,3 +295,57 @@ def use_profile(name: str, path: Path | None = None) -> Path:
 def redact(cfg: dict[str, Any]) -> dict[str, Any]:
     """Return a copy with secret values replaced by '****'."""
     return {k: "****" if k in _SECRETS and v else v for k, v in cfg.items()}
+
+
+# --- SOAR config resolution ---
+
+
+def _apply_soar_env_overlay(cfg: dict[str, Any]) -> bool:
+    """Overlay ``SOAR_*`` env vars onto ``cfg``; True if any applied."""
+    touched = False
+    for env_key, cfg_key in _SOAR_ENV_MAP.items():
+        val = os.environ.get(env_key)
+        if val is None:
+            continue
+        if cfg_key == "port":
+            try:
+                cfg[cfg_key] = int(val)
+            except ValueError:
+                continue
+        elif cfg_key == "verify":
+            cfg[cfg_key] = val.lower() in ("1", "true", "yes")
+        else:
+            cfg[cfg_key] = val
+        touched = True
+    return touched
+
+
+def resolve_soar(
+    path: Path | None = None,
+    *,
+    profile: str | None = None,
+    overrides: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Resolve effective SOAR config for the active profile.
+
+    Precedence: ``overrides`` (CLI flags) > ``SOAR_*`` env vars >
+    profile ``soar:`` section > built-in SOAR defaults (port, verify).
+    Returns a flat dict with only the keys that have values — callers
+    check for ``host`` to decide if SOAR is configured.
+    """
+    cfg = soar_defaults()
+    config_path = path or DEFAULT_PATH
+    raw = _read_raw(config_path)
+    name = _active_profile_name(raw, profile)
+    cfg.update(_soar_profile_config(raw, name))
+    _apply_soar_env_overlay(cfg)
+    if overrides:
+        for key, val in overrides.items():
+            if val is not None:
+                cfg[key] = val
+    return cfg
+
+
+def redact_soar(cfg: dict[str, Any]) -> dict[str, Any]:
+    """Return a copy of SOAR config with secrets replaced by '****'."""
+    return {k: "****" if k in _SOAR_SECRETS and v else v for k, v in cfg.items()}

@@ -281,3 +281,197 @@ def test_use_profile_does_not_test_connectivity(
     config.use_profile("uat", p)
     raw = yaml.safe_load(p.read_text())
     assert raw["current"] == "uat"
+
+
+# --- SOAR profile section (L1) ---
+
+
+def test_soar_defaults() -> None:
+    """soar_defaults returns correct default port and verify."""
+    d = config.soar_defaults()
+    assert d["port"] == 8443
+    assert d["verify"] is False
+    # No host/token/username/password defaults — those must be explicit.
+    assert "host" not in d
+    assert "token" not in d
+    assert "username" not in d
+    assert "password" not in d
+
+
+def test_resolve_soar_from_profile(tmp_path: Path) -> None:
+    """A profile with a soar: section resolves SOAR fields."""
+    p = tmp_path / "config.yaml"
+    _write_v2(
+        p,
+        {"lab": {"host": "siem", "soar": {"host": "soar-host", "token": "tok123"}}},
+        current="lab",
+    )
+    resolved = config.resolve_soar(p)
+    assert resolved["host"] == "soar-host"
+    assert resolved["token"] == "tok123"
+    assert resolved["port"] == 8443  # default
+
+
+def test_resolve_soar_env_overlay(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """SOAR_* env vars override profile soar: values."""
+    p = tmp_path / "config.yaml"
+    _write_v2(
+        p,
+        {"lab": {"host": "siem", "soar": {"host": "profile-soar"}}},
+        current="lab",
+    )
+    monkeypatch.setenv("SOAR_HOST", "env-soar")
+    monkeypatch.setenv("SOAR_PORT", "9443")
+    monkeypatch.setenv("SOAR_TOKEN", "env-token")
+    monkeypatch.setenv("SOAR_VERIFY", "true")
+    resolved = config.resolve_soar(p)
+    assert resolved["host"] == "env-soar"
+    assert resolved["port"] == 9443
+    assert resolved["token"] == "env-token"
+    assert resolved["verify"] is True
+
+
+def test_resolve_soar_env_user_and_pass(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """SOAR_USER and SOAR_PASS map to username and password."""
+    p = tmp_path / "config.yaml"
+    _write_v2(
+        p,
+        {"lab": {"host": "siem", "soar": {"host": "soar-host"}}},
+        current="lab",
+    )
+    monkeypatch.setenv("SOAR_USER", "soar-admin")
+    monkeypatch.setenv("SOAR_PASS", "s3cret")
+    resolved = config.resolve_soar(p)
+    assert resolved["username"] == "soar-admin"
+    assert resolved["password"] == "s3cret"
+
+
+def test_resolve_soar_flags_beat_env(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Explicit overrides (flags) beat env vars."""
+    p = tmp_path / "config.yaml"
+    _write_v2(
+        p,
+        {"lab": {"host": "siem", "soar": {"host": "profile-soar"}}},
+        current="lab",
+    )
+    monkeypatch.setenv("SOAR_HOST", "env-soar")
+    resolved = config.resolve_soar(p, overrides={"host": "flag-soar"})
+    assert resolved["host"] == "flag-soar"
+
+
+def test_resolve_soar_no_soar_section(tmp_path: Path) -> None:
+    """A profile without soar: returns only defaults (port, verify)."""
+    p = tmp_path / "config.yaml"
+    _write_v2(p, {"lab": {"host": "siem"}}, current="lab")
+    resolved = config.resolve_soar(p)
+    assert resolved["port"] == 8443
+    assert resolved["verify"] is False
+    assert "host" not in resolved
+
+
+def test_resolve_soar_respects_profile_flag(tmp_path: Path) -> None:
+    """--profile selects which profile's soar: to read."""
+    p = tmp_path / "config.yaml"
+    _write_v2(
+        p,
+        {
+            "dev": {"host": "dev-siem", "soar": {"host": "dev-soar"}},
+            "prod": {"host": "prod-siem", "soar": {"host": "prod-soar"}},
+        },
+        current="dev",
+    )
+    resolved = config.resolve_soar(p, profile="prod")
+    assert resolved["host"] == "prod-soar"
+
+
+def test_resolve_soar_invalid_port_env_ignored(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Non-numeric SOAR_PORT is silently ignored."""
+    p = tmp_path / "config.yaml"
+    _write_v2(
+        p,
+        {"lab": {"host": "siem", "soar": {"host": "soar-host", "port": 9443}}},
+        current="lab",
+    )
+    monkeypatch.setenv("SOAR_PORT", "not-a-number")
+    resolved = config.resolve_soar(p)
+    assert resolved["port"] == 9443
+
+
+def test_redact_soar_masks_secrets() -> None:
+    """redact_soar masks token and password, keeps others."""
+    soar_cfg: dict[str, Any] = {
+        "host": "soar-host",
+        "port": 8443,
+        "token": "tok123",
+        "username": "admin",
+        "password": "s3cret",
+        "verify": False,
+    }
+    r = config.redact_soar(soar_cfg)
+    assert r["host"] == "soar-host"
+    assert r["token"] == "****"
+    assert r["password"] == "****"
+    assert r["username"] == "admin"
+    assert r["port"] == 8443
+
+
+def test_redact_soar_keeps_empty_secrets() -> None:
+    """Empty token/password stays empty, not redacted."""
+    soar_cfg: dict[str, Any] = {"token": "", "password": ""}
+    r = config.redact_soar(soar_cfg)
+    assert r["token"] == ""
+    assert r["password"] == ""
+
+
+def test_save_profile_with_soar_roundtrips(tmp_path: Path) -> None:
+    """A profile with soar: nested map saves and reloads correctly."""
+    p = tmp_path / "config.yaml"
+    profile_cfg: dict[str, Any] = {
+        "host": "siem-host",
+        "port": 8089,
+        "soar": {"host": "soar-host", "port": 8443, "token": "tok"},
+    }
+    config.save_profile(profile_cfg, "lab", p)
+    raw = yaml.safe_load(p.read_text())
+    assert raw["profiles"]["lab"]["soar"]["host"] == "soar-host"
+    assert raw["profiles"]["lab"]["soar"]["token"] == "tok"
+
+
+def test_resolve_soar_verify_false_string_env(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """SOAR_VERIFY=false resolves as boolean False."""
+    p = tmp_path / "config.yaml"
+    _write_v2(p, {"lab": {"host": "siem", "soar": {"host": "s"}}}, current="lab")
+    monkeypatch.setenv("SOAR_VERIFY", "false")
+    resolved = config.resolve_soar(p)
+    assert resolved["verify"] is False
+
+
+def test_siem_profile_unaffected_by_soar_section(tmp_path: Path) -> None:
+    """Adding soar: to a profile does not pollute SIEM resolve."""
+    p = tmp_path / "config.yaml"
+    _write_v2(
+        p,
+        {
+            "lab": {
+                "host": "siem-host",
+                "port": 8089,
+                "soar": {"host": "soar-host", "token": "tok"},
+            }
+        },
+        current="lab",
+    )
+    siem = config.resolve(p)
+    assert siem["cfg"]["host"] == "siem-host"
+    assert "soar" not in siem["cfg"] or siem["cfg"].get("soar") is not None
+    # Specifically: SIEM resolve must NOT have soar keys at top level
+    assert siem["cfg"].get("token") is None or siem["cfg"].get("token") == ""

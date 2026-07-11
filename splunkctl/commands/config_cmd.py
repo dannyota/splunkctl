@@ -17,17 +17,24 @@ def config_group() -> None:
 
 
 @config_group.command()
-@click.option("--host", prompt=True, default="localhost", help="Splunk host.")
-@click.option("--port", prompt=True, default=8089, type=int, help="Splunk port.")
-@click.option("--username", prompt=True, default="admin", help="Splunk username.")
-@click.option("--password", prompt=True, hide_input=True, help="Splunk password.")
+@click.option("--host", default=None, help="Splunk host.")
+@click.option("--port", default=None, type=int, help="Splunk port.")
+@click.option("--username", default=None, help="Splunk username.")
+@click.option("--password", default=None, help="Splunk password.")
 @click.option(
     "--scheme",
     type=click.Choice(["https", "http"]),
-    default="https",
+    default=None,
     help="Connection scheme.",
 )
-@click.option("--verify/--no-verify", default=False, help="Verify SSL certificate.")
+@click.option("--verify/--no-verify", default=None, help="Verify SSL certificate.")
+@click.option(
+    "--soar",
+    "soar_mode",
+    is_flag=True,
+    default=False,
+    help="Add SOAR connection settings to the profile.",
+)
 @click.option(
     "--profile",
     "profile_name",
@@ -44,13 +51,16 @@ def config_group() -> None:
     default=None,
     help="Config file path (default: ~/.splunkctl/config.yaml).",
 )
+@click.pass_context
 def init(
-    host: str,
-    port: int,
-    username: str,
-    password: str,
-    scheme: str,
-    verify: bool,
+    ctx: click.Context,
+    host: str | None,
+    port: int | None,
+    username: str | None,
+    password: str | None,
+    scheme: str | None,
+    verify: bool | None,
+    soar_mode: bool,
     profile_name: str | None,
     path: str | None,
 ) -> None:
@@ -63,7 +73,28 @@ def init(
     never clobbers an existing multi-profile file.
     ``config init --profile <name>`` targets that named profile instead —
     use ``config use <name>`` afterwards to make it active.
+
+    ``config init --soar`` prompts for SOAR connection settings and saves
+    them as a nested ``soar:`` map within the profile, preserving existing
+    SIEM fields.
     """
+    dest = Path(path) if path else None
+    if soar_mode:
+        _init_soar(profile_name, dest)
+        return
+
+    # Prompt for SIEM fields not supplied via flags.
+    host = host or click.prompt("Host", default="localhost")
+    port = port or click.prompt("Port", default=8089, type=int)
+    username = username or click.prompt("Username", default="admin")
+    password = (
+        password
+        if password is not None
+        else click.prompt("Password", default="", hide_input=True)
+    )
+    scheme = scheme or "https"
+    verify = verify if verify is not None else False
+
     cfg: dict[str, Any] = {
         "host": host,
         "port": port,
@@ -72,7 +103,6 @@ def init(
         "scheme": scheme,
         "verify": verify,
     }
-    dest = Path(path) if path else None
     if profile_name:
         saved = cfg_mod.save_profile(cfg, profile_name, dest)
     elif cfg_mod.is_v2_file(dest):
@@ -80,6 +110,40 @@ def init(
     else:
         saved = cfg_mod.save(cfg, dest)
     output.info(f"Config saved to {saved}")
+
+
+def _init_soar(
+    profile_name: str | None,
+    dest: Path | None,
+) -> None:
+    """Prompt for SOAR fields and merge into the target profile."""
+    soar_host = click.prompt("SOAR host", type=str)
+    soar_port = click.prompt("SOAR port", default=8443, type=int)
+    soar_token = click.prompt("SOAR token", default="", type=str)
+    soar_user = click.prompt("SOAR username", default="", type=str)
+    soar_pass = click.prompt("SOAR password", default="", hide_input=True, type=str)
+
+    soar_cfg: dict[str, Any] = {"host": soar_host, "port": soar_port}
+    if soar_token:
+        soar_cfg["token"] = soar_token
+    if soar_user:
+        soar_cfg["username"] = soar_user
+    if soar_pass:
+        soar_cfg["password"] = soar_pass
+
+    # Resolve which profile to update (same precedence as resolve()).
+    config_path = dest or cfg_mod.DEFAULT_PATH
+    raw = cfg_mod._read_raw(config_path)  # noqa: SLF001
+    name = cfg_mod._active_profile_name(raw, profile_name)  # noqa: SLF001
+
+    # Load existing SIEM fields (if any) and attach the new soar: map.
+    try:
+        existing = dict(cfg_mod._profile_config(raw, name))  # noqa: SLF001
+    except cfg_mod.ProfileNotFoundError:
+        existing = {}
+    existing["soar"] = soar_cfg
+    saved = cfg_mod.save_profile(existing, name, dest)
+    output.info(f"SOAR config saved to {saved}")
 
 
 @config_group.command()
@@ -97,7 +161,17 @@ def show(ctx: click.Context) -> None:
     explicit_profile = obj.get("profile")
 
     resolved = cfg_mod.resolve(config_path, profile=explicit_profile)
-    payload = {"profile": resolved["profile"], **cfg_mod.redact(resolved["cfg"])}
+    payload: dict[str, Any] = {
+        "profile": resolved["profile"],
+        **cfg_mod.redact(resolved["cfg"]),
+    }
+
+    # Include redacted SOAR section if the profile has one.
+    soar = cfg_mod.resolve_soar(config_path, profile=explicit_profile)
+    # Only include soar: if the profile actually configured it (has a host).
+    if "host" in soar:
+        payload["soar"] = cfg_mod.redact_soar(soar)
+
     output.render(ctx, payload)
 
     if explicit_profile is None:
