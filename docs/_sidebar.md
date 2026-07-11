@@ -29,7 +29,7 @@
   - [Server health](guides/server.md)
 
 - **SOAR**
-  - [Playbook runs](guides/soar-playbook-runs.md)
+  - [Playbook runs](guides/soar-playbooks.md)
 
 - **Design**
   - [Architecture](design/architecture.md)

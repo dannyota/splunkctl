@@ -37,7 +37,7 @@
 
 ## SOAR
 
-- [Playbook runs](https://splunkctl.danny.vn/#/guides/soar-playbook-runs): Run playbooks against containers, poll to completion, inspect run history and block results, cancel in-progress runs.
+- [Playbook runs](https://splunkctl.danny.vn/#/guides/soar-playbooks): Playbook lifecycle and playbooks-as-code workflow on Splunk SOAR via the REST API. Export, edit in git, import back -- the first programmatic
 
 ## Design
 

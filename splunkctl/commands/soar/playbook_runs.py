@@ -10,6 +10,7 @@ import click
 
 from splunkctl import guard, output
 from splunkctl.commands.soar._client import get_soar_client
+from splunkctl.commands.soar.playbooks import playbooks_group
 from splunkctl.soar.client import SOARClient, SOARError
 
 # Terminal statuses — stop polling when we see one of these.
@@ -17,14 +18,6 @@ _TERMINAL: frozenset[str] = frozenset({"success", "failed", "cancelled"})
 
 _DEFAULT_POLL_INTERVAL: float = 2.0
 _DEFAULT_TIMEOUT: int = 300
-
-
-# -- playbook group (parent is registered externally) -------------------------
-
-
-@click.group("playbooks")
-def playbooks_group() -> None:
-    """Playbook operations — run playbooks, inspect runs."""
 
 
 # -- run ---------------------------------------------------------------------

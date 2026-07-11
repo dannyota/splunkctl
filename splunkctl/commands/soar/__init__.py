@@ -5,6 +5,9 @@ import click
 from splunkctl.commands.soar import (
     containers_write as _cw,  # noqa: F401  # register writes
 )
+from splunkctl.commands.soar import (
+    playbook_runs as _pr,  # noqa: F401  # register run/runs
+)
 from splunkctl.commands.soar.actions import actions_group
 from splunkctl.commands.soar.admin_views import meta, settings, stats
 from splunkctl.commands.soar.apps import apps_group
@@ -13,7 +16,6 @@ from splunkctl.commands.soar.assets import assets_group, ingest_status_cmd
 from splunkctl.commands.soar.containers import containers_group
 from splunkctl.commands.soar.functions import functions_group
 from splunkctl.commands.soar.notes import notes_group
-from splunkctl.commands.soar.playbook_runs import playbooks_group
 from splunkctl.commands.soar.playbooks import playbooks_group
 from splunkctl.commands.soar.system import health, info, license_cmd, test
 from splunkctl.commands.soar.vault import vault_group
