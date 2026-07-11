@@ -12,7 +12,7 @@ from splunkctl import guard, output
 from splunkctl.commands.soar._client import get_soar_client
 from splunkctl.soar.client import SOARError
 
-_TERMINAL_STATUSES: frozenset[str] = frozenset({"success", "failed"})
+_TERMINAL_STATUSES: frozenset[str] = frozenset({"success", "failed", "cancelled"})
 _DEFAULT_POLL_INTERVAL: float = 2.0
 _DEFAULT_TIMEOUT: int = 300
 
@@ -154,13 +154,10 @@ def _resolve_app_id(
     The SOAR asset record stores the app reference as ``app`` (not
     ``app_id``). Falls back to ``app_id`` for forward-compatibility.
     """
-    try:
-        result = client.get(
-            "asset",
-            params={"_filter_name": f'"{asset_name}"', "page_size": 1},
-        )
-    except SOARError:
-        return None
+    result = client.get(
+        "asset",
+        params={"_filter_name": f'"{asset_name}"', "page_size": 1},
+    )
     data = result.get("data", []) if isinstance(result, dict) else []
     if data and isinstance(data[0], dict):
         aid = data[0].get("app") or data[0].get("app_id") or 0
@@ -224,13 +221,10 @@ def _poll_action(
     """
     deadline = time.monotonic() + timeout
     while True:
-        try:
-            status: dict[str, Any] = client.get(
-                f"action_run/{action_run_id}",
-                params={},
-            )
-        except SOARError:
-            return None
+        status: dict[str, Any] = client.get(
+            f"action_run/{action_run_id}",
+            params={},
+        )
 
         current = status.get("status", "") if isinstance(status, dict) else ""
         if current in _TERMINAL_STATUSES:
@@ -329,7 +323,12 @@ def run_cmd(
 
     client = get_soar_client(ctx)
 
-    targets, err = _build_targets(client, assets, app_id, params)
+    try:
+        targets, err = _build_targets(client, assets, app_id, params)
+    except SOARError as exc:
+        output.error(exc.message, kind=exc.kind, http_status=exc.http_status)
+        ctx.exit(1)
+        return
     if err:
         output.error(err, kind="usage")
         ctx.exit(1)
@@ -360,7 +359,12 @@ def run_cmd(
 
     # Poll until terminal
     output.info(f"Waiting for action run {new_id} (timeout={timeout}s)...")
-    final = _poll_action(client, int(new_id), timeout=timeout)
+    try:
+        final = _poll_action(client, int(new_id), timeout=timeout)
+    except SOARError as exc:
+        output.error(exc.message, kind=exc.kind, http_status=exc.http_status)
+        ctx.exit(1)
+        return
 
     if final is None:
         output.error(

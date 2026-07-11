@@ -29,7 +29,11 @@
   - [Server health](guides/server.md)
 
 - **SOAR**
-  - [Playbook runs](guides/soar-playbooks.md)
+  - [Overview](guides/soar.md)
+  - [Apps, assets & ingest](guides/soar-automation.md)
+  - [Playbooks](guides/soar-playbooks.md)
+  - [Actions](guides/soar-actions.md)
+  - [Functions](guides/soar-functions.md)
 
 - **Design**
   - [Architecture](design/architecture.md)
