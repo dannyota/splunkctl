@@ -35,6 +35,33 @@ def _is_not_enabled(exc: Exception) -> bool:
     return "not enabled" in msg
 
 
+def _disabled_detail(exc: Exception) -> str:
+    """Human-readable message from a feature-disabled HTTPError.
+
+    Splunk's error body is JSON (``{"messages": [{"text": ...}]}``) when
+    the request asked for ``output_mode=json``, XML otherwise; ``str(exc)``
+    would embed the raw bytes literal for JSON bodies.
+    """
+    raw = getattr(exc, "body", b"") or b""
+    body = raw.decode("utf-8", errors="replace") if isinstance(raw, bytes) else raw
+    try:
+        msgs = json.loads(body).get("messages", [])
+        texts = [m.get("text") for m in msgs if isinstance(m, dict)]
+        if any(texts):
+            return "; ".join(t for t in texts if t)
+    except (json.JSONDecodeError, AttributeError):
+        pass
+    try:
+        from defusedxml.ElementTree import fromstring
+
+        text = fromstring(body).findtext("./messages/msg")
+        if text:
+            return text
+    except Exception:  # noqa: BLE001, S110
+        pass
+    return str(getattr(exc, "reason", "") or exc)
+
+
 def _rest_get(svc: Any, path: str) -> dict[str, Any]:
     """GET a REST path and parse JSON. Thin wrapper for topology reads."""
     resp = svc.get(path, output_mode="json")
@@ -156,7 +183,7 @@ def cluster_health(ctx: click.Context) -> None:
         info_body = _rest_get(svc, f"/services/{prefix}/info")
     except Exception as exc:
         if _is_not_enabled(exc):
-            output.render(ctx, {"mode": "disabled", "detail": str(exc)})
+            output.render(ctx, {"mode": "disabled", "detail": _disabled_detail(exc)})
             return
         # 404 -> try legacy master prefix
         if type(exc).__name__ == "HTTPError" and getattr(exc, "status", 0) == 404:
@@ -165,7 +192,10 @@ def cluster_health(ctx: click.Context) -> None:
                 info_body = _rest_get(svc, f"/services/{prefix}/info")
             except Exception as inner:
                 if _is_not_enabled(inner):
-                    output.render(ctx, {"mode": "disabled", "detail": str(inner)})
+                    output.render(
+                        ctx,
+                        {"mode": "disabled", "detail": _disabled_detail(inner)},
+                    )
                     return
                 raise
         else:
@@ -224,7 +254,7 @@ def shcluster_health(ctx: click.Context) -> None:
         body = _rest_get(svc, "/services/shcluster/status")
     except Exception as exc:
         if _is_not_enabled(exc):
-            output.render(ctx, {"mode": "disabled", "detail": str(exc)})
+            output.render(ctx, {"mode": "disabled", "detail": _disabled_detail(exc)})
             return
         raise
 
@@ -273,7 +303,9 @@ def deployment_health(ctx: click.Context) -> None:
         body = _rest_get(svc, "/services/deployment/server/clients")
     except Exception as exc:
         if _is_not_enabled(exc):
-            output.render(ctx, {"status": "disabled", "detail": str(exc)})
+            output.render(
+                ctx, {"status": "disabled", "detail": _disabled_detail(exc)}
+            )
             return
         raise
 
