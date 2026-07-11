@@ -9,7 +9,9 @@ import sys
 from typing import Any
 
 from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.fastmcp.utilities.func_metadata import ArgModelBase, FuncMetadata
 from mcp.types import ToolAnnotations
+from pydantic import ConfigDict
 
 from splunkctl.mcp.resources import load_guides
 from splunkctl.mcp.tools import (
@@ -290,6 +292,23 @@ def create_server() -> FastMCP:
     return mcp
 
 
+class _PassThroughArgs(ArgModelBase):
+    """Arg model that forwards arbitrary fields to the CLI unvalidated.
+
+    Focused tools advertise a Click-derived JSON Schema, but runtime
+    validation belongs to Click itself — the subprocess rejects bad args
+    with a usage error. FastMCP's default ``func_metadata`` would instead
+    validate against the runner's ``**kwargs`` signature, which no client
+    payload can ever satisfy.
+    """
+
+    model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
+
+    def model_dump_one_level(self) -> dict[str, Any]:
+        """Return the extra (client-sent) fields as-is."""
+        return dict(self.__pydantic_extra__ or {})
+
+
 def _register_tool(mcp: FastMCP, entry: ToolEntry) -> None:
     """Register a focused tool that executes via subprocess.
 
@@ -297,7 +316,6 @@ def _register_tool(mcp: FastMCP, entry: ToolEntry) -> None:
     Schema instead of FastMCP's auto-generation from function signatures.
     """
     from mcp.server.fastmcp.tools import Tool as MCPTool
-    from mcp.server.fastmcp.utilities.func_metadata import func_metadata
 
     annotations = ToolAnnotations(
         readOnlyHint=not entry.guarded,
@@ -314,7 +332,7 @@ def _register_tool(mcp: FastMCP, entry: ToolEntry) -> None:
         title=None,
         description=entry.description,
         parameters=entry.schema,
-        fn_metadata=func_metadata(_runner),
+        fn_metadata=FuncMetadata(arg_model=_PassThroughArgs),
         is_async=True,
         context_kwarg=None,
         annotations=annotations,
