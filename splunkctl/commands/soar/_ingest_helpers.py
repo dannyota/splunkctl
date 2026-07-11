@@ -120,8 +120,10 @@ def fetch_sid_results(
     return read_results(job.results(output_mode="json", count=0))
 
 
-def load_map_file(path: str) -> tuple[dict[str, str], bool]:
-    """Load a YAML map file and return (cim_map, include_unmapped).
+def load_map_file(
+    path: str,
+) -> tuple[dict[str, str], dict[str, list[str]], bool]:
+    """Load a YAML map file and return (cim_map, contains_map, include_unmapped).
 
     Format::
 
@@ -133,13 +135,18 @@ def load_map_file(path: str) -> tuple[dict[str, str], bool]:
     data = yaml.safe_load(Path(path).read_text())
     mappings: dict[str, Any] = data.get("mappings", {})
     cim_map: dict[str, str] = {}
+    contains_map: dict[str, list[str]] = {}
     for cim_field, spec in mappings.items():
         if isinstance(spec, dict):
-            cim_map[cim_field] = spec.get("cef", cim_field)
+            cef_key = spec.get("cef", cim_field)
+            cim_map[cim_field] = cef_key
+            contains = spec.get("contains")
+            if isinstance(contains, list) and contains:
+                contains_map[cef_key] = [str(c) for c in contains]
         else:
             cim_map[cim_field] = str(spec)
     unmapped = data.get("unmapped", "drop")
-    return cim_map, unmapped == "pass"
+    return cim_map, contains_map, unmapped == "pass"
 
 
 def validate_label(soar: Any, label: str) -> bool:
@@ -213,6 +220,8 @@ class ContainerGroup:
 def build_preview(
     groups: dict[str, ContainerGroup],
     cim_map: dict[str, str],
+    *,
+    include_unmapped: bool = False,
 ) -> str:
     """Build the dry-run preview string."""
     lines: list[str] = []
@@ -238,7 +247,7 @@ def build_preview(
             sample_cef = row_to_cef(
                 first_grp.rows[0],
                 cim_map=cim_map,
-                include_unmapped=False,
+                include_unmapped=include_unmapped,
             )
             if sample_cef:
                 lines.append("")

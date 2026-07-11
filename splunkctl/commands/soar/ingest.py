@@ -20,6 +20,7 @@ from splunkctl.commands.soar._ingest_helpers import (
 )
 from splunkctl.guard import soar_check
 from splunkctl.soar.cimcef import (
+    CEF_CONTAINS_MAP,
     CIM_CEF_MAP,
     artifact_name_for_row,
     auto_cef_types,
@@ -84,7 +85,7 @@ from splunkctl.soar.client import SOARError
     "--map",
     "map_overrides",
     multiple=True,
-    help="CEF=splunk_field mapping override (repeatable).",
+    help="CEF_KEY=SPLUNK_FIELD — map a result field onto a CEF key (repeatable).",
 )
 @click.option(
     "--map-file",
@@ -140,9 +141,11 @@ def ingest_cmd(
 
     # ---- Build effective CIM map ----
     cim_map = dict(CIM_CEF_MAP)
+    contains_map = dict(CEF_CONTAINS_MAP)
     if map_file:
-        file_map, include_unmapped_file = load_map_file(map_file)
+        file_map, file_contains, include_unmapped_file = load_map_file(map_file)
         cim_map = file_map
+        contains_map = {**CEF_CONTAINS_MAP, **file_contains}
         include_unmapped = include_unmapped or include_unmapped_file
     for override in map_overrides:
         cef_key, _, splunk_field = override.partition("=")
@@ -174,7 +177,7 @@ def ingest_cmd(
     )
 
     # ---- Dry-run preview ----
-    preview = build_preview(groups, cim_map)
+    preview = build_preview(groups, cim_map, include_unmapped=include_unmapped)
     action = f"Ingest {len(rows)} row(s) into SOAR"
     if not soar_check(ctx, action, details=preview):
         return
@@ -191,6 +194,7 @@ def ingest_cmd(
         severity_override=severity_override,
         sdi_field=sdi_field,
         cim_map=cim_map,
+        contains_map=contains_map,
         include_unmapped=include_unmapped,
         no_automation=no_automation,
     )
@@ -243,6 +247,7 @@ def _apply(
     severity_override: str | None,
     sdi_field: str,
     cim_map: dict[str, str],
+    contains_map: dict[str, list[str]],
     include_unmapped: bool,
     no_automation: bool,
 ) -> dict[str, Any]:
@@ -275,6 +280,7 @@ def _apply(
             sdi_field=sdi_field,
             severity_override=severity_override,
             cim_map=cim_map,
+            contains_map=contains_map,
             include_unmapped=include_unmapped,
             no_automation=no_automation,
         )
@@ -337,6 +343,7 @@ def _create_artifacts(
     sdi_field: str,
     severity_override: str | None,
     cim_map: dict[str, str],
+    contains_map: dict[str, list[str]],
     include_unmapped: bool,
     no_automation: bool,
 ) -> tuple[int, int]:
@@ -361,7 +368,7 @@ def _create_artifacts(
             "container_id": container_id,
             "name": artifact_name_for_row(row),
             "cef": cef,
-            "cef_types": auto_cef_types(cef),
+            "cef_types": auto_cef_types(cef, contains_map=contains_map),
             "source_data_identifier": art_sdi,
             "severity": severity_override or map_severity(row),
             "run_automation": run_auto,

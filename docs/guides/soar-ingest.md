@@ -152,7 +152,7 @@ No data is sent to SOAR in dry-run mode.
 | `--container-name` | — | Container name (literal or template) |
 | `--container-name-field` | — | Row field for container name |
 | `--grouping` | off | Group all rows into one container |
-| `--map` | — | CEF=splunk_field override (repeatable) |
+| `--map` | — | CEF_KEY=SPLUNK_FIELD — map a result field onto a CEF key (repeatable) |
 | `--map-file` | — | YAML custom mapping file |
 | `--include-unmapped` | off | Pass unmapped fields as custom CEF |
 | `--no-automation` | off | Suppress playbook automation |
