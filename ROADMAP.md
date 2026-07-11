@@ -171,30 +171,47 @@ SOAR arc (v0.7.0 → v0.9.0).
 ### Wave 30 — SOAR foundation *(phase L)*
 
 `soar:` profile section + `SOAR_*` env overlay; `SOARClient` on requests
-(ph-auth-token/Basic, Django filters, pagination, error mapping);
-`soar info/health/license/test`.
+(dual auth — token preferred, Basic fallback since DELETE refuses
+tokens; Django filters with Python-style booleans; four response
+envelopes normalized); `soar test/info/health/license` +
+`soar settings/stats/meta` admin visibility (system_settings sections,
+widget_data SOC metrics, vocabularies).
 
 ### Wave 31 — SOAR containers & artifacts *(phase M, → v0.7.0)*
 
-`soar containers` CRUD + close (status-id resolution, SDI dedup),
-`soar artifacts` with CEF payloads, notes/comments, vault upload/list.
+`soar containers` reads with sub-views (artifacts/notes/audit/activity/
+playbook-runs) and writes with **bulk array-POST** (create/update/close/
+assign/tag/delete; status by name, SDI dedup precheck); `soar artifacts`
+with typed CEF payloads (client-side dedup — server has none);
+notes/comments (comments immutable); vault upload/**download**
+(`download_attachment`)/delete.
 
 ### Wave 32 — SOAR automation *(phase N, → v0.8.0)*
 
-`soar playbooks` (list/enable/sync/run with `--wait` polling),
-`soar actions` (run/status/results/cancel), `soar apps`/`soar assets`.
+`soar apps/assets` (fetch-merge updates, `assets test` connectivity,
+`ingest-status` polling health); **playbooks-as-code** — tgz
+export/import (first such tool anywhere), repos + external-repo sync,
+enable/disable/trigger; `playbooks run --wait` + runs/blocks/cancel;
+`soar actions run` (asset-name targets) + results; custom functions
+list/import/update.
 
-### Wave 33 — SOAR case management & admin *(phase O)*
+### Wave 33 — SOAR case management & response ops *(phase O)*
 
-`soar cases` (promote, workbooks, task updates), custom `soar lists`
-with CSV/JSON round-trip, `soar users/roles/audit`, `soar meta`
-vocabulary reads, `soar search`.
+`soar cases` (atomic promote+template, workbook views, phase/task
+create, integer task-status transitions), `soar approvals`
+(list/respond — unblock paused automation), custom `soar lists`
+(CSV↔JSON round-trip), `soar indicators` (IOC pivots) + evidence,
+`soar users/roles/audit` (user CRUD incl. password reset; token
+plaintext is UI-only — verified), `soar search`.
 
 ### Wave 34 — SIEM↔SOAR integration *(phase P, → v0.9.0)*
 
-`soar ingest` — Splunk search results → container + CEF artifacts with
-dedup and batch `run_automation`; MCP coverage for the nested soar tree
-(subgroup-granular focus); docs/catalog/release.
+`soar ingest` — SIEM search/notable results → containers + typed CEF
+artifacts following the official connector conventions
+([soar-ingest-map.md](docs/design/soar-ingest-map.md): CIM→CEF map,
+severity/urgency mapping, event_id SDI, grouping, run_automation
+batching); MCP subgroup-granular focus for the nested soar tree;
+docs/catalog/release.
 
 ## Deferred
 
