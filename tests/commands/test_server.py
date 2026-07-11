@@ -1,6 +1,7 @@
 """Tests for server commands."""
 
 import json
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 from click.testing import CliRunner
@@ -158,3 +159,112 @@ def test_kvstore_status_missing_current(mock_gc: MagicMock) -> None:
     assert result.exit_code == 0
     data = json.loads(result.output)
     assert data[0]["status"] == "unknown"
+
+
+def _resp(data: dict[str, Any]) -> MagicMock:
+    resp = MagicMock()
+    resp.body.read.return_value = json.dumps(data).encode()
+    return resp
+
+
+@patch(_PATCH)
+def test_license_usage_daily_volume(mock_gc: MagicMock) -> None:
+    """--usage shows today's indexed volume vs quota and soonest expiry."""
+    svc = mock_gc.return_value.service
+
+    def fake_get(path: str, **kwargs: Any) -> MagicMock:
+        if "licenser/usage" in path:
+            return _resp(
+                {
+                    "entry": [
+                        {
+                            "name": "license_usage",
+                            "content": {
+                                "quota": 524288000,
+                                "slaves_usage_bytes": 262144000,
+                                "peers_usage_bytes": 0,
+                            },
+                        }
+                    ]
+                }
+            )
+        return _resp(
+            {
+                "entry": [
+                    {
+                        "name": "AAA",
+                        "content": {
+                            "type": "enterprise",
+                            "status": "VALID",
+                            "quota": 524288000,
+                            "expiration_time": 1788934111,
+                            "label": "Splunk Enterprise",
+                        },
+                    },
+                    {
+                        "name": "FFF",
+                        "content": {
+                            "type": "forwarder",
+                            "status": "VALID",
+                            "quota": 1048576,
+                            "expiration_time": 2147483647,
+                            "label": "Splunk Forwarder",
+                        },
+                    },
+                ]
+            }
+        )
+
+    svc.get.side_effect = fake_get
+
+    result = CliRunner().invoke(cli, ["--json", "server", "license", "--usage"])
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.output)
+    row = data[0]
+    assert row["used"] == "250.0 MB"
+    assert row["quota"] == "500.0 MB"
+    assert row["pct_used"] == 50.0
+    assert row["licenses_valid"] == 2
+    assert row["soonest_expiry"].startswith("2026-")
+
+
+@patch(_PATCH)
+def test_license_usage_perpetual_only_never_expires(mock_gc: MagicMock) -> None:
+    svc = mock_gc.return_value.service
+
+    def fake_get(path: str, **kwargs: Any) -> MagicMock:
+        if "licenser/usage" in path:
+            return _resp(
+                {
+                    "entry": [
+                        {
+                            "name": "license_usage",
+                            "content": {"quota": 100, "slaves_usage_bytes": 0},
+                        }
+                    ]
+                }
+            )
+        return _resp(
+            {
+                "entry": [
+                    {
+                        "name": "FFF",
+                        "content": {
+                            "type": "free",
+                            "status": "VALID",
+                            "quota": 100,
+                            "expiration_time": 2147483647,
+                            "label": "Splunk Free",
+                        },
+                    }
+                ]
+            }
+        )
+
+    svc.get.side_effect = fake_get
+
+    result = CliRunner().invoke(cli, ["--json", "server", "license", "--usage"])
+    assert result.exit_code == 0, result.output
+    row = json.loads(result.output)[0]
+    assert row["pct_used"] == 0.0
+    assert row["soonest_expiry"] == "never"

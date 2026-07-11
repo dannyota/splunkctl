@@ -8,7 +8,7 @@ from click.testing import CliRunner
 
 from splunkctl.main import cli
 
-_PATCH = "splunkctl.commands.server.get_client"
+_PATCH = "splunkctl.commands.server_topology.get_client"
 
 
 def _http_error(status: int, body_text: str) -> Exception:
@@ -364,3 +364,128 @@ def test_deployment_genuine_error(mock_gc: MagicMock) -> None:
 
     result = CliRunner().invoke(cli, ["--json", "server", "deployment"])
     assert result.exit_code == 1
+
+
+# ---------------------------------------------------------------------------
+# server health
+# ---------------------------------------------------------------------------
+
+_HEALTH_DETAILS = {
+    "entry": [
+        {
+            "content": {
+                "health": "yellow",
+                "features": {
+                    "Search Scheduler": {
+                        "health": "yellow",
+                        "features": {
+                            "Searches Skipped": {
+                                "health": "yellow",
+                                "reasons": {
+                                    "yellow": {
+                                        "1": {
+                                            "reason": "10% of searches skipped",
+                                            "due_to_stanza": "feature:searches_skipped",
+                                        }
+                                    }
+                                },
+                            },
+                            "Search Lag": {"health": "green"},
+                        },
+                    },
+                    "Index Processor": {
+                        "health": "green",
+                        "features": {"Disk Space": {"health": "green"}},
+                    },
+                },
+            }
+        }
+    ],
+}
+
+
+@patch(_PATCH)
+def test_health_flattens_component_tree(mock_gc: MagicMock) -> None:
+    svc = mock_gc.return_value.service
+    svc.get.return_value = _json_resp(_HEALTH_DETAILS)
+
+    result = CliRunner().invoke(cli, ["--json", "server", "health"])
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    by_component = {r["component"]: r for r in data}
+    assert by_component["splunkd"]["health"] == "yellow"
+    assert by_component["Search Scheduler"]["health"] == "yellow"
+    assert by_component["Search Scheduler / Searches Skipped"]["health"] == "yellow"
+    assert by_component["Search Scheduler / Search Lag"]["health"] == "green"
+    assert by_component["Index Processor / Disk Space"]["health"] == "green"
+
+
+@patch(_PATCH)
+def test_health_surfaces_reasons_for_unhealthy(mock_gc: MagicMock) -> None:
+    svc = mock_gc.return_value.service
+    svc.get.return_value = _json_resp(_HEALTH_DETAILS)
+
+    result = CliRunner().invoke(cli, ["--json", "server", "health"])
+    data = json.loads(result.output)
+    skipped = next(
+        r for r in data if r["component"] == "Search Scheduler / Searches Skipped"
+    )
+    assert "10% of searches skipped" in skipped["reasons"]
+    green = next(r for r in data if r["component"] == "Search Scheduler / Search Lag")
+    assert green["reasons"] == ""
+
+
+@patch(_PATCH)
+def test_health_red_component_still_exits_zero(mock_gc: MagicMock) -> None:
+    """health reports, it does not gate — red components exit 0."""
+    details = {"entry": [{"content": {"health": "red", "features": {}}}]}
+    svc = mock_gc.return_value.service
+    svc.get.return_value = _json_resp(details)
+
+    result = CliRunner().invoke(cli, ["--json", "server", "health"])
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data[0] == {"component": "splunkd", "health": "red", "reasons": ""}
+
+
+# ---------------------------------------------------------------------------
+# server search-peers
+# ---------------------------------------------------------------------------
+
+
+@patch(_PATCH)
+def test_search_peers_lists_peers(mock_gc: MagicMock) -> None:
+    svc = mock_gc.return_value.service
+    svc.get.return_value = _json_resp(
+        {
+            "entry": [
+                {
+                    "name": "idx1:8089",
+                    "content": {
+                        "peerName": "idx1",
+                        "status": "Up",
+                        "replicationStatus": "Successful",
+                        "version": "10.4.0",
+                    },
+                }
+            ]
+        }
+    )
+
+    result = CliRunner().invoke(cli, ["--json", "server", "search-peers"])
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data[0]["peer"] == "idx1"
+    assert data[0]["status"] == "Up"
+    assert data[0]["replication_status"] == "Successful"
+    assert data[0]["version"] == "10.4.0"
+
+
+@patch(_PATCH)
+def test_search_peers_empty_on_standalone(mock_gc: MagicMock) -> None:
+    svc = mock_gc.return_value.service
+    svc.get.return_value = _json_resp({"entry": []})
+
+    result = CliRunner().invoke(cli, ["--json", "server", "search-peers"])
+    assert result.exit_code == 0
+    assert json.loads(result.output) == []
