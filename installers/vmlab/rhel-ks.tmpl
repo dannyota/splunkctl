@@ -1,0 +1,68 @@
+# RHEL 9 unattended lab kickstart TEMPLATE — @@PLACEHOLDERS@@ filled by build-rhel-vm.sh.
+# Fully automated via OEMDRV auto-kickstart. Offline: packages come from the DVD.
+
+text
+cdrom
+eula --agreed
+firstboot --disable
+skipx
+
+lang en_US.UTF-8
+keyboard --vckeymap=us --xlayouts='us'
+timezone @@TIMEZONE@@ --utc
+
+# Static IP on the VMware NAT so host access is stable.
+# MUST stay on ONE line — pykickstart does not join backslash-continued lines.
+network --bootproto=static --ip=@@IP@@ --netmask=@@NETMASK@@ --gateway=@@GATEWAY@@ --nameserver=@@GATEWAY@@ --hostname=@@HOSTNAME@@ --device=link --activate --onboot=on
+
+rootpw --iscrypted @@PWHASH@@
+user --name=labadmin --groups=wheel --gecos="Lab Admin" --iscrypted --password=@@PWHASH@@
+
+selinux --@@SELINUX@@
+firewall --enabled --ssh --port=@@FIREWALL_PORTS@@
+
+# zerombr: initialize a blank disk's label without an interactive prompt.
+zerombr
+bootloader --location=mbr --append="crashkernel=no"
+clearpart --all --initlabel
+autopart --type=lvm --nohome
+
+# Power off when done so install media can be detached before first real boot.
+poweroff
+
+%packages
+@^minimal-environment
+@standard
+tar
+nfs-utils
+policycoreutils-python-utils
+chrony
+net-tools
+bind-utils
+python3
+libxcrypt-compat
+%end
+
+%post --log=/root/ks-post.log
+set -x
+# passwordless sudo for labadmin (lab convenience)
+echo 'labadmin ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/labadmin
+chmod 440 /etc/sudoers.d/labadmin
+
+# DVD as an offline dnf repo (enable after (re)attaching media)
+mkdir -p /mnt/dvd
+cat > /etc/yum.repos.d/dvd.repo <<'EOF'
+[dvd-baseos]
+name=RHEL DVD BaseOS
+baseurl=file:///mnt/dvd/BaseOS
+enabled=0
+gpgcheck=0
+[dvd-appstream]
+name=RHEL DVD AppStream
+baseurl=file:///mnt/dvd/AppStream
+enabled=0
+gpgcheck=0
+EOF
+
+echo "kickstart-complete $(date)" > /root/INSTALL_DONE
+%end

@@ -34,6 +34,12 @@ credentials.json
 # Local-only working plan
 PLAN.md
 
+# Installer binaries (large); scripts under installers/ stay tracked
+installers/*.iso
+installers/*.rpm
+installers/*.tgz
+installers/vmlab/config.local.env
+
 # OS
 .DS_Store
 Thumbs.db
