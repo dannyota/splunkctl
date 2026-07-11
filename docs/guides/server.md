@@ -12,8 +12,13 @@ splunkctl server messages --dismiss warn_disk --yes    # dismiss a message
 ## License
 
 ```bash
-splunkctl server license     # license pool usage (used vs quota per pool)
+splunkctl server license             # license pool usage (used vs quota per pool)
+splunkctl server license --usage     # today's indexed volume vs quota + expiry
 ```
+
+`--usage` reports one row: `used`, `quota`, `pct_used` (today's indexed
+volume against the licensed daily quota), `licenses_valid`, and
+`soonest_expiry` (earliest expiring non-perpetual license, or `never`).
 
 ## KV Store
 
@@ -23,6 +28,20 @@ splunkctl server kvstore     # status, port, version, storage engine
 
 Reports an explicit status word (`ready`, `failed`, `starting`,
 `unknown`) so a down KV store is never mistaken for a healthy result.
+
+## Health Report
+
+```bash
+splunkctl server health            # component-level splunkd health
+splunkctl server health --json
+```
+
+Flattens Splunk's health-report tree (search scheduler, disk space, KV
+store, ingestion latency...) into one row per component — nested feature
+names join with `/`, and unhealthy components carry their reason text in
+a `reasons` column. The command reports, it does not gate: red
+components still exit 0. Complements `doctor` (connectivity-oriented)
+with splunkd's own self-diagnosis.
 
 ## Topology Health
 
@@ -71,6 +90,16 @@ Output (when clients exist): one row per client (client name, hostname,
 ip, last_phone_home, phone_home_interval).
 
 When no clients: single row with `status: no_clients, total: 0`.
+
+### Search Peers
+
+```bash
+splunkctl server search-peers      # distributed-search peers
+splunkctl server search-peers --json
+```
+
+Output: one row per peer (peer, status, replication_status, version).
+Empty on a standalone instance (exit 0).
 
 ## Empty Result vs Infrastructure Down
 

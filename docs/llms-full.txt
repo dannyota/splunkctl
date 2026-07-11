@@ -2151,8 +2151,13 @@ splunkctl server messages --dismiss warn_disk --yes    # dismiss a message
 ## License
 
 ```bash
-splunkctl server license     # license pool usage (used vs quota per pool)
+splunkctl server license             # license pool usage (used vs quota per pool)
+splunkctl server license --usage     # today's indexed volume vs quota + expiry
 ```
+
+`--usage` reports one row: `used`, `quota`, `pct_used` (today's indexed
+volume against the licensed daily quota), `licenses_valid`, and
+`soonest_expiry` (earliest expiring non-perpetual license, or `never`).
 
 ## KV Store
 
@@ -2162,6 +2167,20 @@ splunkctl server kvstore     # status, port, version, storage engine
 
 Reports an explicit status word (`ready`, `failed`, `starting`,
 `unknown`) so a down KV store is never mistaken for a healthy result.
+
+## Health Report
+
+```bash
+splunkctl server health            # component-level splunkd health
+splunkctl server health --json
+```
+
+Flattens Splunk's health-report tree (search scheduler, disk space, KV
+store, ingestion latency...) into one row per component — nested feature
+names join with `/`, and unhealthy components carry their reason text in
+a `reasons` column. The command reports, it does not gate: red
+components still exit 0. Complements `doctor` (connectivity-oriented)
+with splunkd's own self-diagnosis.
 
 ## Topology Health
 
@@ -2210,6 +2229,16 @@ Output (when clients exist): one row per client (client name, hostname,
 ip, last_phone_home, phone_home_interval).
 
 When no clients: single row with `status: no_clients, total: 0`.
+
+### Search Peers
+
+```bash
+splunkctl server search-peers      # distributed-search peers
+splunkctl server search-peers --json
+```
+
+Output: one row per peer (peer, status, replication_status, version).
+Empty on a standalone instance (exit 0).
 
 ## Empty Result vs Infrastructure Down
 
@@ -2353,14 +2382,15 @@ command group, updated in the same commit that moves it forward.
 ## Command groups
 
 All list surfaces accept uniform `--limit`/`--offset`/`--filter` options
-(filter first, then paging; defaults fetch everything).
+(filter first, then paging; defaults fetch everything). Computed views
+that are not SDK list surfaces (e.g. `audit rbac`) are exempt by design.
 
 | Group | Status | Subcommands |
 |---|---|---|
 | `config` | ✅ built | init (--profile), show (--profile), use, test — multi-instance profiles |
 | `info` | ✅ built | (default) |
 | `search` | ✅ built | run (--detach), export, oneshot, jobs, job (--offset/--count/--events/--status-only), cancel, upload |
-| `rules` | ✅ built | list (--filter, --app, --owner), get (--app, --owner), create (--email-to/--email-subject/--webhook-url conflict with --set), update (same), delete, enable, disable, share, history |
+| `rules` | ✅ built | list (--filter, --app, --owner), get (--app, --owner), create (--email-to/--email-subject/--webhook-url conflict with --set), update (same), delete, enable, disable, share, history, test (dispatch now, alert actions suppressed) |
 | `rules import/export` | ✅ built | YAML round-trip with alert semantics, dry-run diff |
 | `alerts` | ✅ built | list, get, actions, suppress, unsuppress |
 | `dashboards` | ✅ built | list (type column), get (--definition), create (--type classic/studio/auto, --sharing), update (diff preview), delete, export (--definition, --all --dir), share |
@@ -2378,7 +2408,7 @@ All list surfaces accept uniform `--limit`/`--offset`/`--filter` options
 | `apps` | ✅ built | list, get, install, uninstall, update, reload |
 | `users` | ✅ built | list, get, create, update (--password), delete |
 | `users roles` | ✅ built | list, get, create, update, delete |
-| `server` | ✅ built | messages (--dismiss), license, kvstore, cluster (indexer cluster health: mode/peers/SF-RF, manager→master fallback), shcluster (SH cluster: captain/members/replication), deployment (deployment server clients/check-in) — topology reads are read-only with graceful not-enabled handling (exit 0 on non-clustered instances); live-verified not-enabled paths, populated rendering unit-tested |
+| `server` | ✅ built | messages (--dismiss), license (--usage: daily volume vs quota + soonest expiry), kvstore, health (component-level splunkd health report, flattened tree + reason text), cluster (indexer cluster health: mode/peers/SF-RF, manager→master fallback), shcluster (SH cluster: captain/members/replication), deployment (deployment server clients/check-in), search-peers (distributed-search peer status; empty on standalone) — topology/health reads are read-only with graceful not-enabled handling (exit 0 on non-clustered instances); live-verified |
 | `es` | ✅ built | notables list (--since/--until/--status/--owner/--rule/--limit), get, update (bulk triage via `notable_update`) — feature-detected on `SplunkEnterpriseSecuritySuite`; live-verified against ES: pending (local dev instance has SSE, not ES) |
 | `audit` | ✅ built | changes (--since/--until/--user/--action/--object-type/--limit, normalizes both `_audit` event shapes, zero SPL composition), rbac (--roles-only, transitive capability/index aggregation) — read-only, live-verified |
 | `kvstore` | ✅ built | collections (--app), create, delete, query (--query/--limit/--skip/--sort), insert/update/remove (--data/--file/--query), export/import (JSONL, batch_save chunked at 500) — raw REST (no SDK entity), F1-classified errors; live round-trip pending healthy KV store (local dev instance's KV store is down; negative path live-verified) |
@@ -2391,7 +2421,7 @@ All list surfaces accept uniform `--limit`/`--offset`/`--filter` options
 
 | Feature | Status | Notes |
 |---|---|---|
-| MCP server | ✅ built | 5 meta-tools (help/usage/focus/unfocus/run), 129 auto-generated tools, 22 guide resources |
+| MCP server | ✅ built | 5 meta-tools (help/usage/focus/unfocus/run), auto-generated typed tools (array schemas for variadic/repeated params, explicit `yes` on guarded schemas, additionalProperties:false), 22 guide resources, protocol-level test suite |
 | `mcp install` | ✅ built | Write `.mcp.json` for Claude Code registration |
 | `commands --json` | ✅ built | Guard markers, global options, note field |
 | `doctor --strict` | ✅ built | CI-friendly health gate |
@@ -2407,5 +2437,5 @@ Gaps to fill in `dannyota/splunk-sdk-python`:
 | Dashboards | ✅ built | `Dashboard`/`Dashboards` on `splunkctl` branch |
 | Lookup tables | ✅ built | `LookupTableFile`/`LookupTableFiles` on `splunkctl` branch |
 | HEC tokens | ✅ built | `HECToken`/`HECTokens` on `splunkctl` branch |
-| Alert actions | - planned | Extend `SavedSearch` |
+| Alert actions | not needed | Shipped as first-class CLI flags over `--set action.*` (Wave 25); no SDK entity required |
 
