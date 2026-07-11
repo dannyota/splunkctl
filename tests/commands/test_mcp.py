@@ -9,9 +9,12 @@ from click.testing import CliRunner
 from splunkctl.main import cli
 from splunkctl.mcp.tools import (
     build_tool_index,
+    direct_commands,
     group_names,
     group_summary,
     group_tools,
+    has_subgroups,
+    subgroup_names,
 )
 
 
@@ -265,3 +268,103 @@ def test_mcp_install_merges_existing(tmp_path: Path) -> None:
     config = json.loads((tmp_path / ".mcp.json").read_text())
     assert "other" in config["mcpServers"]
     assert "splunkctl" in config["mcpServers"]
+
+
+# --- Soar MCP coverage tests ---
+
+
+def test_soar_subgroup_names() -> None:
+    sg = subgroup_names(cli, "soar")
+    assert "containers" in sg
+    assert "playbooks" in sg
+    assert "actions" in sg
+    assert "vault" in sg
+    # Direct commands are NOT subgroups
+    assert "test" not in sg
+    assert "info" not in sg
+
+
+def test_soar_has_subgroups() -> None:
+    assert has_subgroups(cli, "soar")
+    assert not has_subgroups(cli, "search")
+    assert not has_subgroups(cli, "indexes")
+
+
+def test_soar_direct_commands() -> None:
+    dc = direct_commands(cli, "soar")
+    assert "test" in dc
+    assert "info" in dc
+    assert "health" in dc
+    # Subgroups should NOT appear
+    assert "containers" not in dc
+    assert "playbooks" not in dc
+
+
+def test_group_tools_soar_subgroup() -> None:
+    idx = build_tool_index(cli)
+    containers = group_tools(idx, "soar containers")
+    assert len(containers) >= 5
+    for t in containers:
+        assert t.name.startswith("soar_containers_")
+    playbooks = group_tools(idx, "soar playbooks")
+    assert len(playbooks) >= 5
+    for t in playbooks:
+        assert t.name.startswith("soar_playbooks_")
+
+
+def test_group_tools_soar_all_is_large() -> None:
+    idx = build_tool_index(cli)
+    all_soar = group_tools(idx, "soar")
+    assert len(all_soar) > 50, "soar tree should have many tools"
+
+
+def test_soar_guarded_tools_have_yes() -> None:
+    idx = build_tool_index(cli)
+    soar_tools = [t for t in idx.values() if t.name.startswith("soar_")]
+    guarded = [t for t in soar_tools if t.guarded]
+    assert len(guarded) > 15
+    for t in guarded:
+        props = t.schema.get("properties", {})
+        assert "yes" in props, f"{t.name} is guarded but missing 'yes'"
+        assert props["yes"]["type"] == "boolean"
+
+
+def test_soar_tool_index_nested_paths() -> None:
+    idx = build_tool_index(cli)
+    # Verify deeply nested tools resolve
+    assert "soar_playbooks_run" in idx
+    assert idx["soar_playbooks_run"].cmd_path == ["soar", "playbooks", "run"]
+    assert "soar_containers_create" in idx
+    assert "soar_actions_run" in idx
+
+
+def test_group_summary_includes_soar_subgroups() -> None:
+    rows = group_summary(cli)
+    soar_row = next(r for r in rows if r["group"] == "soar")
+    assert "subgroups" in soar_row
+    assert "containers" in soar_row["subgroups"]
+    assert "playbooks" in soar_row["subgroups"]
+    # Non-nested groups should not have subgroups key
+    search_row = next(r for r in rows if r["group"] == "search")
+    assert "subgroups" not in search_row
+
+
+def test_soar_guides_surface_as_resources() -> None:
+    from splunkctl.mcp.resources import load_guides
+
+    guides = load_guides()
+    slugs = {g["slug"] for g in guides}
+    assert "soar" in slugs
+    assert "soar-playbooks" in slugs
+    assert "soar-actions" in slugs
+
+
+def test_usage_resolves_nested_soar_path() -> None:
+    idx = build_tool_index(cli)
+    # Simulate what usage_tool does
+    command = "soar playbooks run"
+    tool_name = command.strip().replace(" ", "_").replace("-", "_")
+    entry = idx.get(tool_name)
+    assert entry is not None, f"Failed to resolve: {command}"
+    assert entry.name == "soar_playbooks_run"
+    assert entry.guarded is True

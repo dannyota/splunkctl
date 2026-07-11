@@ -8,6 +8,7 @@ import subprocess
 import sys
 from typing import Any
 
+import click
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.fastmcp.utilities.func_metadata import ArgModelBase, FuncMetadata
 from mcp.types import ToolAnnotations
@@ -20,9 +21,12 @@ from splunkctl.mcp.tools import (
     ToolEntry,
     ToolIndex,
     build_tool_index,
+    direct_commands,
     group_names,
     group_summary,
     group_tools,
+    has_subgroups,
+    subgroup_names,
 )
 
 _INSTRUCTIONS = """\
@@ -32,7 +36,10 @@ the preferred way to run commands (validated arguments, full schemas). \
 `usage <command>` previews one command's schema and auto-loads it as a \
 callable tool. `run` is an escape hatch for raw command strings (no \
 validation). `unfocus` when done to free context. Mutations are guarded: \
-pass yes=true to apply (dry-run by default)."""
+pass yes=true to apply (dry-run by default). \
+The soar tree has nested subgroups (containers, playbooks, actions, ...); \
+focus at subgroup granularity: `focus "soar containers"`, not `focus soar`. \
+`help soar` lists available subgroups."""
 
 _FORCE_FLAGS = ["--json"]
 
@@ -149,11 +156,39 @@ def create_server() -> FastMCP:
         """List command groups, or subcommands within a group."""
         if group is None:
             rows = group_summary(cli)
-            lines = [
-                f"{r['group']:16s} {r['description']} ({r['count']} cmds)" for r in rows
-            ]
+            lines: list[str] = []
+            for r in rows:
+                line = f"{r['group']:16s} {r['description']} ({r['count']} cmds)"
+                lines.append(line)
+                if "subgroups" in r:
+                    lines.append(f"{'':16s}   subgroups: {r['subgroups']}")
+                    lines.append(
+                        f"{'':16s}   focus at subgroup level: "
+                        f'focus "{r["group"]} <subgroup>"'
+                    )
             return "\n".join(lines)
-        return _exec_cli([group, "--help"])
+        # For groups with subgroups, show the two-level layout
+        parts = _split_command(group)
+        if len(parts) == 1 and has_subgroups(cli, parts[0]):
+            grp = parts[0]
+            top_cmd = cli.commands.get(grp)
+            assert isinstance(top_cmd, click.Group)  # guaranteed by has_subgroups
+            sg = subgroup_names(cli, grp)
+            dc = direct_commands(cli, grp)
+            lines = [f'{grp} subgroups (focus "{grp} <subgroup>"):']
+            for s in sg:
+                sub_cmd = top_cmd.commands[s]
+                desc = (sub_cmd.help or "").split("\n")[0]
+                n = len(sub_cmd.commands) if isinstance(sub_cmd, click.Group) else 0
+                lines.append(f"  {grp} {s:16s} {desc} ({n} cmds)")
+            if dc:
+                lines.append(f"\n{grp} direct commands:")
+                for c in dc:
+                    sub_cmd = top_cmd.commands[c]
+                    desc = (sub_cmd.help or "").split("\n")[0]
+                    lines.append(f"  {grp} {c:16s} {desc}")
+            return "\n".join(lines)
+        return _exec_cli([*parts, "--help"])
 
     # --- Meta-tool: usage ---
 
@@ -161,7 +196,8 @@ def create_server() -> FastMCP:
         name="usage",
         description=(
             "Show flags, args, and description for one command. "
-            "Auto-loads it as a callable tool."
+            "Auto-loads it as a callable tool. "
+            'Accepts nested paths: usage "soar playbooks run".'
         ),
         annotations=ToolAnnotations(readOnlyHint=True),
     )
@@ -193,7 +229,8 @@ def create_server() -> FastMCP:
         name="focus",
         description=(
             "Load typed tools for a command group (enables full schemas). "
-            "Preferred over run for validated arguments."
+            "Preferred over run for validated arguments. "
+            'Nested groups like soar require subgroup: focus "soar containers".'
         ),
         annotations=ToolAnnotations(readOnlyHint=True),
     )
@@ -202,6 +239,26 @@ def create_server() -> FastMCP:
         if group in focused:
             count = len(focused[group])
             return f"Group '{group}' already focused ({count} tools)."
+
+        # Reject bare groups that have nested subgroups (too many tools).
+        parts = _split_command(group)
+        if len(parts) == 1 and has_subgroups(cli, parts[0]):
+            sg = subgroup_names(cli, parts[0])
+            dc = direct_commands(cli, parts[0])
+            lines = [
+                f"'{parts[0]}' has nested subgroups — focus at "
+                f"subgroup level to avoid flooding context.",
+                "",
+                "Subgroups:",
+            ]
+            for s in sg:
+                lines.append(f'  focus "{parts[0]} {s}"')
+            if dc:
+                lines.append(
+                    f"\nDirect commands ({', '.join(dc)}) can be "
+                    f"loaded individually via usage."
+                )
+            return "\n".join(lines)
 
         entries = group_tools(all_tools, group)
         if not entries:
@@ -249,14 +306,22 @@ def create_server() -> FastMCP:
                 await ctx.session.send_tool_list_changed()
             return f"Unloaded all focused tools ({removed} total)."
 
-        if group not in focused:
+        # Try exact key first, then normalized form for subgroup paths
+        key = group if group in focused else None
+        if key is None:
+            norm = group.replace(" ", "_").replace("-", "_")
+            for k in focused:
+                if k.replace(" ", "_").replace("-", "_") == norm:
+                    key = k
+                    break
+        if key is None:
             return f"Group '{group}' is not focused."
-        for n in focused[group]:
+        for n in focused[key]:
             try:
                 mcp.remove_tool(n)
             except Exception:  # noqa: BLE001, S110
                 pass
-        count = len(focused.pop(group))
+        count = len(focused.pop(key))
         if ctx is not None:
             await ctx.session.send_tool_list_changed()
         return f"Unloaded {count} tools for '{group}'."

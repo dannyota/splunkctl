@@ -222,3 +222,168 @@ def test_focused_tool_missing_required_arg_yields_cli_usage_error() -> None:
             assert "Missing argument" in text or "Usage" in text
 
     anyio.run(main)
+
+
+# --- Soar MCP protocol tests ---
+
+
+def test_focus_soar_rejected_with_subgroup_list() -> None:
+    """focus 'soar' alone must be rejected, listing subgroups."""
+
+    async def main() -> None:
+        server = create_server()
+        async with create_connected_server_and_client_session(server) as session:
+            res = await session.call_tool("focus", {"group": "soar"})
+            text = _text(res)
+            assert "nested subgroups" in text
+            assert "soar containers" in text
+            assert "soar playbooks" in text
+            # No soar tools should be loaded
+            tools = {t.name for t in (await session.list_tools()).tools}
+            assert not any(n.startswith("soar_") for n in tools)
+
+    anyio.run(main)
+
+
+def test_focus_soar_subgroup_registers_tools(
+    captured_cli: list[list[str]],
+) -> None:
+    """focus 'soar containers' registers only that subgroup's tools."""
+
+    async def main() -> None:
+        server = create_server()
+        async with create_connected_server_and_client_session(server) as session:
+            res = await session.call_tool("focus", {"group": "soar containers"})
+            text = _text(res)
+            assert not res.isError, text
+            assert "soar_containers_list" in text
+
+            tools = {t.name for t in (await session.list_tools()).tools}
+            assert "soar_containers_list" in tools
+            assert "soar_containers_create" in tools
+            # Other soar subgroups NOT loaded
+            assert "soar_playbooks_list" not in tools
+            assert "soar_actions_run" not in tools
+
+            # Execute a focused tool
+            res = await session.call_tool("soar_containers_list", {})
+            assert not res.isError, _text(res)
+
+    anyio.run(main)
+    assert ["soar", "containers", "list"] in captured_cli
+
+
+def test_soar_guarded_tools_carry_yes_in_schema(
+    captured_cli: list[list[str]],
+) -> None:
+    """Guarded soar tools include the yes parameter in their schemas."""
+
+    async def main() -> None:
+        server = create_server()
+        async with create_connected_server_and_client_session(server) as session:
+            res = await session.call_tool("focus", {"group": "soar containers"})
+            assert not res.isError, _text(res)
+            tools = (await session.list_tools()).tools
+            create_tool = next(t for t in tools if t.name == "soar_containers_create")
+            props = create_tool.inputSchema.get("properties", {})
+            assert "yes" in props
+            assert props["yes"]["type"] == "boolean"
+
+            # Verify yes=true reaches CLI
+            res = await session.call_tool(
+                "soar_containers_create",
+                {"name": "test", "label": "events", "yes": True},
+            )
+            assert not res.isError, _text(res)
+
+    anyio.run(main)
+    create_calls = [
+        c for c in captured_cli if c[:3] == ["soar", "containers", "create"]
+    ]
+    assert create_calls
+    assert "--yes" in create_calls[0]
+
+
+def test_help_shows_soar_two_level_layout() -> None:
+    """help with no args shows soar subgroups; help 'soar' lists them."""
+
+    async def main() -> None:
+        server = create_server()
+        async with create_connected_server_and_client_session(server) as session:
+            # Global help shows subgroup hint
+            res = await session.call_tool("help", {})
+            text = _text(res)
+            assert "soar" in text
+            assert "subgroups:" in text
+            assert "soar <subgroup>" in text.lower() or "subgroup" in text.lower()
+
+            # help "soar" lists subgroups with descriptions
+            res = await session.call_tool("help", {"group": "soar"})
+            text = _text(res)
+            assert "soar containers" in text
+            assert "soar playbooks" in text
+            assert "soar actions" in text
+            assert "direct commands" in text.lower()
+
+    anyio.run(main)
+
+
+def test_usage_soar_nested_path(captured_cli: list[list[str]]) -> None:
+    """usage 'soar playbooks run' resolves and auto-loads the tool."""
+
+    async def main() -> None:
+        server = create_server()
+        async with create_connected_server_and_client_session(server) as session:
+            res = await session.call_tool("usage", {"command": "soar playbooks run"})
+            text = _text(res)
+            assert '"soar_playbooks_run"' in text
+            assert '"guarded": true' in text
+
+            # Tool should be auto-loaded
+            tools = {t.name for t in (await session.list_tools()).tools}
+            assert "soar_playbooks_run" in tools
+
+    anyio.run(main)
+
+
+def test_focus_unfocus_soar_subgroup_lifecycle() -> None:
+    """Focus and unfocus a soar subgroup cleanly."""
+
+    async def main() -> None:
+        server = create_server()
+        async with create_connected_server_and_client_session(server) as session:
+            res = await session.call_tool("focus", {"group": "soar containers"})
+            assert not res.isError, _text(res)
+
+            tools = {t.name for t in (await session.list_tools()).tools}
+            assert "soar_containers_list" in tools
+
+            res = await session.call_tool("unfocus", {"group": "soar containers"})
+            assert "Unloaded" in _text(res)
+
+            tools = {t.name for t in (await session.list_tools()).tools}
+            assert "soar_containers_list" not in tools
+            # Meta-tools still there
+            assert tools == {"help", "focus", "unfocus", "run", "usage"}
+
+    anyio.run(main)
+
+
+def test_soar_resources_listed() -> None:
+    """guide://soar-* resources are listed and readable."""
+
+    async def main() -> None:
+        server = create_server()
+        async with create_connected_server_and_client_session(server) as session:
+            resources = (await session.list_resources()).resources
+            uris = [str(r.uri) for r in resources]
+            soar_uris = [u for u in uris if "soar" in u]
+            assert len(soar_uris) >= 4, f"Expected >=4 soar guides, got {soar_uris}"
+            # Read one
+            soar_r = next(r for r in resources if "soar-playbooks" in str(r.uri))
+            content = await session.read_resource(soar_r.uri)
+            first = content.contents[0]
+            assert isinstance(first, types.TextResourceContents)
+            assert len(first.text) > 50
+
+    anyio.run(main)

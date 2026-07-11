@@ -207,13 +207,51 @@ def group_names(root: click.Group) -> list[str]:
 
 
 def group_tools(index: ToolIndex, group: str) -> list[ToolEntry]:
-    """Return all tools under a given top-level group."""
-    prefix = group.replace("-", "_") + "_"
+    """Return all tools under a group or subgroup path.
+
+    Accepts space-separated paths (``"soar containers"``) as well as
+    plain group names (``"indexes"``).
+    """
+    prefix = group.replace(" ", "_").replace("-", "_") + "_"
     return [t for t in index.values() if t.name.startswith(prefix)]
 
 
+def subgroup_names(root: click.Group, group: str) -> list[str]:
+    """Return subgroup names within a top-level group.
+
+    For ``soar`` this yields ``["actions", "apps", "artifacts", ...]`` —
+    only the children that are themselves ``click.Group`` instances.
+    """
+    top = root.commands.get(group)
+    if not isinstance(top, click.Group):
+        return []
+    return sorted(
+        name for name, cmd in top.commands.items() if isinstance(cmd, click.Group)
+    )
+
+
+def has_subgroups(root: click.Group, group: str) -> bool:
+    """Return True if the group has nested subgroups."""
+    return bool(subgroup_names(root, group))
+
+
+def direct_commands(root: click.Group, group: str) -> list[str]:
+    """Return direct (non-group) command names under a top-level group."""
+    top = root.commands.get(group)
+    if not isinstance(top, click.Group):
+        return []
+    return sorted(
+        name for name, cmd in top.commands.items() if not isinstance(cmd, click.Group)
+    )
+
+
 def group_summary(root: click.Group) -> list[dict[str, str]]:
-    """Build a summary of command groups with descriptions and counts."""
+    """Build a summary of command groups with descriptions and counts.
+
+    Groups that contain nested subgroups (like ``soar``) include a
+    ``subgroups`` key with the two-level layout so agents can discover
+    subgroup focus paths without flooding context.
+    """
     skip = {"mcp", "commands", "skill", "config", "doctor", "info"}
     rows: list[dict[str, str]] = []
     for name, cmd in sorted(root.commands.items()):
@@ -222,12 +260,14 @@ def group_summary(root: click.Group) -> list[dict[str, str]]:
         if isinstance(cmd, click.Group):
             subs = list(cmd.commands.keys())
             desc = (cmd.help or "").split("\n")[0]
-            rows.append(
-                {
-                    "group": name,
-                    "description": desc,
-                    "subcommands": ", ".join(sorted(subs)),
-                    "count": str(len(subs)),
-                }
-            )
+            row: dict[str, str] = {
+                "group": name,
+                "description": desc,
+                "subcommands": ", ".join(sorted(subs)),
+                "count": str(len(subs)),
+            }
+            sg = subgroup_names(root, name)
+            if sg:
+                row["subgroups"] = ", ".join(sg)
+            rows.append(row)
     return rows
