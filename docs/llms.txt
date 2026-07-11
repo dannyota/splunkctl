@@ -42,6 +42,11 @@
 - [Playbooks](https://splunkctl.danny.vn/#/guides/soar-playbooks): Playbook lifecycle and playbooks-as-code workflow on Splunk SOAR via the REST API. Export, edit in git, import back -- the first programmatic
 - [Actions](https://splunkctl.danny.vn/#/guides/soar-actions): Run, monitor, and inspect action runs on Splunk SOAR assets.
 - [Functions](https://splunkctl.danny.vn/#/guides/soar-functions): Manage SOAR custom functions: list, inspect, import, export, update, and delete. Custom functions are reusable Python snippets called from playbook
+- [Cases & workbooks](https://splunkctl.danny.vn/#/guides/soar-cases): Promote containers to cases with workbook templates, view phase/task structure, and manage individual phases and tasks. Cases are containers with
+- [Approvals](https://splunkctl.danny.vn/#/guides/soar-approvals): Manage approval requests from SOAR playbook prompt blocks. A playbook pauses at a prompt action and waits for an external approve/deny response
+- [Custom lists](https://splunkctl.danny.vn/#/guides/soar-lists): Manage SOAR custom lists (the decided_list API). Custom lists are simple tabular data structures stored as an array of rows, where each row is an
+- [Indicators & evidence](https://splunkctl.danny.vn/#/guides/soar-indicators): IOC indicator lookups and evidence management on Splunk SOAR.
+- [Users, roles & audit](https://splunkctl.danny.vn/#/guides/soar-admin): Manage SOAR platform users, inspect role permissions, and query the audit trail. User mutations are guarded (dry-run by default, --yes to apply).
 
 ## Design
 

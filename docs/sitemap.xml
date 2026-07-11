@@ -28,6 +28,11 @@
   <url><loc>https://splunkctl.danny.vn/#/guides/soar-playbooks</loc><priority>0.7</priority></url>
   <url><loc>https://splunkctl.danny.vn/#/guides/soar-actions</loc><priority>0.7</priority></url>
   <url><loc>https://splunkctl.danny.vn/#/guides/soar-functions</loc><priority>0.7</priority></url>
+  <url><loc>https://splunkctl.danny.vn/#/guides/soar-cases</loc><priority>0.7</priority></url>
+  <url><loc>https://splunkctl.danny.vn/#/guides/soar-approvals</loc><priority>0.7</priority></url>
+  <url><loc>https://splunkctl.danny.vn/#/guides/soar-lists</loc><priority>0.7</priority></url>
+  <url><loc>https://splunkctl.danny.vn/#/guides/soar-indicators</loc><priority>0.7</priority></url>
+  <url><loc>https://splunkctl.danny.vn/#/guides/soar-admin</loc><priority>0.7</priority></url>
   <url><loc>https://splunkctl.danny.vn/#/design/architecture</loc><priority>0.6</priority></url>
   <url><loc>https://splunkctl.danny.vn/#/design/catalog</loc><priority>0.6</priority></url>
 </urlset>

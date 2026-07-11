@@ -34,6 +34,11 @@
   - [Playbooks](guides/soar-playbooks.md)
   - [Actions](guides/soar-actions.md)
   - [Functions](guides/soar-functions.md)
+  - [Cases & workbooks](guides/soar-cases.md)
+  - [Approvals](guides/soar-approvals.md)
+  - [Custom lists](guides/soar-lists.md)
+  - [Indicators & evidence](guides/soar-indicators.md)
+  - [Users, roles & audit](guides/soar-admin.md)
 
 - **Design**
   - [Architecture](design/architecture.md)

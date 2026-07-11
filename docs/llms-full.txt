@@ -3303,6 +3303,591 @@ This is the same pair shape used by playbooks under
 
 ---
 
+# soar cases -- case management, workbook phases & tasks
+
+Promote containers to cases with workbook templates, view phase/task
+structure, and manage individual phases and tasks. Cases are containers
+with `container_type=case` and an attached workbook (phases and tasks).
+
+## Promote a container to a case
+
+Promote an existing container (event) to a case with a workbook template.
+The promotion is a single atomic POST that sets `container_type` and
+instantiates all phases/tasks from the template.
+
+```bash
+# Use the server's default template (NIST 800-61 on most instances)
+splunkctl --yes soar cases promote 42
+
+# Specify a template by name
+splunkctl --yes soar cases promote 42 --template "NIST 800-61"
+
+# Specify a template by numeric id
+splunkctl --yes soar cases promote 42 --template 3
+```
+
+Template resolution: `--template` accepts a name (case-sensitive) or
+numeric id. Without `--template`, the server's default template
+(`is_default=true`) is used. If no default exists, the command errors
+with the list of available templates.
+
+## View workbook phases and tasks
+
+```bash
+splunkctl soar cases workbook 42
+splunkctl --json soar cases workbook 42
+```
+
+Returns all phases with their nested tasks. Each task shows `status`
+(0=incomplete, 1=in_progress, 2=complete), owner, description, and
+notes.
+
+## Add a phase
+
+```bash
+splunkctl --yes soar cases phase add --container 42 --name "Recovery"
+splunkctl --yes soar cases phase add --container 42 --name "Recovery" --order 3
+```
+
+Posts to `/rest/workbook_phase` with `container_id`, `name`, and
+optional `order`.
+
+## Add a task
+
+```bash
+splunkctl --yes soar cases task add --phase-id 13 --name "Review logs"
+splunkctl --yes soar cases task add --phase-id 13 --name "Review logs" \
+    --description "Check all relevant logs" --order 5
+```
+
+Posts to `/rest/workbook_task`. The field name is `phase_id` (not
+`phase`).
+
+## Update a task
+
+```bash
+# Mark complete (0 -> 2, no note required)
+splunkctl --yes soar cases task update 100 --status complete
+
+# Mark incomplete
+splunkctl --yes soar cases task update 100 --status incomplete
+
+# Mark in_progress (requires a closing note)
+splunkctl --yes soar cases task update 100 --status in_progress \
+    --note "Starting active investigation"
+
+# Assign owner
+splunkctl --yes soar cases task update 100 --owner analyst
+
+# Combine status + owner + note
+splunkctl --yes soar cases task update 100 --status in_progress \
+    --owner analyst --note "Taking over investigation"
+```
+
+### Task status codes
+
+| Name | Integer | Note required |
+|---|---|---|
+| `incomplete` | 0 | No |
+| `in_progress` | 1 | Yes |
+| `complete` | 2 | No |
+
+The `--status` flag accepts human-readable names; the CLI maps them to
+the integer codes the SOAR API expects. The `in_progress` transition
+requires a closing note -- the SOAR server rejects it with "Closing
+note content is required". The CLI enforces this client-side with a
+clear error message before making any API call.
+
+### Closing notes
+
+When `--note` is provided, the CLI posts a note to `/rest/note` with
+`task_id` set, linking the note to the specific task. The task's
+`container_id` is resolved automatically via a GET on the task.
+
+## Workbook templates
+
+SOAR ships with 10 preloaded workbook templates. The default is
+NIST 800-61 (5 phases, 19 tasks). Templates are listed at
+`/rest/workbook_template`. The `promote` command resolves template
+names via this endpoint.
+
+## API endpoints used
+
+| Operation | Method | Endpoint |
+|---|---|---|
+| Promote | POST | `/rest/container/<id>` |
+| Workbook view | GET | `/rest/container/<id>/phases` |
+| Phase add | POST | `/rest/workbook_phase` |
+| Task add | POST | `/rest/workbook_task` |
+| Task update | POST | `/rest/workbook_task/<id>` |
+| Closing note | POST | `/rest/note` |
+| Template list | GET | `/rest/workbook_template` |
+
+---
+
+# SOAR Approvals
+
+Manage approval requests from SOAR playbook prompt blocks. A playbook
+pauses at a prompt action and waits for an external approve/deny response
+before continuing. This command group lets an operator review and respond
+to those prompts from the terminal, unblocking automation without opening
+the SOAR UI.
+
+## How approvals arise
+
+1. A playbook author adds a **prompt** block (manual or automated prompt
+   action) to a playbook.
+2. When the playbook runs and reaches that block, it creates an approval
+   request tied to the container and pauses execution.
+3. The approval stays in `pending` status until someone responds via the
+   UI or the REST API (`/rest/external_prompt/<id>`).
+4. Once approved or denied, the playbook resumes along the corresponding
+   branch.
+
+Without active playbooks that contain prompt blocks, the approval list
+will be empty -- this is normal on a fresh or lab instance.
+
+## List
+
+```bash
+splunkctl soar approvals list                          # all approvals
+splunkctl soar approvals list --pending                # only unanswered
+splunkctl soar approvals list --container 42           # by container
+splunkctl soar approvals list --container 42 --pending # combined
+splunkctl soar approvals list --json
+```
+
+`--pending` adds a `_filter_status="pending"` filter so only unanswered
+approvals are returned. `--container` queries the per-container
+pseudo-field endpoint (`/rest/container/<id>/approvals`) instead of the
+global collection. Both flags compose.
+
+An empty result exits 0 with clean output (`[]` in JSON mode, a human
+message in table mode).
+
+## Get
+
+```bash
+splunkctl soar approvals get 5
+splunkctl soar approvals get 5 --json
+```
+
+Fetches the detail summary view for a single approval
+(`/rest/approval/<id>?_detail=detail_summary_view`). Returns the full
+approval object including message, status, and response history.
+
+## Respond
+
+```bash
+splunkctl soar approvals respond 5 approve             # dry-run preview
+splunkctl --yes soar approvals respond 5 approve       # apply
+splunkctl --yes soar approvals respond 5 deny --message "Insufficient evidence"
+```
+
+Posts to `/rest/external_prompt/<id>` with `{status: "approve"|"deny"}`.
+`--message` attaches a freeform response message to the decision.
+
+**Guarded**: dry-run by default. The preview shows the approval ID,
+action, and message. Pass `--yes` to apply. The guard banner includes the
+SOAR host so you never accidentally respond on the wrong instance.
+
+The action argument accepts only `approve` or `deny` (case-insensitive).
+Any other value is rejected as a usage error before any API call.
+
+## Workflow example
+
+A typical prompt-response cycle from the terminal:
+
+```bash
+# 1. Check for pending approvals
+splunkctl soar approvals list --pending
+
+# 2. Inspect a specific approval
+splunkctl soar approvals get 5
+
+# 3. Approve it (or deny)
+splunkctl --yes soar approvals respond 5 approve --message "Verified IOC"
+
+# 4. Confirm the playbook resumed
+splunkctl soar containers get 42 --playbook-runs
+```
+
+## Error handling
+
+All commands produce typed error envelopes on failure:
+
+```bash
+splunkctl soar approvals get 999 --json
+# stderr: {"error": {"kind": "not_found", "http_status": 404, ...}}
+# exit 1
+```
+
+Responding to an already-answered approval typically returns a conflict
+error from the server.
+
+---
+
+# soar lists -- Custom Lists (decided_list)
+
+Manage SOAR custom lists (the `decided_list` API). Custom lists are
+simple tabular data structures stored as an array of rows, where each
+row is an array of string values.
+
+## Quick reference
+
+```bash
+# List all custom lists
+splunkctl soar lists list
+splunkctl soar lists list --limit 10
+
+# Get a list by name or ID (shows metadata + content)
+splunkctl soar lists get blocklist
+splunkctl soar lists get 42
+
+# Create an empty list
+splunkctl soar lists create --name my_list
+
+# Create with initial content from a JSON file
+# JSON format: [["col1","col2"],["a","b"],["c","d"]]
+splunkctl soar lists create --name my_list --file rows.json
+
+# Create from CSV (parsed client-side into array-of-rows)
+splunkctl soar lists create --name my_list --file data.csv
+
+# Update (FULL REPLACE -- all existing rows are overwritten)
+splunkctl soar lists update my_list --file new_rows.json
+
+# Add a single row (fetch-modify-replace)
+splunkctl soar lists add-row my_list --values "val1,val2,val3"
+
+# Remove a row by 0-based index (fetch-modify-replace)
+splunkctl soar lists remove-row my_list --index 2
+
+# Delete a list (token auth is allowed for this endpoint)
+splunkctl soar lists delete 42
+
+# Export as JSON (content array only)
+splunkctl soar lists export my_list
+splunkctl soar lists export my_list --out backup.json
+
+# Export as CSV (uses the formatted_content API route)
+splunkctl soar lists export my_list --format csv
+splunkctl soar lists export my_list --format csv --out backup.csv
+
+# Import: creates if new, updates (full-replace) if exists
+splunkctl soar lists import --name my_list --file rows.json
+splunkctl soar lists import --name my_list --file data.csv
+```
+
+## Concepts
+
+### Content format
+
+The SOAR `decided_list` API stores content as a JSON array of arrays
+(rows of string values). The server rejects `text/csv` -- all content
+is sent as JSON. The CLI handles CSV-to-JSON conversion client-side
+when you pass a `.csv` file to `--file`.
+
+### Full-replace semantics
+
+The `update` command replaces **all** content in the list. There is no
+partial merge. The dry-run preview states this explicitly. Use
+`add-row` and `remove-row` for incremental edits -- they fetch the
+current content, modify it, and POST the full replacement.
+
+### Name resolution
+
+The `get`, `update`, `add-row`, `remove-row`, and `export` commands
+accept either a numeric ID or a list name. Names are resolved via a
+`_filter_name` query against the API.
+
+### Token auth on DELETE
+
+Unlike most SOAR endpoints, `decided_list` DELETE accepts automation
+token auth (no Basic auth required). This is the only SOAR DELETE
+endpoint with this exception.
+
+## File formats
+
+### JSON input (--file)
+
+Array of arrays, each inner array is one row:
+
+```json
+[
+  ["header1", "header2"],
+  ["value1", "value2"],
+  ["value3", "value4"]
+]
+```
+
+### CSV input (--file)
+
+Standard CSV. The header row becomes the first element of the content
+array (SOAR custom lists do not distinguish headers from data):
+
+```csv
+header1,header2
+value1,value2
+value3,value4
+```
+
+## Mutations
+
+All mutations are dry-run by default. Pass `--yes` to apply. The
+dry-run preview shows the SOAR host and the operation details.
+
+---
+
+# SOAR Indicators & Evidence
+
+IOC indicator lookups and evidence management on Splunk SOAR.
+
+## Prerequisites
+
+SOAR credentials configured (see `splunkctl config init --soar`).
+
+Indicator commands (`list`, `get`, `pivot`, `stats`) require the
+`use_indicators` feature flag to be enabled on the SOAR instance. When
+the flag is off (the default on new installs), commands exit 1 with an
+actionable message explaining how to enable it.
+
+Evidence commands (`list`, `add`, `remove`) work regardless of the
+indicators flag.
+
+## Indicators
+
+### Feature flag detection
+
+Every indicator command checks `/rest/feature_flag` for
+`use_indicators=true` before proceeding. If the flag is off or the
+endpoint is unreachable, you get:
+
+```
+Error: Indicators feature is disabled on this SOAR instance.
+Enable it in Administration > Product Settings > Feature Toggles,
+or POST /rest/feature_flag with name='use_indicators' and value=true.
+```
+
+### List indicators
+
+```bash
+splunkctl soar indicators list                  # all indicators
+splunkctl soar indicators list --type ip        # filter by type
+splunkctl soar indicators list --limit 20       # page size
+splunkctl soar indicators list --json           # machine-readable
+```
+
+Supported `--type` values: `ip`, `domain`, `hash`, `url`, `email`,
+`file`, `process`, `vault_id`.
+
+### Get indicator by value
+
+```bash
+splunkctl soar indicators get 8.8.8.8
+splunkctl soar indicators get evil.com --json
+```
+
+Looks up an indicator by its exact value via `indicator_by_value`.
+
+### Pivot — common containers
+
+```bash
+splunkctl soar indicators pivot evil.com
+splunkctl soar indicators pivot 8.8.8.8 --json
+```
+
+Shows every container where the IOC has appeared
+(`indicator_common_container`). Useful for cross-case correlation:
+"where else have we seen this IP?"
+
+### Indicator stats
+
+```bash
+splunkctl soar indicators stats
+splunkctl soar indicators stats --json
+```
+
+Aggregated breakdowns from `indicator_stats_type` and
+`indicator_stats_severity`.
+
+## Evidence
+
+Evidence links artifacts, notes, or action runs to a container as
+formally tagged proof items.
+
+### List evidence
+
+```bash
+splunkctl soar evidence list --container 100
+splunkctl soar evidence list --container 100 --json
+```
+
+`--container` is required.
+
+### Add evidence (guarded)
+
+```bash
+# Dry-run preview (default):
+splunkctl soar evidence add 100 --object artifact --id 42
+
+# Apply:
+splunkctl soar evidence add 100 --object artifact --id 42 --yes
+```
+
+Supported `--object` types: `artifact`, `note`, `action_run`.
+
+The guard banner shows the SOAR host and previews the payload before
+any mutation. Pass `--yes` to apply.
+
+### Remove evidence (guarded)
+
+```bash
+splunkctl soar evidence remove 5              # dry-run
+splunkctl soar evidence remove 5 --yes        # apply (Basic auth)
+```
+
+DELETE requires Basic auth credentials (SOAR refuses automation tokens
+on DELETE). If your profile only has a token, the CLI will error with a
+clear auth message.
+
+## API endpoints
+
+| Command | REST endpoint |
+|---|---|
+| `indicators list` | `GET /rest/indicator` |
+| `indicators get` | `GET /rest/indicator_by_value` |
+| `indicators pivot` | `GET /rest/indicator_common_container` |
+| `indicators stats` | `GET /rest/indicator_stats_type`, `indicator_stats_severity` |
+| `evidence list` | `GET /rest/evidence` |
+| `evidence add` | `POST /rest/evidence` |
+| `evidence remove` | `DELETE /rest/evidence/<id>` |
+
+---
+
+# SOAR Admin — Users, Roles, Audit
+
+Manage SOAR platform users, inspect role permissions, and query the
+audit trail. User mutations are guarded (dry-run by default, `--yes` to
+apply). SOAR user deletion is a soft-delete (`is_active=False`).
+
+## Commands
+
+```bash
+splunkctl soar users list                        # list users
+splunkctl soar users list --type automation      # include hidden automation user
+splunkctl soar users get 5                       # user detail
+splunkctl soar users create \
+    --username analyst1 --password 'P@ss!' \
+    --type normal --role Analyst --yes           # create user
+splunkctl soar users update 5 \
+    --password 'NewP@ss!' --yes                  # change password
+splunkctl soar users update 5 \
+    --add-role Observer --remove-role Analyst \
+    --yes                                        # modify roles
+splunkctl soar users delete 5 --yes              # soft-delete
+splunkctl soar users token 5                     # show hashed token info
+
+splunkctl soar roles list                        # all 7 built-in roles
+splunkctl soar roles get 1                       # single role + permissions
+
+splunkctl soar audit                             # full audit log
+splunkctl soar audit --user admin                # filter by username
+splunkctl soar audit --container 42              # filter by container
+splunkctl soar audit --playbook dns_lookup       # filter by playbook
+splunkctl soar audit --start 2026-01-01 \
+    --end 2026-06-30                             # time range
+splunkctl soar audit --format csv                # request CSV from server
+splunkctl soar audit --limit 50                  # limit rows
+```
+
+## User management
+
+### Listing users
+
+By default, the system `automation` user is hidden from `/rest/ph_user`.
+Use `--type automation` to surface it. Use `--type normal` for human
+users only.
+
+```bash
+splunkctl soar users list --type automation --json
+```
+
+### Creating users
+
+Both `normal` and `automation` types are supported. Roles and allowed
+IPs can be specified at creation.
+
+```bash
+splunkctl soar users create \
+    --username bot_user \
+    --password 'StrongP@ss1' \
+    --type automation \
+    --role Automation \
+    --allowed-ip 10.0.0.1 \
+    --yes
+```
+
+For automation users, the CLI prints a notice: the automation token
+plaintext is shown **once** in the SOAR UI at creation time. It cannot
+be retrieved via REST. `GET .../token` returns only the hashed key.
+
+### Updating users
+
+Password changes, role modifications, and profile updates are supported.
+Roles use a read-modify-write pattern: `--add-role` and `--remove-role`
+fetch the current role list, merge changes, and POST the result.
+
+```bash
+splunkctl soar users update 5 \
+    --add-role Observer \
+    --remove-role Analyst \
+    --first-name Jane \
+    --yes
+```
+
+Passwords are masked in the dry-run preview (shown as `********`).
+
+### Deleting users
+
+SOAR user deletion is a **soft delete** (`is_active=False`). The user
+record remains in the system; their automation token returns "User is
+inactive" on subsequent API calls. The dry-run preview explains this.
+
+```bash
+splunkctl soar users delete 5 --yes
+```
+
+### Token inspection
+
+`users token <id>` shows the hashed key and expiry date. This is
+explicitly **not** the usable plaintext token.
+
+```bash
+splunkctl soar users token 5
+```
+
+## Roles
+
+SOAR ships with 7 immutable built-in roles. `roles list` shows the full
+permission matrix; `roles get <id>` shows a single role in detail.
+
+```bash
+splunkctl soar roles list --json | jq '.[].name'
+```
+
+## Audit log
+
+The audit endpoint returns a bare array (normalized by `SOARClient`).
+Supports time-range filtering (`--start`/`--end`), user/playbook/container
+filters, server-side CSV format, and row limits.
+
+```bash
+splunkctl soar audit --user admin --start 2026-07-01 --limit 100
+```
+
+---
+
 # Architecture
 
 How splunkctl is built — the layers, the data flow, and the design decisions.
