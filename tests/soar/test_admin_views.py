@@ -151,12 +151,21 @@ class TestSoarStats:
 
     @patch(_PATCH_CLIENT)
     @patch(_PATCH_RESOLVE)
-    def test_unknown_widget(self, mock_resolve: MagicMock, mock_cls: MagicMock) -> None:
-        """Unknown widget returns not_found error envelope."""
+    def test_stats_unknown_widget_http_error_envelope(
+        self, mock_resolve: MagicMock, mock_cls: MagicMock
+    ) -> None:
+        """Unknown widget passes the server's HTTP 400 through as-is.
+
+        The live SOAR API answers a bogus widget name with HTTP 400
+        ("Bad request. Provide a valid widget name"); the CLI keeps
+        transparent pass-through — no remapping to not_found.
+        """
         mock_resolve.return_value = _soar_cfg()
         client = MagicMock()
         client.get.side_effect = SOARError(
-            "Not found", kind="not_found", http_status=404
+            "Bad request. Provide a valid widget name",
+            kind="http",
+            http_status=400,
         )
         mock_cls.return_value = client
 
@@ -166,7 +175,8 @@ class TestSoarStats:
         assert result.exit_code == 1
         last = result.stderr.strip().splitlines()[-1]
         payload = json.loads(last)
-        assert payload["error"]["kind"] == "not_found"
+        assert payload["error"]["kind"] == "http"
+        assert payload["error"]["http_status"] == 400
 
     @patch(_PATCH_CLIENT)
     @patch(_PATCH_RESOLVE)
