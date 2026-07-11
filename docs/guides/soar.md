@@ -176,14 +176,17 @@ SOAR host.
 ```bash
 splunkctl soar containers update 42 --severity critical --yes
 splunkctl soar containers update 42 --status closed --yes
+splunkctl soar containers update 42 --owner analyst --role analyst --yes
 splunkctl soar containers update 1 2 3 --severity low --yes   # bulk
 splunkctl soar containers update 42 --tag new_tag --yes       # read-modify-write
 ```
 
 Updates one or more containers. Multiple ids use a single bulk array POST
 to `/rest/container`. Status must be a name (`closed`, not `2`) -- numeric
-ids are rejected with a `usage` error. Tags are read-modify-write: existing
-tags are fetched first, new tags merged, duplicates removed.
+ids are rejected with a `usage` error. Tags are read-modify-write: each
+container's existing tags are fetched at apply time, new tags merged per
+container, duplicates removed (dry-run previews the merge without any
+API call).
 
 ### Close
 

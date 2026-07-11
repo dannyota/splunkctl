@@ -89,6 +89,7 @@ def _build_update_payload(
     description: str | None,
     status: str | None,
     owner: str | None,
+    role: str | None,
     fields: tuple[str, ...],
 ) -> dict[str, Any]:
     """Assemble container update payload."""
@@ -107,6 +108,8 @@ def _build_update_payload(
         body["status"] = status
     if owner is not None:
         body["owner_name"] = owner
+    if role is not None:
+        body["role"] = role
     for field in fields:
         key, _, value = field.partition("=")
         if key and value:
@@ -202,6 +205,7 @@ def create_cmd(
 @click.option("--description", default=None, help="New description.")
 @click.option("--status", default=None, help="New status (by NAME, not id).")
 @click.option("--owner", default=None, help="New owner username.")
+@click.option("--role", default=None, help="New role name.")
 @click.option("--tag", "tags", multiple=True, help="Tag to add (repeatable).")
 @click.option(
     "--field",
@@ -221,6 +225,7 @@ def update_cmd(
     description: str | None,
     status: str | None,
     owner: str | None,
+    role: str | None,
     tags: tuple[str, ...],
     fields: tuple[str, ...],
 ) -> None:
@@ -241,6 +246,7 @@ def update_cmd(
         description=description,
         status=status,
         owner=owner,
+        role=role,
         fields=fields,
     )
     if not body and not tags:
@@ -251,16 +257,14 @@ def update_cmd(
         ctx.exit(1)
         return
 
-    client = get_soar_client(ctx)
-
-    # Tags: read-modify-write per container, merge into body.
-    if tags:
-        for cid in ids:
-            merged = _read_modify_write_tags(client, cid, tags)
-            body["tags"] = merged
-
+    # Guard BEFORE any network I/O — the tags read-modify-write merge is
+    # deferred to apply time, so dry-run previews it without fetching.
     id_str = ", ".join(str(i) for i in ids)
     details = json.dumps(body, indent=2)
+    if tags:
+        details += (
+            f"\ntags: <existing> + {json.dumps(list(tags))} (merged at apply time)"
+        )
     if not guard.soar_check(
         ctx,
         f"Update container(s) {id_str}",
@@ -268,7 +272,11 @@ def update_cmd(
     ):
         return
 
+    client = get_soar_client(ctx)
+
     if len(ids) == 1:
+        if tags:
+            body["tags"] = _read_modify_write_tags(client, ids[0], tags)
         try:
             result = client.post(f"container/{ids[0]}", body=body)
         except SOARError as exc:
@@ -279,8 +287,14 @@ def update_cmd(
         if isinstance(result, dict) and result:
             output.render(ctx, result)
     else:
-        # Bulk: one array POST to /rest/container.
-        bulk = [{"id": cid, **body} for cid in ids]
+        # Bulk: one array POST to /rest/container. Each container gets
+        # its OWN tag merge so no container inherits another's tags.
+        bulk: list[dict[str, Any]] = []
+        for cid in ids:
+            item: dict[str, Any] = {"id": cid, **body}
+            if tags:
+                item["tags"] = _read_modify_write_tags(client, cid, tags)
+            bulk.append(item)
         try:
             result = client.post("container", body=bulk)
         except SOARError as exc:
