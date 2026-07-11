@@ -174,9 +174,7 @@ class TestSoarSearch:
         """SOARError (e.g. auth failure) exits 1 with typed envelope."""
         mock_resolve.return_value = soar_cfg()
         client = MagicMock()
-        client.get.side_effect = SOARError(
-            "Unauthorized", kind="auth", http_status=401
-        )
+        client.get.side_effect = SOARError("Unauthorized", kind="auth", http_status=401)
         mock_cls.return_value = client
 
         result = CliRunner().invoke(cli, ["--json", "soar", "search", "dns"])
