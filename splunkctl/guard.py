@@ -93,35 +93,6 @@ def check(ctx: click.Context, action: str, *, details: str = "") -> bool:
     return False
 
 
-def banner_soar(ctx: click.Context) -> str:
-    """Build the ``(SOAR @ host:port)`` guard banner for SOAR mutations."""
-    obj: dict[str, Any] = ctx.obj or {}
-    config_path = Path(obj["config"]) if obj.get("config") else None
-    cfg = cfg_mod.resolve_soar(config_path, profile=obj.get("profile"))
-    host = cfg.get("host", "soar-host")
-    port = cfg.get("port", 8443)
-    return f"(SOAR @ {host}:{port})"
-
-
-def check_soar(ctx: click.Context, action: str, *, details: str = "") -> bool:
-    """Return True if the SOAR mutation should proceed.
-
-    Same contract as :func:`check` but uses SOAR config for the banner.
-    """
-    obj: dict[str, Any] = ctx.obj or {}
-    tag = banner_soar(ctx)
-
-    if not obj.get("dry_run", True):
-        click.echo(f"Applying: {action} {tag}", err=True)
-        return True
-
-    click.echo(f"[DRY RUN] {action} {tag}", err=True)
-    if details:
-        click.echo(details, err=True)
-    click.echo("Pass --yes to apply.", err=True)
-    return False
-
-
 def guarded[F](cmd: F) -> F:
     """Mark a Click command callback as a guarded mutation."""
     cmd.guarded = True  # type: ignore[attr-defined]

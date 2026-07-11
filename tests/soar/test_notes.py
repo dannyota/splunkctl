@@ -12,7 +12,7 @@ from splunkctl.main import cli
 from splunkctl.soar.client import SOARError
 from tests.soar.conftest import PATCH_CLIENT, PATCH_RESOLVE, soar_cfg
 
-PATCH_BANNER = "splunkctl.guard.banner_soar"
+PATCH_BANNER = "splunkctl.guard.soar_banner"
 
 
 # ---------------------------------------------------------------------------

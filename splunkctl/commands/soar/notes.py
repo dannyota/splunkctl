@@ -9,7 +9,7 @@ import click
 
 from splunkctl import output
 from splunkctl.commands.soar._client import get_soar_client
-from splunkctl.guard import check_soar, guarded
+from splunkctl.guard import guarded, soar_check
 from splunkctl.soar.client import SOARError
 
 
@@ -138,7 +138,7 @@ def add_cmd(
         f"  content:   {resolved_content[:80]}"
         f"{'...' if len(resolved_content) > 80 else ''}"
     )
-    if not check_soar(ctx, f"Add note to container {container}", details=details):
+    if not soar_check(ctx, f"Add note to container {container}", details=details):
         return
 
     client = get_soar_client(ctx)
@@ -163,7 +163,7 @@ def add_cmd(
 @guarded
 def delete_cmd(ctx: click.Context, *, note_id: int) -> None:
     """Delete a note by ID."""
-    if not check_soar(ctx, f"Delete note {note_id}"):
+    if not soar_check(ctx, f"Delete note {note_id}"):
         return
 
     client = get_soar_client(ctx)
@@ -193,7 +193,7 @@ def comment_cmd(ctx: click.Context, *, container_id: int, text: str) -> None:
         f"  container: {container_id}\n"
         f"  comment:   {text[:80]}{'...' if len(text) > 80 else ''}"
     )
-    if not check_soar(ctx, f"Add comment to container {container_id}", details=details):
+    if not soar_check(ctx, f"Add comment to container {container_id}", details=details):
         return
 
     client = get_soar_client(ctx)

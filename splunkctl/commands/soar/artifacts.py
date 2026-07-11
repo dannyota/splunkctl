@@ -8,9 +8,9 @@ from typing import Any
 
 import click
 
-from splunkctl import config as cfg_mod
 from splunkctl import output
 from splunkctl.commands.soar._client import get_soar_client
+from splunkctl.guard import soar_check
 from splunkctl.soar.client import SOARError
 
 # Built-in CEF contains-type map — derived from soar-ingest-map.md.
@@ -41,34 +41,6 @@ CEF_CONTAINS_MAP: dict[str, list[str]] = {
     "destinationUserName": ["user name"],
     "destinationUserId": ["user name"],
 }
-
-
-def _soar_banner(ctx: click.Context) -> str:
-    """Build a ``(soar @ host:port)`` banner for guard messages."""
-    obj: dict[str, Any] = ctx.obj or {}
-    cfg_path = obj.get("config")
-    profile = obj.get("profile")
-    config_path = Path(cfg_path) if cfg_path else None
-    cfg = cfg_mod.resolve_soar(config_path, profile=profile)
-    host = cfg.get("host", "unknown")
-    port = cfg.get("port", 8443)
-    return f"(soar @ {host}:{port})"
-
-
-def _soar_check(ctx: click.Context, action: str, *, details: str = "") -> bool:
-    """SOAR-specific mutation guard — dry-run preview with SOAR host."""
-    obj: dict[str, Any] = ctx.obj or {}
-    tag = _soar_banner(ctx)
-
-    if not obj.get("dry_run", True):
-        click.echo(f"Applying: {action} {tag}", err=True)
-        return True
-
-    click.echo(f"[DRY RUN] {action} {tag}", err=True)
-    if details:
-        click.echo(details, err=True)
-    click.echo("Pass --yes to apply.", err=True)
-    return False
 
 
 def _parse_cef_pairs(raw: tuple[str, ...]) -> dict[str, str]:
@@ -295,7 +267,7 @@ def create_cmd(
         payload["run_automation"] = False
 
     details = json.dumps(payload, indent=2, default=str)
-    if not _soar_check(ctx, f"Create artifact '{name}'", details=details):
+    if not soar_check(ctx, f"Create artifact '{name}'", details=details):
         return
 
     try:
@@ -393,7 +365,7 @@ def update_cmd(
         return
 
     details = json.dumps(payload, indent=2, default=str)
-    if not _soar_check(ctx, f"Update artifact {artifact_id}", details=details):
+    if not soar_check(ctx, f"Update artifact {artifact_id}", details=details):
         return
 
     try:
@@ -418,7 +390,7 @@ def delete_cmd(ctx: click.Context, *, artifact_id: int) -> None:
     """Delete an artifact by ID."""
     client = get_soar_client(ctx)
 
-    if not _soar_check(ctx, f"Delete artifact {artifact_id}"):
+    if not soar_check(ctx, f"Delete artifact {artifact_id}"):
         return
 
     try:

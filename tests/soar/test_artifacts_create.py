@@ -10,7 +10,7 @@ from click.testing import CliRunner
 from splunkctl.main import cli
 from tests.soar.conftest import PATCH_CLIENT, PATCH_RESOLVE, soar_cfg
 
-PATCH_SOAR_RESOLVE = "splunkctl.commands.soar.artifacts.cfg_mod.resolve_soar"
+PATCH_SOAR_RESOLVE = "splunkctl.guard.cfg_mod.resolve_soar"
 
 
 class TestArtifactsCreate:
