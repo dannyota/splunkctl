@@ -64,12 +64,14 @@ that are not SDK list surfaces (e.g. `audit rbac`) are exempt by design.
 |---|---|---|
 | `soar` | ✅ built | test, info, health, license, settings, stats, meta — platform reads via `SOARClient`; typed error envelopes; live-verified against lab SOAR 8.5.0.248 |
 | `soar containers` | ✅ built | list (--label/--status/--severity/--owner/--since/--type/--filter/--limit/--offset; status validated via container_status), get (--artifacts/--notes/--comments/--audit/--activity/--playbook-runs/--phases sub-views), create (--name/--label/--severity/--sensitivity/--sdi/--description/--tag/--field; SDI dedup precheck), update (single+bulk array POST; --name/--label/--severity/--sensitivity/--description/--status/--owner/--tag/--field; status by NAME only; tags read-modify-write), close (sugar for status=closed; single+bulk), assign (--owner/--role; single+bulk), delete (Basic auth; cascading) |
+| `soar containers` | ✅ built | list (--label/--status/--severity/--owner/--since/--type/--filter/--limit/--offset; status validated via container_status), get (--artifacts/--notes/--comments/--audit/--activity/--playbook-runs/--phases sub-views) |
+| `soar vault` | ✅ built | list (--container), get (vault_id via vault_document hash), upload (--container, base64, >30 MB warning), download (vault_id, --out), delete (container_attachment id; 405 explanation); upload/download byte-identical round-trip verified |
 
 ## SOAR infrastructure
 
 | Module | Status | Notes |
 |---|---|---|
-| `soar/client.py` | ✅ built | SOARClient — requests-based, lazy, normalizing; dual auth (token + Basic fallback for DELETE) |
+| `soar/client.py` | ✅ built | SOARClient — requests-based, lazy, normalizing; dual auth (token + Basic fallback for DELETE); `get_bytes` for binary downloads |
 | `config.py` SOAR | ✅ built | `resolve_soar`, `redact_soar`, `SOAR_*` env overlay, profile `soar:` section |
 
 ## Agent integration

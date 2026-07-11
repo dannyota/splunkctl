@@ -317,6 +317,38 @@ class SOARClient:
         """DELETE a SOAR REST endpoint. Uses Basic auth (except decided_list)."""
         return self._request("DELETE", path, params=params)
 
+    def get_bytes(
+        self,
+        path: str,
+        *,
+        params: dict[str, Any] | None = None,
+    ) -> bytes:
+        """GET a SOAR REST endpoint and return raw bytes.
+
+        Used for binary downloads (e.g. ``download_attachment``).
+        Raises :class:`SOARError` on non-2xx responses.
+        """
+        auth_kw = self._auth_kwargs(method="GET", path=path)
+        headers: dict[str, str] = auth_kw.get("headers", {})
+
+        kwargs: dict[str, Any] = {
+            "method": "GET",
+            "url": self._url(path),
+            "headers": headers,
+            "params": params,
+        }
+        if "auth" in auth_kw:
+            kwargs["auth"] = auth_kw["auth"]
+
+        resp: requests.Response = self._session.request(**kwargs)
+        if resp.status_code >= 400:
+            raise SOARError(
+                f"HTTP {resp.status_code}: {resp.text[:200]}",
+                kind=kind_for_status(resp.status_code),
+                http_status=resp.status_code,
+            )
+        return resp.content
+
     def iter_pages(
         self,
         path: str,

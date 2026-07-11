@@ -202,6 +202,50 @@ splunkctl soar containers assign 1 2 --owner admin --role analyst --yes
 ```
 
 Sets owner and/or role on containers. Multiple ids use one array POST.
+## Vault
+
+### List
+
+```bash
+splunkctl soar vault list                             # all vault items
+splunkctl soar vault list --container 42              # by container
+splunkctl soar vault list --json
+```
+
+Lists vault attachments via `/rest/container_attachment`. `--container`
+filters by container ID.
+
+### Get
+
+```bash
+splunkctl soar vault get <vault_id>                   # by SHA1 hash
+splunkctl soar vault get <vault_id> --json
+```
+
+Queries `/rest/vault_document` by hash. Returns metadata including SHA1,
+SHA256, file names, size, and tags.
+
+### Upload
+
+```bash
+splunkctl soar vault upload --container 42 ./sample.pcap
+splunkctl --yes soar vault upload --container 42 ./sample.pcap
+```
+
+Base64-encodes the file and POSTs to `/rest/container_attachment`.
+Guarded: dry-run by default, `--yes` to apply. Files over 30 MB emit a
+warning (SOAR's nginx proxy caps at ~32 MB).
+
+### Download
+
+```bash
+splunkctl soar vault download <vault_id>              # raw bytes to stdout
+splunkctl soar vault download <vault_id> --out ./file # write to file
+```
+
+Downloads via `GET /rest/download_attachment?vault_id=<sha1>` (the only
+working download path). Without `--out`, writes raw bytes to stdout
+(pipe-friendly).
 
 ### Delete
 
@@ -214,6 +258,14 @@ Cascading delete (artifacts, vault, comments, notes, phases, tasks).
 Requires Basic auth credentials (username/password in profile); SOAR
 refuses automation tokens on DELETE. Token-only profiles get a clear
 `kind: auth` error.
+splunkctl --yes soar vault delete <attachment_id>
+```
+
+Deletes via `DELETE /rest/container_attachment/<id>`. Use the attachment
+ID from `vault list`, not the vault_id hash. SOAR's `vault_document`
+DELETE endpoint returns 405 -- the CLI explains this if encountered.
+Guarded: dry-run by default, `--yes` to apply. Requires Basic auth
+(SOAR refuses token auth on DELETE).
 
 ## Error Handling
 
