@@ -10,6 +10,7 @@ from splunkctl.commands.soar import (
 )
 from splunkctl.commands.soar.actions import actions_group
 from splunkctl.commands.soar.admin_views import meta, settings, stats
+from splunkctl.commands.soar.approvals import approvals_group
 from splunkctl.commands.soar.apps import apps_group
 from splunkctl.commands.soar.artifacts import artifacts_group
 from splunkctl.commands.soar.assets import assets_group, ingest_status_cmd
@@ -45,3 +46,4 @@ soar_group.add_command(ingest_status_cmd)
 soar_group.add_command(playbooks_group)
 soar_group.add_command(actions_group)
 soar_group.add_command(functions_group)
+soar_group.add_command(approvals_group)
