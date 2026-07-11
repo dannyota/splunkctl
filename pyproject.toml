@@ -52,7 +52,7 @@ Repository = "https://github.com/dannyota/splunkctl"
 Issues = "https://github.com/dannyota/splunkctl/issues"
 
 [tool.setuptools]
-packages = ["splunkctl", "splunkctl.commands", "splunkctl.mcp"]
+packages = ["splunkctl", "splunkctl.commands", "splunkctl.mcp", "splunkctl.soar"]
 
 [tool.setuptools.dynamic]
 version = { attr = "splunkctl.__version__" }
