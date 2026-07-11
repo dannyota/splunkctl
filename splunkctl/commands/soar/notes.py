@@ -217,9 +217,9 @@ def comment_cmd(ctx: click.Context, *, container_id: int, text: str) -> None:
 
 
 @notes_group.command("comment-delete")
-@click.argument("comment_id", type=int)
+@click.argument("comment_id", type=int, expose_value=False)
 @click.pass_context
-def comment_delete_cmd(ctx: click.Context, *, comment_id: int) -> None:
+def comment_delete_cmd(ctx: click.Context) -> None:
     """Attempt to delete a comment — explains immutability."""
     output.error(
         "SOAR comments are immutable and cannot be deleted. "

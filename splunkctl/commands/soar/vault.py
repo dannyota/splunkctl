@@ -106,7 +106,12 @@ def upload_cmd(ctx: click.Context, *, container: int, file_path: str) -> None:
     if not soar_check(ctx, f"Upload '{path.name}' to vault", details=details):
         return
 
-    raw = path.read_bytes()
+    try:
+        raw = path.read_bytes()
+    except OSError as exc:
+        output.error(str(exc), kind="error")
+        ctx.exit(1)
+        return
     encoded = base64.b64encode(raw).decode()
 
     body: dict[str, Any] = {
@@ -168,7 +173,7 @@ def delete_cmd(ctx: click.Context, *, attachment_id: int) -> None:
     """Delete a vault attachment by its container_attachment ID.
 
     SOAR's vault_document DELETE endpoint returns 405; use the
-    container_attachment ID (from ``vault list`` or ``vault get``).
+    container_attachment ID (from ``vault list``, the ``id`` column).
     """
     details = f"  container_attachment id: {attachment_id}"
     if not soar_check(ctx, f"Delete vault attachment {attachment_id}", details=details):

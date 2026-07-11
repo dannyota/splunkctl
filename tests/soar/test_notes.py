@@ -61,7 +61,7 @@ class TestNotesList:
         client.get.return_value = {"count": 1, "num_pages": 1, "data": []}
         mock_cls.return_value = client
 
-        CliRunner().invoke(
+        result = CliRunner().invoke(
             cli,
             [
                 "--json",
@@ -74,6 +74,7 @@ class TestNotesList:
                 "42",
             ],
         )
+        assert result.exit_code == 0
         call_args = client.get.call_args
         path_arg = call_args[0][0]
         assert path_arg == "note"

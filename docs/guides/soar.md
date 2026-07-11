@@ -205,6 +205,19 @@ splunkctl soar containers assign 1 2 --owner admin --role analyst --yes
 ```
 
 Sets owner and/or role on containers. Multiple ids use one array POST.
+
+### Delete
+
+```bash
+splunkctl soar containers delete 42 --yes
+splunkctl soar containers delete 1 2 3 --yes
+```
+
+Cascading delete (artifacts, vault, comments, notes, phases, tasks).
+Requires Basic auth credentials (username/password in profile); SOAR
+refuses automation tokens on DELETE. Token-only profiles get a clear
+`kind: auth` error.
+
 ## Vault
 
 ### List
@@ -248,27 +261,73 @@ splunkctl soar vault download <vault_id> --out ./file # write to file
 
 Downloads via `GET /rest/download_attachment?vault_id=<sha1>` (the only
 working download path). Without `--out`, writes raw bytes to stdout
-(pipe-friendly).
+(pipe-friendly). `--out` overwrites the target file without prompting
+(same convention as `lookups download --out` and `dashboards export --out`).
 
 ### Delete
 
 ```bash
-splunkctl soar containers delete 42 --yes
-splunkctl soar containers delete 1 2 3 --yes
-```
-
-Cascading delete (artifacts, vault, comments, notes, phases, tasks).
-Requires Basic auth credentials (username/password in profile); SOAR
-refuses automation tokens on DELETE. Token-only profiles get a clear
-`kind: auth` error.
 splunkctl --yes soar vault delete <attachment_id>
 ```
 
 Deletes via `DELETE /rest/container_attachment/<id>`. Use the attachment
-ID from `vault list`, not the vault_id hash. SOAR's `vault_document`
-DELETE endpoint returns 405 -- the CLI explains this if encountered.
-Guarded: dry-run by default, `--yes` to apply. Requires Basic auth
-(SOAR refuses token auth on DELETE).
+ID from `vault list` (the `id` column), not the vault_id hash. SOAR's
+`vault_document` DELETE endpoint returns 405 -- the CLI explains this
+if encountered. Guarded: dry-run by default, `--yes` to apply.
+Requires Basic auth (SOAR refuses token auth on DELETE).
+
+## Notes & Comments
+
+### List
+
+```bash
+splunkctl soar notes list --container 42
+splunkctl soar notes list --container 42 --task 7   # task-scoped notes
+splunkctl soar notes list --container 42 --json
+```
+
+Lists notes for a container. `--task` filters to notes attached to a
+specific task ID (queries `/rest/note` with container + task_id filters,
+since task notes are not visible on the container sub-view endpoint).
+
+### Add
+
+```bash
+splunkctl soar notes add --container 42 --title "Summary" "Investigation findings"
+splunkctl soar notes add --container 42 --title "Report" --file ./report.md --yes
+splunkctl soar notes add --container 42 --title "Task note" --task-id 7 "Task analysis" --yes
+```
+
+Content comes from the positional argument or `--file` (mutually
+exclusive). `--task-id` makes the note a task note instead of a general
+container note. Guarded: dry-run by default, `--yes` to apply.
+
+### Delete
+
+```bash
+splunkctl --yes soar notes delete 10
+```
+
+Deletes a note by its numeric ID. Guarded.
+
+### Comment
+
+```bash
+splunkctl --yes soar notes comment 42 "Investigation complete"
+```
+
+Adds a comment to a container. Comments are immutable -- once created,
+they cannot be edited or deleted via the API.
+
+### Comment-delete
+
+```bash
+splunkctl soar notes comment-delete 50
+```
+
+Exits with a usage error explaining that SOAR comments are immutable and
+cannot be deleted. Comments are removed only when the parent container is
+deleted. No API call is made.
 
 ## Error Handling
 
