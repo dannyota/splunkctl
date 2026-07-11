@@ -17,6 +17,7 @@ uses.
 """
 
 import re
+import urllib.parse
 from typing import Any
 
 import click
@@ -275,7 +276,13 @@ def eventtypes_get(ctx: click.Context, name: str, app: str | None) -> None:
 # each key inside the stanza is a tag name whose value is enabled/disabled.
 # `disabled` itself is the stanza-level flag, not a tag, and eai:* keys are
 # read-only REST metadata — both are excluded from the tag-name views below.
+# REST returns stanza names URL-encoded (`eventtype=cim%3Aauth`); the views
+# decode them, and `tags get` accepts either form.
 _TAG_METADATA_KEYS = {"disabled"}
+
+
+def _decode_stanza(name: str) -> str:
+    return urllib.parse.unquote(name)
 
 
 def _is_tag_key(key: str) -> bool:
@@ -335,7 +342,7 @@ def tags_list(
     )
     rows: list[dict[str, Any]] = [
         {
-            "field_value": s.name,
+            "field_value": _decode_stanza(s.name),
             "tags": ";".join(_enabled_tag_names(dict(s.content))),
             "app": dict(s.access).get("app", ""),
         }
@@ -359,9 +366,16 @@ def tags_get(ctx: click.Context, field_value: str, app: str | None) -> None:
     try:
         entity = conf_ops.get_stanza(client, "tags", field_value, app=app)
     except KeyError:
-        output.error(
-            f"Stanza '{field_value}' not found in tags.conf.", kind="not_found"
-        )
-        ctx.exit(1)
-        return
-    output.render(ctx, {"name": entity.name, **_tag_states(dict(entity.content))})
+        encoded = urllib.parse.quote(field_value, safe="=")
+        try:
+            entity = conf_ops.get_stanza(client, "tags", encoded, app=app)
+        except KeyError:
+            output.error(
+                f"Stanza '{field_value}' not found in tags.conf.", kind="not_found"
+            )
+            ctx.exit(1)
+            return
+    output.render(
+        ctx,
+        {"name": _decode_stanza(entity.name), **_tag_states(dict(entity.content))},
+    )

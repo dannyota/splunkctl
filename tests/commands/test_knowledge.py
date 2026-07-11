@@ -378,7 +378,7 @@ def test_tags_list_enabled_tags_only_semicolon_joined(mock_gc: MagicMock) -> Non
     result = CliRunner().invoke(cli, ["--json", "tags", "list"])
     assert result.exit_code == 0, result.output
     row = json.loads(result.output)[0]
-    assert row["field_value"] == "eventtype=cim%3Aauthentication"
+    assert row["field_value"] == "eventtype=cim:authentication"
     assert row["app"] == "Splunk_SA_CIM"
     tags = row["tags"].split(";")
     assert set(tags) == {"authentication", "cim3"}
@@ -414,10 +414,34 @@ def test_tags_get_shows_all_tag_states(mock_gc: MagicMock) -> None:
     )
     assert result.exit_code == 0, result.output
     row = json.loads(result.output)[0]
+    assert row["name"] == "eventtype=cim:authentication"
     assert row["authentication"] == "enabled"
     assert row["deprecated"] == "disabled"
     assert "eai:appName" not in row
     assert "disabled" not in row  # stanza-level disabled flag, not a tag
+
+
+@patch(_PATCH)
+def test_tags_get_accepts_decoded_stanza_name(mock_gc: MagicMock) -> None:
+    """A human-readable field=value resolves via its URL-encoded stanza."""
+    conf = _conf(mock_gc)
+    encoded = "eventtype=cim%3Aauthentication"
+    stanza = _stanza(encoded, {"authentication": "enabled"})
+
+    def lookup(key: str) -> MagicMock:
+        if key == encoded:
+            return stanza
+        raise KeyError(key)
+
+    conf.__getitem__.side_effect = lookup
+
+    result = CliRunner().invoke(
+        cli, ["--json", "tags", "get", "eventtype=cim:authentication"]
+    )
+    assert result.exit_code == 0, result.output
+    row = json.loads(result.output)[0]
+    assert row["name"] == "eventtype=cim:authentication"
+    assert row["authentication"] == "enabled"
 
 
 @patch(_PATCH)
