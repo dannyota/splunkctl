@@ -11,7 +11,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"; source "$HERE/lib.sh"
 
 : "${SIEM_IP:=100.65.1.10}"; : "${SOAR_IP:=100.65.1.11}"
-: "${SIEM_RAM:=8192}"; : "${SOAR_RAM:=8192}"
+: "${SIEM_RAM:=4096}"; : "${SOAR_RAM:=6144}"
 : "${SIEM_CPU:=4}"; : "${SOAR_CPU:=4}"
 ONLY="both"
 while [[ $# -gt 0 ]]; do case "$1" in --only) ONLY="$2"; shift 2;; *) die "unknown arg: $1";; esac; done
