@@ -76,6 +76,8 @@ that are not SDK list surfaces (e.g. `audit rbac`) are exempt by design.
 | `soar cases` | ✅ built | promote (--template name or id; resolves via workbook_template; atomic container_type+template POST), workbook (phases + nested tasks view), phase add (--container/--name/--order), task add (--phase-id/--name/--description/--order), task update (--status incomplete/in_progress/complete mapped to integer codes 0/1/2, --owner, --note; client-side closing-note enforcement for in_progress); live-verified: NIST 800-61 promote creates 5 phases/19 tasks, 0→2 works, 0→1 without note blocked |
 | `soar approvals` | ✅ built | list (--container/--pending), get (detail_summary_view), respond (approve/deny, --message; guarded; POST external_prompt) |
 | `soar lists` | ✅ built | list (--limit), get (name or id), create (--name, --file JSON/CSV; CSV parsed client-side), update (full-replace via --file), add-row (--values; fetch-modify-replace), remove-row (--index; fetch-modify-replace), delete (token auth OK), export (--format json/csv; CSV via formatted_content route, --out), import (--name --file; create-or-update) |
+| `soar indicators` | ✅ built | list (--type/--limit; feature-flag gated), get (indicator_by_value), pivot (common containers for an IOC), stats (type + severity aggregations); all commands exit 1 with actionable message when `use_indicators` flag is off |
+| `soar evidence` | ✅ built | list (--container), add (--object artifact\|note\|action_run --id; guarded), remove (guarded; Basic auth) |
 
 ## SOAR infrastructure
 
