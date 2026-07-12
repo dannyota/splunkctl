@@ -80,10 +80,31 @@ name (`<dir>/<module>`), then the bare module name as a suffix match
 (`export my_playbook` finds `my-repo-dir/my_playbook`). Ambiguous or
 missing names return an error.
 
-There is no `playbooks delete`: SOAR 8.5 exposes no working REST
-deletion (`DELETE /rest/playbook/<id>` returns 405, and a POST with
-`{"delete": true}` reports success without removing anything).
-Deletion is UI-only; `disable` is the REST-reachable equivalent.
+## Delete
+
+```bash
+splunkctl soar playbooks delete 10 --yes                 # by id
+splunkctl soar playbooks delete local/old_pb --yes       # by exact name
+splunkctl soar playbooks delete 10 11 12 --yes           # bulk
+```
+
+SOAR 8.5 exposes no working REST deletion (`DELETE /rest/playbook/<id>`
+returns 405, and a POST with `{"delete": true}` reports success without
+removing anything), so this command uses the same route the browser
+does: a Django Web UI login (CSRF cookie) followed by `POST /playbooks`
+with `{ids, delete: true}`. It therefore **requires username/password
+credentials** — an automation token alone is refused with an `auth`
+error.
+
+Deletion is irreversible, so names never suffix-match: pass the exact
+scoped name (`<dir>/<module>`) or the numeric id. A bare module name
+that only matches as a suffix returns a did-you-mean error carrying the
+full name and id. Name→id resolution happens at apply time — the
+dry-run preview lists the identifiers as typed and needs no
+connectivity.
+
+Guarded: dry-run by default, `--yes` to apply. Prints the server's
+per-playbook change/error report and exits 1 if any deletion failed.
 
 ## Import
 

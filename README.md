@@ -227,7 +227,7 @@ splunkctl mcp install              # register in .mcp.json
 splunkctl mcp serve                # start stdio MCP server
 ```
 
-The MCP server auto-generates 237 typed tools from the Click command tree
+The MCP server auto-generates 229 typed tools from the Click command tree
 (SIEM + SOAR) with progressive discovery -- agents start with 5 meta-tools
 (`help`, `usage`, `focus`, `unfocus`, `run`) and dynamically load typed
 schemas per command group. Subgroup-granular focus works for nested groups

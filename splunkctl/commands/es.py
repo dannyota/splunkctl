@@ -57,7 +57,7 @@ def _status_to_int(value: str) -> str:
     key = value.strip().lower()
     if key in _STATUS_MAP:
         return _STATUS_MAP[key]
-    if value.isdigit():
+    if value.isascii() and value.isdigit():
         return value
     known = ", ".join(_STATUS_MAP)
     raise click.BadParameter(f"'{value}' is not a known status ({known}, or 0-5)")

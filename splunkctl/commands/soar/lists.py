@@ -57,12 +57,12 @@ def _resolve_list_id(
 
     Returns the integer id, or None after printing an error.
     """
-    if ref.isdigit():
+    if ref.isascii() and ref.isdigit():
         return int(ref)
 
     # Name lookup.
     try:
-        result = client.get(_EP, params={"_filter_name": f'"{ref}"'})
+        result = client.get(_EP, params={"_filter_name": json.dumps(ref)})
     except SOARError as exc:
         output.error(exc.message, kind=exc.kind, http_status=exc.http_status)
         ctx.exit(1)
@@ -445,7 +445,7 @@ def import_cmd(
 
     client = get_soar_client(ctx)
     try:
-        result = client.get(_EP, params={"_filter_name": f'"{name}"'})
+        result = client.get(_EP, params={"_filter_name": json.dumps(name)})
     except SOARError as exc:
         output.error(exc.message, kind=exc.kind, http_status=exc.http_status)
         ctx.exit(1)

@@ -177,7 +177,7 @@ def dedup_check_container(soar: Any, sdi: str) -> int | None:
     try:
         result = soar.get(
             "container",
-            params={"_filter_source_data_identifier": f'"{sdi}"'},
+            params={"_filter_source_data_identifier": json.dumps(sdi)},
         )
         data = result.get("data", []) if isinstance(result, dict) else []
         if data:
@@ -193,7 +193,7 @@ def dedup_check_artifact(soar: Any, sdi: str, container_id: int) -> int | None:
         result = soar.get(
             "artifact",
             params={
-                "_filter_source_data_identifier": f'"{sdi}"',
+                "_filter_source_data_identifier": json.dumps(sdi),
                 "_filter_container": container_id,
             },
         )

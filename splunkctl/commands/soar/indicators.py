@@ -97,7 +97,7 @@ def list_cmd(
 
     params: dict[str, Any] = {}
     if indicator_type is not None:
-        params["_filter_type"] = f'"{indicator_type}"'
+        params["_filter_type"] = json.dumps(indicator_type)
     if limit is not None:
         params["page_size"] = limit
 

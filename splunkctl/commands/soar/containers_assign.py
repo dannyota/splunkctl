@@ -22,7 +22,10 @@ def resolve_owner_role(
 
     The container endpoint returns success but silently IGNORES
     name-shaped fields (``owner_name``, ``role``) on write — only
-    ``owner_id``/``role_id`` stick. Raises SOARError on unknown names.
+    ``owner_id``/``role_id`` stick. The name lookup runs first so an
+    all-digit username (AD employee-id accounts) resolves to the right
+    principal; the value is treated as a raw id only when no name
+    matches. Raises SOARError on unknown names.
     """
     resolved: dict[str, Any] = {}
     for key, endpoint, field, value in (
@@ -31,43 +34,65 @@ def resolve_owner_role(
     ):
         if value is None:
             continue
-        if value.isdigit():
-            resolved[key] = int(value)
-            continue
         result = client.get(endpoint, params={f"_filter_{field}": json.dumps(value)})
         data = result.get("data", []) if isinstance(result, dict) else []
-        if not data:
+        if data:
+            resolved[key] = int(data[0]["id"])
+        elif value.isascii() and value.isdigit():
+            resolved[key] = int(value)
+        else:
             raise SOARError(
                 f"{field.capitalize()} '{value}' not found on SOAR.",
                 kind="not_found",
             )
-        resolved[key] = int(data[0]["id"])
     return resolved
+
+
+def _as_int(value: Any) -> int | None:
+    """Coerce an API id field (int or numeric string) for comparison."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.isascii() and value.isdigit():
+        return int(value)
+    return None
 
 
 def verify_owner_role(
     client: SOARClient,
-    cid: int,
+    cids: list[int],
     resolved: dict[str, Any],
-) -> list[str]:
-    """Read back a container and report owner/role writes that didn't stick."""
-    try:
-        got = client.get(f"container/{cid}", params={})
-    except SOARError:
-        return []
+) -> tuple[list[str], list[str]]:
+    """Read back containers and report owner/role writes that didn't stick.
+
+    Returns ``(problems, unverified)``: *problems* are writes the server
+    accepted but ignored; *unverified* are containers the read-back
+    could not check — never treated as verified-OK.
+    """
     problems: list[str] = []
-    if "owner_id" in resolved and got.get("owner") != resolved["owner_id"]:
-        problems.append(f"owner is still {got.get('owner_name') or got.get('owner')!r}")
-    if "role_id" in resolved and got.get("role") != resolved["role_id"]:
-        problems.append(f"role is still {got.get('role')!r}")
-    return problems
+    unverified: list[str] = []
+    for cid in cids:
+        try:
+            got = client.get(f"container/{cid}", params={})
+        except SOARError as exc:
+            unverified.append(f"container {cid} ({exc.message})")
+            continue
+        if "owner_id" in resolved and _as_int(got.get("owner")) != resolved["owner_id"]:
+            problems.append(
+                f"container {cid}: owner is still "
+                f"{got.get('owner_name') or got.get('owner')!r}"
+            )
+        if "role_id" in resolved and _as_int(got.get("role")) != resolved["role_id"]:
+            problems.append(f"container {cid}: role is still {got.get('role')!r}")
+    return problems, unverified
 
 
 @containers_group.command("assign")
 @guard.guarded
 @click.argument("ids", nargs=-1, required=True, type=int)
-@click.option("--owner", default=None, help="Owner username.")
-@click.option("--role", default=None, help="Role name.")
+@click.option("--owner", default=None, help="Owner username (or numeric id).")
+@click.option("--role", default=None, help="Role name (or numeric id).")
 @click.pass_context
 def assign_cmd(
     ctx: click.Context,
@@ -130,7 +155,9 @@ def assign_cmd(
         return
     output.info(f"Container(s) assigned: {id_str}")
 
-    problems = verify_owner_role(client, ids[0], body)
+    problems, unverified = verify_owner_role(client, list(ids), body)
+    for item in unverified:
+        output.warning(f"Could not verify the assign stuck on {item}.")
     if problems:
         output.error(
             f"Server accepted the assign but it did not stick: {'; '.join(problems)}.",

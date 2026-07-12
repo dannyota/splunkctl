@@ -156,7 +156,7 @@ def _resolve_app_id(
     """
     result = client.get(
         "asset",
-        params={"_filter_name": f'"{asset_name}"', "page_size": 1},
+        params={"_filter_name": json.dumps(asset_name), "page_size": 1},
     )
     data = result.get("data", []) if isinstance(result, dict) else []
     if data and isinstance(data[0], dict):

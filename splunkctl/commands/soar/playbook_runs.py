@@ -10,7 +10,11 @@ import click
 
 from splunkctl import guard, output
 from splunkctl.commands.soar._client import get_soar_client
-from splunkctl.commands.soar.playbooks import playbooks_group
+from splunkctl.commands.soar.playbooks import (
+    _as_id,
+    _resolve_playbook_id,
+    playbooks_group,
+)
 from splunkctl.soar.client import SOARClient, SOARError
 
 # Terminal statuses — stop polling when we see one of these.
@@ -21,28 +25,6 @@ _DEFAULT_TIMEOUT: int = 300
 
 
 # -- run ---------------------------------------------------------------------
-
-
-def _resolve_playbook_id(
-    client: SOARClient,
-    playbook: str,
-) -> int | None:
-    """Resolve a playbook name to its numeric id.
-
-    Returns the id on success, or None if no match was found.
-    """
-    params: dict[str, Any] = {
-        "_filter_name": f'"{playbook}"',
-        "page_size": 1,
-    }
-    try:
-        result = client.get("playbook", params=params)
-    except SOARError:
-        return None
-    data = result.get("data", []) if isinstance(result, dict) else []
-    if data and isinstance(data[0], dict):
-        return int(data[0]["id"])
-    return None
 
 
 def _build_run_body(
@@ -151,8 +133,9 @@ def run_cmd(
     PLAYBOOK can be a numeric id or a playbook name.
     """
     # Resolve playbook name -> id if not numeric.
-    if playbook.isdigit():
-        playbook_id = int(playbook)
+    pb_id = _as_id(playbook)
+    if pb_id is not None:
+        playbook_id = pb_id
         playbook_label = f"playbook id={playbook_id}"
     else:
         playbook_label = f"playbook '{playbook}'"
@@ -178,15 +161,12 @@ def run_cmd(
 
     client = get_soar_client(ctx)
 
-    # Resolve name -> id (after guard, since it needs network).
-    if not playbook.isdigit():
-        resolved = _resolve_playbook_id(client, playbook)
+    # Resolve name -> id (after guard, since it needs network). The
+    # shared resolver retries bare module names as a "/<name>" suffix
+    # match and errors out itself on not-found/ambiguous.
+    if playbook_id == -1:
+        resolved = _resolve_playbook_id(client, playbook, ctx)
         if resolved is None:
-            output.error(
-                f"Playbook '{playbook}' not found",
-                kind="not_found",
-            )
-            ctx.exit(1)
             return
         playbook_id = resolved
         body["playbook_id"] = playbook_id
@@ -202,7 +182,7 @@ def run_cmd(
     run_id: int | str = "?"
     if isinstance(result, dict):
         raw = result.get("id", "?")
-        if isinstance(raw, str) and raw.isdigit():
+        if isinstance(raw, str) and raw.isascii() and raw.isdigit():
             run_id = int(raw)
         elif isinstance(raw, int):
             run_id = raw
@@ -287,7 +267,7 @@ def runs_list_cmd(
     if container_id is not None:
         params["_filter_container"] = container_id
     if status is not None:
-        params["_filter_status"] = f'"{status}"'
+        params["_filter_status"] = json.dumps(status)
     if limit is not None:
         params["page_size"] = limit
 

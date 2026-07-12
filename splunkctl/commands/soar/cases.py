@@ -58,7 +58,7 @@ def _resolve_template(
         raise click.ClickException("No workbook templates available on this instance.")
 
     # Numeric id?
-    if template_arg is not None and template_arg.isdigit():
+    if template_arg is not None and template_arg.isascii() and template_arg.isdigit():
         tid = int(template_arg)
         if any(t.get("id") == tid for t in data):
             return tid

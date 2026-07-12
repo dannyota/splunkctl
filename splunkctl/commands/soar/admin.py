@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import csv
+import io
 import json
 from typing import Any
 
@@ -10,6 +12,19 @@ import click
 from splunkctl import guard, output
 from splunkctl.commands.soar._client import get_soar_client
 from splunkctl.soar.client import SOARError
+
+
+def _cap_csv(text: str, limit: int) -> str:
+    """Truncate CSV *text* to header + *limit* rows (quote-aware)."""
+    reader = csv.reader(io.StringIO(text))
+    buf = io.StringIO()
+    writer = csv.writer(buf, lineterminator="\n")
+    for i, row in enumerate(reader):
+        if i > limit:
+            break
+        writer.writerow(row)
+    return buf.getvalue()
+
 
 # ── users ────────────────────────────────────────────────────────────
 
@@ -40,7 +55,7 @@ def users_list(ctx: click.Context, *, user_type: str | None) -> None:
     client = get_soar_client(ctx)
     params: dict[str, Any] = {"page_size": 200}
     if user_type is not None:
-        params["_filter_type"] = f'"{user_type}"'
+        params["_filter_type"] = json.dumps(user_type)
     try:
         result = client.get("ph_user", params=params)
     except SOARError as exc:
@@ -432,9 +447,9 @@ def audit_cmd(
     client = get_soar_client(ctx)
     params: dict[str, Any] = {}
     if user_filter is not None:
-        params["_filter_username__icontains"] = f'"{user_filter}"'
+        params["_filter_username__icontains"] = json.dumps(user_filter)
     if playbook_filter is not None:
-        params["_filter_playbook__icontains"] = f'"{playbook_filter}"'
+        params["_filter_playbook__icontains"] = json.dumps(playbook_filter)
     if container_filter is not None:
         params["_filter_container"] = str(container_filter)
     if start is not None:
@@ -454,7 +469,12 @@ def audit_cmd(
             output.error(exc.message, kind=exc.kind, http_status=exc.http_status)
             ctx.exit(1)
             return
-        click.echo(raw.decode("utf-8"), nl=False)
+        text = raw.decode("utf-8")
+        if limit is not None:
+            # The bare-array audit endpoint ignores page_size — enforce
+            # the row cap client-side here too, not just for JSON.
+            text = _cap_csv(text, limit)
+        click.echo(text, nl=False)
         return
 
     try:

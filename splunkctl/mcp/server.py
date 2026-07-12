@@ -364,17 +364,20 @@ def create_server() -> FastMCP:
         tokens = _split_command(command)
         # The tool's yes parameter is the only mutation switch — a --yes
         # smuggled inside the command string must not bypass the guard.
-        stripped = [t for t in tokens if t not in ("--yes", "-y")]
-        note = ""
-        if len(stripped) != len(tokens) and not yes:
-            note = (
-                "\n\nNote: --yes in the command string is ignored — "
-                "pass yes=true to apply this mutation."
+        # Reject rather than silently strip: after shlex a quoted option
+        # VALUE of '-y' is indistinguishable from the flag, and eating
+        # it would shift arguments or corrupt the value.
+        if any(t in ("--yes", "-y") for t in tokens):
+            return (
+                "Error: '--yes'/'-y' is not accepted inside the command "
+                "string — the tool's yes parameter is the only mutation "
+                "switch. Remove it and pass yes=true to apply. If you "
+                "need the literal value '-y', use a focused typed tool "
+                "instead."
             )
-        tokens = stripped
         if yes:
             tokens.append("--yes")
-        result = _exec_cli(tokens) + note
+        result = _exec_cli(tokens)
 
         tool_name = "_".join(
             t.replace("-", "_") for t in tokens if not t.startswith("-")

@@ -22,7 +22,7 @@ def _sdi_precheck(
     sdi: str,
 ) -> int | None:
     """Return existing container id if *sdi* is already in use, else None."""
-    params = {"_filter_source_data_identifier": f'"{sdi}"', "page_size": 1}
+    params = {"_filter_source_data_identifier": json.dumps(sdi), "page_size": 1}
     try:
         result = client.get("container", params=params)
     except SOARError as exc:
@@ -203,8 +203,8 @@ def create_cmd(
 @click.option("--sensitivity", default=None, help="New sensitivity.")
 @click.option("--description", default=None, help="New description.")
 @click.option("--status", default=None, help="New status (by NAME, not id).")
-@click.option("--owner", default=None, help="New owner username.")
-@click.option("--role", default=None, help="New role name.")
+@click.option("--owner", default=None, help="New owner username (or numeric id).")
+@click.option("--role", default=None, help="New role name (or numeric id).")
 @click.option("--tag", "tags", multiple=True, help="Tag to add (repeatable).")
 @click.option(
     "--field",
@@ -323,7 +323,9 @@ def update_cmd(
             output.render(ctx, result)
 
     if resolved:
-        problems = verify_owner_role(client, ids[0], resolved)
+        problems, unverified = verify_owner_role(client, list(ids), resolved)
+        for msg in unverified:
+            output.warning(f"Could not verify the update stuck on {msg}.")
         if problems:
             output.error(
                 f"Server accepted the update but it did not stick: "

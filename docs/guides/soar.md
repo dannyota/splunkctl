@@ -175,7 +175,7 @@ SOAR host.
 ```bash
 splunkctl soar containers update 42 --severity critical --yes
 splunkctl soar containers update 42 --status closed --yes
-splunkctl soar containers update 42 --owner analyst --role analyst --yes
+splunkctl soar containers update 42 --owner analyst --yes
 splunkctl soar containers update 1 2 3 --severity low --yes   # bulk
 splunkctl soar containers update 42 --tag new_tag --yes       # read-modify-write
 ```
@@ -200,10 +200,17 @@ Sugar for `update --status closed`. Multiple ids use one array POST.
 
 ```bash
 splunkctl soar containers assign 42 --owner analyst --yes
-splunkctl soar containers assign 1 2 --owner admin --role analyst --yes
+splunkctl soar containers assign 1 2 --role analyst --yes     # bulk
 ```
 
-Sets owner and/or role on containers. Multiple ids use one array POST.
+Assigns an owner OR a role — mutually exclusive, since SOAR assigns a
+container to a single principal (setting one clears the other; passing
+both is a usage error). Names resolve to `owner_id`/`role_id` at apply
+time — the name lookup runs first, so an all-digit username resolves
+correctly; a raw numeric id is used only when no name matches. Every
+container is read-back verified: a write the server accepted but
+ignored exits 1, and an unverifiable read-back prints a warning.
+Multiple ids use one array POST.
 
 ### Delete
 

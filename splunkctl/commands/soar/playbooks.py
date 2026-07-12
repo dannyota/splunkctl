@@ -1,4 +1,4 @@
-"""SOAR playbooks — list, get, enable/disable, trigger, export, import, repos, sync."""
+"""SOAR playbooks — list, get, enable/disable, trigger, export, import."""
 
 from __future__ import annotations
 
@@ -43,7 +43,7 @@ def list_cmd(
     if active:
         params["_filter_active"] = "True"
     if label is not None:
-        params["_filter_labels__contains"] = f'"{label}"'
+        params["_filter_labels__contains"] = json.dumps(label)
 
     try:
         if repo is not None:
@@ -59,10 +59,20 @@ def list_cmd(
     output.render(ctx, data, empty="No playbooks found.")
 
 
+def _as_id(value: str) -> int | None:
+    """Parse a strict ASCII-decimal id, else None.
+
+    ``str.isdigit`` alone is unsafe: it accepts Unicode digits like
+    ``"²"`` that ``int()`` rejects with a ValueError.
+    """
+    return int(value) if value.isascii() and value.isdigit() else None
+
+
 def _resolve_repo_id(client: Any, repo: str) -> int:
     """Resolve an SCM repo name to its numeric id (numeric passes through)."""
-    if repo.isdigit():
-        return int(repo)
+    repo_id = _as_id(repo)
+    if repo_id is not None:
+        return repo_id
     result = client.get("scm", params={"_filter_name": json.dumps(repo)})
     data = result.get("data", []) if isinstance(result, dict) else []
     if not data:
@@ -99,8 +109,7 @@ def get_cmd(ctx: click.Context, *, playbook_id: int) -> None:
 def enable_cmd(ctx: click.Context, *, playbook_id: int) -> None:
     """Activate a playbook. draft_mode playbooks cannot be activated."""
     body: dict[str, Any] = {"active": True}
-    details = json.dumps(body, indent=2)
-    if not guard.soar_check(ctx, f"Enable playbook {playbook_id}", details=details):
+    if not guard.soar_check(ctx, f"Enable playbook {playbook_id}"):
         return
 
     client = get_soar_client(ctx)
@@ -138,10 +147,12 @@ def disable_cmd(
 ) -> None:
     """Deactivate a playbook. --cancel-runs stops running instances."""
     body: dict[str, Any] = {"active": False}
+    action = f"Disable playbook {playbook_id}"
     if cancel_runs:
+        # The destructive side effect must be visible in the preview.
         body["cancel_runs"] = True
-    details = json.dumps(body, indent=2)
-    if not guard.soar_check(ctx, f"Disable playbook {playbook_id}", details=details):
+        action += " (cancel in-flight runs)"
+    if not guard.soar_check(ctx, action):
         return
 
     client = get_soar_client(ctx)
@@ -180,9 +191,8 @@ def trigger_cmd(
 ) -> None:
     """Set the automation trigger for a playbook."""
     body: dict[str, Any] = {"playbook_trigger": trigger_type}
-    details = json.dumps(body, indent=2)
     if not guard.soar_check(
-        ctx, f"Set trigger for playbook {playbook_id}", details=details
+        ctx, f"Set trigger '{trigger_type}' for playbook {playbook_id}"
     ):
         return
 
@@ -204,15 +214,22 @@ def _resolve_playbook_id(
     client: Any,
     identifier: str,
     ctx: click.Context,
+    *,
+    suffix_retry: bool = True,
 ) -> int | None:
     """Resolve a playbook name to its numeric id.
+
+    Playbook names are scoped ``<dir>/<module>``; a bare module name is
+    retried as a suffix match unless *suffix_retry* is off (irreversible
+    commands demand the exact name so the name→id mapping is never
+    guessed — a suffix hit becomes a did-you-mean error instead).
 
     Returns None and emits an error if not found.
     """
     try:
         result = client.get(
             "playbook",
-            params={"_filter_name": f'"{identifier}"', "page_size": 2},
+            params={"_filter_name": json.dumps(identifier), "page_size": 2},
         )
     except SOARError as exc:
         output.error(exc.message, kind=exc.kind, http_status=exc.http_status)
@@ -221,13 +238,11 @@ def _resolve_playbook_id(
 
     data = result.get("data", []) if isinstance(result, dict) else []
     if not data:
-        # Playbook names are scoped "<dir>/<module>" — retry the bare
-        # module name as a suffix match before giving up.
         try:
             result = client.get(
                 "playbook",
                 params={
-                    "_filter_name__endswith": f'"/{identifier}"',
+                    "_filter_name__endswith": json.dumps(f"/{identifier}"),
                     "page_size": 2,
                 },
             )
@@ -235,7 +250,20 @@ def _resolve_playbook_id(
             output.error(exc.message, kind=exc.kind, http_status=exc.http_status)
             ctx.exit(1)
             return None
-        data = result.get("data", []) if isinstance(result, dict) else []
+        suffix_data = result.get("data", []) if isinstance(result, dict) else []
+        if suffix_data and not suffix_retry:
+            hints = ", ".join(
+                f"'{d.get('name')}' (id {d.get('id')})" for d in suffix_data
+            )
+            output.error(
+                f"Playbook '{identifier}' not found by exact name. "
+                f"Did you mean {hints}? Pass the exact scoped name or "
+                "the numeric id.",
+                kind="not_found",
+            )
+            ctx.exit(1)
+            return None
+        data = suffix_data
     if not data:
         output.error(
             f"Playbook '{identifier}' not found.",
@@ -269,9 +297,8 @@ def export_cmd(
     client = get_soar_client(ctx)
 
     # Resolve name → id if not numeric.
-    if identifier.isdigit():
-        pb_id = int(identifier)
-    else:
+    pb_id = _as_id(identifier)
+    if pb_id is None:
         resolved = _resolve_playbook_id(client, identifier, ctx)
         if resolved is None:
             return
@@ -400,11 +427,6 @@ def import_cmd(
         output.render(ctx, result)
 
 
-# NOTE: there is deliberately no `playbooks delete` — SOAR 8.5 exposes no
-# working REST deletion (DELETE /rest/playbook/<id> → 405; POST with
-# {"delete": true} returns success but removes nothing). Deletion is
-# UI-only; `disable` is the REST-reachable equivalent.
-
 # ─── repos ────────────────────────────────────────────────────────────
 
 
@@ -432,13 +454,7 @@ def repos_cmd(ctx: click.Context) -> None:
 @click.argument("repo_id", type=int)
 @click.pass_context
 def sync_cmd(ctx: click.Context, *, repo_id: int) -> None:
-    """Sync an external SCM repo (pull + force).
-
-    Note: the built-in local repo has no remote to pull from — the
-    server rejects the sync (an HTTP 400 "Remote named 'origin' didn't
-    exist" on SOAR 8.5, a 500 "Operation not supported" on some other
-    versions). Use ``import`` instead for local playbook deployment.
-    """
+    """Sync an external SCM repo (pull + force)."""
     body: dict[str, Any] = {"pull": True, "force": True}
     details = json.dumps(body, indent=2)
     if not guard.soar_check(ctx, f"Sync SCM repo {repo_id}", details=details):

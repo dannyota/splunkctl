@@ -187,7 +187,8 @@ class TestContainerAssign:
         client = MagicMock()
         client.get.side_effect = [
             {"data": [{"id": 3, "username": "admin"}]},  # user lookup
-            {"id": 1, "owner": 3},  # read-back verify (first id)
+            {"id": 1, "owner": 3},  # read-back verify container 1
+            {"id": 2, "owner": 3},  # read-back verify container 2
         ]
         client.post.return_value = {}
         mock_cls.return_value = client

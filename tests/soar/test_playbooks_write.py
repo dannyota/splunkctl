@@ -427,3 +427,28 @@ class TestPlaybooksSync:
         assert result.exit_code == 0
         assert "[DRY RUN]" in result.stderr
         client.post.assert_not_called()
+
+
+class TestDisablePreviewDisclosure:
+    @patch(PATCH_SOAR_RESOLVE)
+    @patch(PATCH_CLIENT)
+    @patch(PATCH_RESOLVE)
+    def test_cancel_runs_visible_in_dry_run(
+        self,
+        mock_resolve: MagicMock,
+        mock_cls: MagicMock,
+        mock_guard: MagicMock,
+    ) -> None:
+        """The destructive side effect must appear in the preview."""
+        mock_resolve.return_value = _WRITE_CFG
+        mock_guard.return_value = _soar_guard_cfg()
+        client = MagicMock()
+        mock_cls.return_value = client
+
+        result = CliRunner().invoke(
+            cli, ["soar", "playbooks", "disable", "5", "--cancel-runs"]
+        )
+        assert result.exit_code == 0
+        assert "[DRY RUN]" in result.stderr
+        assert "cancel in-flight runs" in result.stderr
+        client.post.assert_not_called()

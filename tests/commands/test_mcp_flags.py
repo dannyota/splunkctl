@@ -85,20 +85,25 @@ def test_decode_stream_binary_safe() -> None:
     assert "--out" in result
 
 
-def test_run_tool_strips_yes_from_command_string() -> None:
-    """--yes inside the raw command must not bypass the MCP guard."""
+def test_run_tool_rejects_yes_in_command_string() -> None:
+    """--yes inside the raw command must not bypass the MCP guard.
+
+    Rejected loudly (never executed, never silently stripped): after
+    shlex a quoted option VALUE of '-y' is indistinguishable from the
+    flag, so stripping would corrupt legitimate commands.
+    """
     server = create_server()
     run_tool = server._tool_manager._tools["run"].fn
 
-    with patch("splunkctl.mcp.server._exec_cli") as mock_exec:
-        mock_exec.return_value = "[DRY RUN] preview"
-        result = asyncio.run(
-            run_tool(command="soar containers delete 1 --yes", yes=False)
-        )
-    tokens = mock_exec.call_args[0][0]
-    assert "--yes" not in tokens
-    assert "-y" not in tokens
-    assert "yes=true" in result  # the ignored-flag note tells the agent how
+    for cmd in (
+        "soar containers delete 1 --yes",
+        "soar containers delete 1 -y",
+        'soar containers delete 1 "--yes"',  # quoting must not sneak past
+    ):
+        with patch("splunkctl.mcp.server._exec_cli") as mock_exec:
+            result = asyncio.run(run_tool(command=cmd, yes=False))
+        mock_exec.assert_not_called()
+        assert "yes=true" in result  # the error tells the agent how
 
 
 def test_run_tool_yes_param_appends_flag() -> None:
@@ -108,7 +113,22 @@ def test_run_tool_yes_param_appends_flag() -> None:
 
     with patch("splunkctl.mcp.server._exec_cli") as mock_exec:
         mock_exec.return_value = "applied"
-        asyncio.run(run_tool(command="soar containers delete 1 --yes", yes=True))
+        asyncio.run(run_tool(command="soar containers delete 1", yes=True))
     tokens = mock_exec.call_args[0][0]
     assert tokens.count("--yes") == 1
     assert tokens[-1] == "--yes"
+
+
+def test_run_tool_quoted_yes_value_never_eaten() -> None:
+    """A quoted value that merely LOOKS like the yes flag is refused, not
+    silently deleted — the old strip turned ``--content "-y"`` into a
+    malformed command (argument shift / wrong write)."""
+    server = create_server()
+    run_tool = server._tool_manager._tools["run"].fn
+
+    with patch("splunkctl.mcp.server._exec_cli") as mock_exec:
+        result = asyncio.run(
+            run_tool(command='soar containers add-note 5 --content "-y"', yes=True)
+        )
+    mock_exec.assert_not_called()
+    assert "typed tool" in result  # points at the lossless alternative

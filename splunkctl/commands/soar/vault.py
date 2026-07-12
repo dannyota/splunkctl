@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import json
 import sys
 from pathlib import Path
 from typing import Any
@@ -60,7 +61,7 @@ def get_cmd(ctx: click.Context, *, vault_id: str) -> None:
     """Get vault document metadata by vault_id (SHA1 hash)."""
     client = get_soar_client(ctx)
 
-    params: dict[str, Any] = {"_filter_hash": f'"{vault_id}"'}
+    params: dict[str, Any] = {"_filter_hash": json.dumps(vault_id)}
 
     try:
         result = client.get("vault_document", params=params)

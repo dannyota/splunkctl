@@ -229,7 +229,7 @@ def create_cmd(
             existing = client.get(
                 "artifact",
                 params={
-                    "_filter_source_data_identifier": f'"{sdi}"',
+                    "_filter_source_data_identifier": json.dumps(sdi),
                     "_filter_container": container_id,
                 },
             )

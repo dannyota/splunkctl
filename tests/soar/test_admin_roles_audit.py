@@ -171,3 +171,45 @@ class TestAudit:
         assert result.exit_code == 0
         params = client.get.call_args[1]["params"]
         assert params["page_size"] == 10
+
+
+class TestAuditCsvLimit:
+    @patch(PATCH_CLIENT)
+    @patch(PATCH_RESOLVE)
+    def test_csv_limit_enforced_client_side(
+        self, mock_resolve: MagicMock, mock_cls: MagicMock
+    ) -> None:
+        """The audit endpoint ignores page_size — CSV must cap rows locally."""
+        mock_resolve.return_value = soar_cfg()
+        client = MagicMock()
+        rows = "\r\n".join(f"user{i},login" for i in range(50))
+        client.get_bytes.return_value = f"USER,ACTION\r\n{rows}\r\n".encode()
+        mock_cls.return_value = client
+
+        result = CliRunner().invoke(
+            cli, ["soar", "audit", "--format", "csv", "--limit", "2"]
+        )
+        assert result.exit_code == 0
+        lines = result.stdout.strip().splitlines()
+        assert lines[0] == "USER,ACTION"
+        assert lines[1:] == ["user0,login", "user1,login"]
+
+    @patch(PATCH_CLIENT)
+    @patch(PATCH_RESOLVE)
+    def test_csv_limit_respects_quoted_newlines(
+        self, mock_resolve: MagicMock, mock_cls: MagicMock
+    ) -> None:
+        """A quoted field containing a newline is one row, not two."""
+        mock_resolve.return_value = soar_cfg()
+        client = MagicMock()
+        client.get_bytes.return_value = (
+            b'USER,ACTION\r\n"multi\nline",login\r\nuser2,login\r\n'
+        )
+        mock_cls.return_value = client
+
+        result = CliRunner().invoke(
+            cli, ["soar", "audit", "--format", "csv", "--limit", "1"]
+        )
+        assert result.exit_code == 0
+        assert "user2" not in result.stdout
+        assert "multi" in result.stdout

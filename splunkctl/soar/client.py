@@ -1,14 +1,9 @@
 """SOAR REST API client — requests-based, lazy, normalizing.
 
-Speaks the Django REST API on Splunk SOAR (on-prem / cloud). All
-response-shape quirks (envelope variants, ``succeeded`` vs ``success``,
-``action_run_id`` vs ``id``, ``failed:true`` on HTTP 200) are
-normalized here so command code never sees them.
-
 Auth: ``ph-auth-token`` header preferred; automatic Basic fallback for
-DELETE (server refuses tokens on DELETE except ``decided_list``). A
-token-only config attempting a non-decided_list DELETE raises
-:class:`SOARError` with kind ``auth``.
+DELETE (server refuses tokens on DELETE except ``decided_list``).
+Web UI session (cookie-based) used for operations the REST API lacks
+(e.g. playbook deletion).
 """
 
 from __future__ import annotations
@@ -122,6 +117,10 @@ class SOARClient:
             # verify=false is an explicit config choice (lab/self-signed);
             # without this every request spams InsecureRequestWarning.
             urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+        # Separate session for Django-view-only operations (e.g. delete).
+        self._web_session: requests.Session | None = None
+        self._web_csrf: str | None = None
 
     # -- URL helpers --------------------------------------------------------
 
@@ -300,6 +299,14 @@ class SOARClient:
         if "playbook_run_id" in body and "id" not in body:
             body["id"] = body.pop("playbook_run_id")
         return body
+
+    # -- Web UI session (Django views) ----------------------------------------
+
+    def web_delete_playbooks(self, ids: list[int]) -> dict[str, Any]:
+        """Delete playbooks via the Django Web UI handler (see soar/web.py)."""
+        from splunkctl.soar import web
+
+        return web.delete_playbooks(self, ids)
 
     # -- Public API ---------------------------------------------------------
 

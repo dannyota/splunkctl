@@ -1,11 +1,18 @@
 # Changelog
 
-## Unreleased
+## 0.10.0
 
 Bug-fix batch from a live MCP agent-journey test against the lab
-(SIEM 10.4.1 + SOAR 8.5.0.248): three parallel agents exercised the
-full v0.9.0 SOAR surface over MCP and surfaced 28 issues; all fixed
-or documented.
+(SIEM 10.4.1 + SOAR 8.5.0.248) — 28 issues, all fixed or documented —
+plus `soar playbooks delete` and the fixes from its pre-release review.
+
+### Added
+- **`soar playbooks delete`** — deletes playbooks through the SOAR Web
+  UI route (CSRF login + `POST /playbooks` with `{ids, delete: true}`),
+  since no working REST deletion exists. Username/password required.
+  Exact scoped name or numeric id only (a suffix-only match is a
+  did-you-mean error); guarded with an offline dry-run preview;
+  per-playbook change/error report; exit 1 on any failure.
 
 ### Fixed
 - **MCP typed tools invoke real CLI flags** — renamed Click options
@@ -16,8 +23,9 @@ or documented.
   flag's name (`--field` on container create/update, `--out` on
   exports) — globals live on the root group only.
 - **MCP `run` guard bypass** — `--yes`/`-y` inside the raw command
-  string is stripped; only the tool's `yes` parameter applies a
-  mutation (a note tells the agent how).
+  string is rejected with a clear error; only the tool's `yes`
+  parameter applies a mutation. Rejection replaced silent stripping,
+  which ate quoted option values that merely looked like the flag.
 - **MCP binary output** — `playbooks export` without `--out` returns a
   size hint instead of crashing the server on a UTF-8 decode.
 - **MCP output order** — guard banners (stderr) now precede the data
@@ -27,7 +35,10 @@ or documented.
   ignores name-shaped fields; names now resolve to `owner_id`/
   `role_id`, writes are verified by read-back (exit 1 if ignored), and
   owner+role together is a usage error (SOAR assigns one principal —
-  writing one clears the other).
+  writing one clears the other). The name lookup runs first, so
+  all-digit usernames resolve by name (raw id only on no match); bulk
+  writes read-back verify every container, and an unverifiable
+  read-back warns instead of passing silently.
 - **`soar evidence add`** — sent `object_type`; the API wants
   `content_type` (and `actionrun` without the underscore). Always
   400'd before.
@@ -38,8 +49,9 @@ or documented.
   id-typed `_filter_scm` (a name string 400'd).
 - **`soar playbooks trigger --on label`** removed — the REST endpoint
   always rejects it (import-metadata only).
-- **`soar playbooks export <name>`** — bare module names resolve via
-  suffix match against the scoped `<dir>/<module>` name.
+- **`soar playbooks export/run <name>`** — bare module names resolve
+  via suffix match against the scoped `<dir>/<module>` name (one
+  shared resolver; `run` previously exact-matched only).
 - **`soar playbooks runs cancel`** — pre-checks run status; cancelling
   a finished run is now a `conflict` error instead of a false success.
 - **`soar playbooks import`** dry-run preview names the final scoped
@@ -47,8 +59,17 @@ or documented.
 - **`soar artifacts update`** — auto-populates `cef_types` for newly
   merged CEF keys (create already did); `--severity` on create/update
   is validated against the instance vocabulary with a clear error.
-- **`soar audit --limit`** — enforced client-side (the bare-array
-  endpoint ignores `page_size`).
+- **`soar audit --limit`** — enforced client-side for JSON and CSV
+  output alike (the bare-array endpoint ignores `page_size`).
+- **SOAR filter escaping** — user-supplied values in Django-style
+  `_filter_*` params are JSON-escaped everywhere; a quote in a name no
+  longer corrupts the filter expression.
+- **`soar playbooks disable --cancel-runs`** — the destructive side
+  effect is disclosed in the guard preview and apply banner; `trigger`
+  previews name the trigger type.
+- **Unicode-digit identifiers** — id parsing accepts ASCII decimals
+  only, so `"²"` (isdigit-true, int-invalid) is treated as a name
+  instead of crashing with a traceback.
 - **`soar ingest` dry-run preview** renders `name (sdi: X)` instead of
   the internal `name::sdi` key (SDIs often contain colons).
 - **urllib3 `InsecureRequestWarning` suppressed** when `verify: false`
@@ -56,7 +77,8 @@ or documented.
 
 ### Documented
 - SOAR 8.5 has **no working REST playbook deletion** (405 / silent
-  no-op) — deletion is UI-only, `disable` is the REST equivalent.
+  no-op) — `playbooks delete` goes through the Web UI route; response
+  envelope `{done_count, fail_count, changes, errors}` captured live.
 - soar-api.md corrections: owner/role numeric-id-only writes with
   mutual exclusion, evidence `content_type`, inline task closing note,
   playbook-run cancel no-op, id-typed `_filter_scm`, sync error is 400

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import click
@@ -176,18 +177,18 @@ def _build_list_params(
     params: dict[str, Any] = {}
 
     if label is not None:
-        params["_filter_label"] = f'"{label}"'
+        params["_filter_label"] = json.dumps(label)
     if status is not None:
-        params["_filter_status"] = f'"{status}"'
+        params["_filter_status"] = json.dumps(status)
     if severity is not None:
-        params["_filter_severity"] = f'"{severity}"'
+        params["_filter_severity"] = json.dumps(severity)
     if owner is not None:
-        params["_filter_owner_name"] = f'"{owner}"'
+        params["_filter_owner_name"] = json.dumps(owner)
     if since is not None:
-        params["_filter_create_time__gt"] = f'"{since}"'
+        params["_filter_create_time__gt"] = json.dumps(since)
     if container_type is not None:
         api_type = _TYPE_MAP.get(container_type, container_type)
-        params["_filter_container_type"] = f'"{api_type}"'
+        params["_filter_container_type"] = json.dumps(api_type)
 
     if raw_filter is not None:
         key, _, value = raw_filter.partition("=")

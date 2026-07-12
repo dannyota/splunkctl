@@ -285,7 +285,12 @@ Corrections to the original discovery doc, all verified during the build:
   0→2, 2→1 only.
 - **Playbook deletion**: no working REST route on 8.5 —
   `DELETE /rest/playbook/<id>` → 405; `POST` with `{"delete": true}`
-  returns success without deleting. UI-only.
+  returns success without deleting. The CLI goes through the Web UI
+  instead: Django login (GET `/login` for the csrftoken cookie, then
+  AJAX `POST /login` — username/password only), then `POST /playbooks`
+  with `{ids: [...], delete: true}` (X-CSRFToken + Referer headers).
+  Response envelope: `{done_count, fail_count, changes[], errors[]}`
+  (captured live on 8.5.0.248).
 - **Playbook run cancel**: the server accepts `{"cancel": true}` on a
   finished run and does nothing — pre-check status client-side.
 - **Playbook list `_filter_scm`**: id-typed; a repo *name* 400s —

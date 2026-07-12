@@ -411,3 +411,43 @@ class TestPlaybooksRunWait:
             ],
         )
         assert result.exit_code == 1
+
+
+class TestRunNameSuffixRetry:
+    @patch(PATCH_SOAR_RESOLVE)
+    @patch(PATCH_CLIENT)
+    @patch(PATCH_RESOLVE)
+    def test_bare_module_name_suffix_resolves(
+        self,
+        mock_resolve: MagicMock,
+        mock_cls: MagicMock,
+        mock_guard_resolve: MagicMock,
+    ) -> None:
+        """'investigate' finds 'local/investigate' like sibling commands do."""
+        mock_resolve.return_value = _WRITE_CFG
+        mock_guard_resolve.return_value = _soar_guard_cfg()
+        client = MagicMock()
+        client.get.side_effect = [
+            {"data": []},  # exact-name miss
+            {"data": [{"id": 7, "name": "local/investigate"}]},  # suffix hit
+        ]
+        client.post.return_value = {"success": True, "id": 101}
+        mock_cls.return_value = client
+
+        result = CliRunner().invoke(
+            cli,
+            [
+                "--yes",
+                "--json",
+                "soar",
+                "playbooks",
+                "run",
+                "investigate",
+                "--container",
+                "42",
+            ],
+        )
+        assert result.exit_code == 0
+        suffix_params = client.get.call_args_list[1][1]["params"]
+        assert suffix_params["_filter_name__endswith"] == '"/investigate"'
+        assert client.post.call_args[1]["body"]["playbook_id"] == 7

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import click
@@ -45,7 +46,7 @@ def list_cmd(
     if installed:
         params["_exclude_install_status"] = '"staged"'
     if category is not None:
-        params["_filter_category"] = f'"{category}"'
+        params["_filter_category"] = json.dumps(category)
     if limit is not None:
         params["page_size"] = limit
 
