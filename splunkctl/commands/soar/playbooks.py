@@ -6,7 +6,7 @@ import base64
 import io
 import json
 import tarfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 import click
@@ -44,10 +44,11 @@ def list_cmd(
         params["_filter_active"] = "True"
     if label is not None:
         params["_filter_labels__contains"] = f'"{label}"'
-    if repo is not None:
-        params["_filter_scm"] = f'"{repo}"'
 
     try:
+        if repo is not None:
+            # The scm filter is id-typed — a name string 400s.
+            params["_filter_scm"] = str(_resolve_repo_id(client, repo))
         result = client.get("playbook", params=params)
     except SOARError as exc:
         output.error(exc.message, kind=exc.kind, http_status=exc.http_status)
@@ -56,6 +57,17 @@ def list_cmd(
 
     data = result.get("data", []) if isinstance(result, dict) else []
     output.render(ctx, data, empty="No playbooks found.")
+
+
+def _resolve_repo_id(client: Any, repo: str) -> int:
+    """Resolve an SCM repo name to its numeric id (numeric passes through)."""
+    if repo.isdigit():
+        return int(repo)
+    result = client.get("scm", params={"_filter_name": json.dumps(repo)})
+    data = result.get("data", []) if isinstance(result, dict) else []
+    if not data:
+        raise SOARError(f"SCM repo '{repo}' not found.", kind="not_found")
+    return int(data[0]["id"])
 
 
 # ─── get ──────────────────────────────────────────────────────────────
@@ -153,8 +165,11 @@ def disable_cmd(
     "--on",
     "trigger_type",
     required=True,
-    type=click.Choice(["label", "artifact_created", "container_resolved"]),
-    help="Trigger type.",
+    type=click.Choice(["artifact_created", "container_resolved"]),
+    help=(
+        "Trigger type. ('label' is import-metadata only — the REST "
+        "endpoint rejects setting it.)"
+    ),
 )
 @click.pass_context
 def trigger_cmd(
@@ -205,6 +220,22 @@ def _resolve_playbook_id(
         return None
 
     data = result.get("data", []) if isinstance(result, dict) else []
+    if not data:
+        # Playbook names are scoped "<dir>/<module>" — retry the bare
+        # module name as a suffix match before giving up.
+        try:
+            result = client.get(
+                "playbook",
+                params={
+                    "_filter_name__endswith": f'"/{identifier}"',
+                    "page_size": 2,
+                },
+            )
+        except SOARError as exc:
+            output.error(exc.message, kind=exc.kind, http_status=exc.http_status)
+            ctx.exit(1)
+            return None
+        data = result.get("data", []) if isinstance(result, dict) else []
     if not data:
         output.error(
             f"Playbook '{identifier}' not found.",
@@ -292,6 +323,20 @@ def _dir_to_tgz(directory: Path) -> bytes:
     return buf.getvalue()
 
 
+def _scoped_name(tgz_bytes: bytes) -> str | None:
+    """Best-effort SOAR-side scoped name (``<dir>/<module>``) from a tgz."""
+    try:
+        with tarfile.open(fileobj=io.BytesIO(tgz_bytes), mode="r:gz") as tar:
+            for member in tar.getmembers():
+                if member.name.endswith(".py"):
+                    p = PurePosixPath(member.name)
+                    parent = p.parent.name
+                    return f"{parent}/{p.stem}" if parent else p.stem
+    except tarfile.TarError:
+        return None
+    return None
+
+
 @playbooks_group.command("import")
 @guard.guarded
 @click.argument("path", type=click.Path())
@@ -335,6 +380,9 @@ def import_cmd(
     }
 
     details = f"Import '{label}' (scm={scm}, force={force})"
+    scoped = _scoped_name(tgz_bytes)
+    if scoped is not None:
+        details += f"\nplaybook name after import: {scoped}"
     if not guard.soar_check(ctx, details):
         return
 
@@ -351,6 +399,11 @@ def import_cmd(
     if isinstance(result, dict):
         output.render(ctx, result)
 
+
+# NOTE: there is deliberately no `playbooks delete` — SOAR 8.5 exposes no
+# working REST deletion (DELETE /rest/playbook/<id> → 405; POST with
+# {"delete": true} returns success but removes nothing). Deletion is
+# UI-only; `disable` is the REST-reachable equivalent.
 
 # ─── repos ────────────────────────────────────────────────────────────
 
@@ -381,10 +434,10 @@ def repos_cmd(ctx: click.Context) -> None:
 def sync_cmd(ctx: click.Context, *, repo_id: int) -> None:
     """Sync an external SCM repo (pull + force).
 
-    Note: the lab's built-in local repo returns 500
-    "Operation not supported" -- this is expected for ``file://`` repos
-    that have no remote to pull from. Use ``import`` instead for local
-    playbook deployment.
+    Note: the built-in local repo has no remote to pull from — the
+    server rejects the sync (an HTTP 400 "Remote named 'origin' didn't
+    exist" on SOAR 8.5, a 500 "Operation not supported" on some other
+    versions). Use ``import`` instead for local playbook deployment.
     """
     body: dict[str, Any] = {"pull": True, "force": True}
     details = json.dumps(body, indent=2)

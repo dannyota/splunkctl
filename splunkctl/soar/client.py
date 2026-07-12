@@ -18,6 +18,7 @@ from collections.abc import Iterator
 from typing import Any
 
 import requests
+import urllib3
 
 from splunkctl.errors import kind_for_status
 
@@ -117,6 +118,10 @@ class SOARClient:
         self._verify = verify
         self._session = requests.Session()
         self._session.verify = verify
+        if not verify:
+            # verify=false is an explicit config choice (lab/self-signed);
+            # without this every request spams InsecureRequestWarning.
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
     # -- URL helpers --------------------------------------------------------
 

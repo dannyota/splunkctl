@@ -465,4 +465,8 @@ def audit_cmd(
         return
 
     rows = result.get("data", []) if isinstance(result, dict) else []
+    if limit is not None:
+        # The bare-array audit endpoint ignores page_size — enforce
+        # the row cap client-side.
+        rows = rows[:limit]
     output.render(ctx, rows, empty="No audit entries found.")

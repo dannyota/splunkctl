@@ -253,9 +253,12 @@ def evidence_add_cmd(
     object_id: int,
 ) -> None:
     """Add an object as evidence to a container."""
+    # The evidence endpoint names the discriminator content_type and
+    # spells action runs without the underscore.
+    content_type = "actionrun" if object_type == "action_run" else object_type
     body: dict[str, Any] = {
         "container_id": container_id,
-        "object_type": object_type,
+        "content_type": content_type,
         "object_id": object_id,
     }
     details = json.dumps(body, indent=2)

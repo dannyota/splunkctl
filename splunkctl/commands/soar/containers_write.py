@@ -10,6 +10,10 @@ import click
 from splunkctl import guard, output
 from splunkctl.commands.soar._client import get_soar_client
 from splunkctl.commands.soar.containers import containers_group
+from splunkctl.commands.soar.containers_assign import (
+    resolve_owner_role,
+    verify_owner_role,
+)
 from splunkctl.soar.client import SOARClient, SOARError
 
 
@@ -89,8 +93,6 @@ def _build_update_payload(
     sensitivity: str | None,
     description: str | None,
     status: str | None,
-    owner: str | None,
-    role: str | None,
     fields: tuple[str, ...],
 ) -> dict[str, Any]:
     """Assemble container update payload."""
@@ -107,10 +109,6 @@ def _build_update_payload(
         body["description"] = description
     if status is not None:
         body["status"] = status
-    if owner is not None:
-        body["owner_name"] = owner
-    if role is not None:
-        body["role"] = role
     for field in fields:
         key, _, value = field.partition("=")
         if key and value:
@@ -238,6 +236,15 @@ def update_cmd(
         )
         ctx.exit(1)
         return
+    if owner is not None and role is not None:
+        output.error(
+            "Provide either --owner or --role, not both — SOAR assigns a "
+            "container to a single principal (assigning a role clears the "
+            "owner, and vice versa).",
+            kind="usage",
+        )
+        ctx.exit(1)
+        return
 
     body = _build_update_payload(
         name=name,
@@ -246,11 +253,9 @@ def update_cmd(
         sensitivity=sensitivity,
         description=description,
         status=status,
-        owner=owner,
-        role=role,
         fields=fields,
     )
-    if not body and not tags:
+    if not body and not tags and owner is None and role is None:
         output.error(
             "No updates specified. Use --name, --status, --severity, etc.",
             kind="usage",
@@ -258,14 +263,18 @@ def update_cmd(
         ctx.exit(1)
         return
 
-    # Guard BEFORE any network I/O — the tags read-modify-write merge is
-    # deferred to apply time, so dry-run previews it without fetching.
+    # Guard BEFORE any network I/O — the tags read-modify-write merge and
+    # owner/role name resolution are deferred to apply time, so dry-run
+    # previews the intent without fetching.
     id_str = ", ".join(str(i) for i in ids)
-    details = json.dumps(body, indent=2)
+    preview: dict[str, Any] = dict(body)
+    if owner is not None:
+        preview["owner"] = f"{owner} (resolved to owner_id at apply time)"
+    if role is not None:
+        preview["role"] = f"{role} (resolved to role_id at apply time)"
     if tags:
-        details += (
-            f"\ntags: <existing> + {json.dumps(list(tags))} (merged at apply time)"
-        )
+        preview["tags"] = f"<existing> + {json.dumps(list(tags))} (merged at apply)"
+    details = json.dumps(preview, indent=2)
     if not guard.soar_check(
         ctx,
         f"Update container(s) {id_str}",
@@ -274,6 +283,13 @@ def update_cmd(
         return
 
     client = get_soar_client(ctx)
+    try:
+        resolved = resolve_owner_role(client, owner, role)
+    except SOARError as exc:
+        output.error(exc.message, kind=exc.kind, http_status=exc.http_status)
+        ctx.exit(1)
+        return
+    body.update(resolved)
 
     if len(ids) == 1:
         if tags:
@@ -305,6 +321,16 @@ def update_cmd(
         output.info(f"Containers updated: {id_str}")
         if isinstance(result, dict) and result:
             output.render(ctx, result)
+
+    if resolved:
+        problems = verify_owner_role(client, ids[0], resolved)
+        if problems:
+            output.error(
+                f"Server accepted the update but it did not stick: "
+                f"{'; '.join(problems)}.",
+                kind="error",
+            )
+            ctx.exit(1)
 
 
 @containers_group.command("close")
@@ -343,63 +369,6 @@ def close_cmd(ctx: click.Context, ids: tuple[int, ...]) -> None:
             ctx.exit(1)
             return
         output.info(f"Containers closed: {id_str}")
-
-
-@containers_group.command("assign")
-@guard.guarded
-@click.argument("ids", nargs=-1, required=True, type=int)
-@click.option("--owner", default=None, help="Owner username.")
-@click.option("--role", default=None, help="Role name.")
-@click.pass_context
-def assign_cmd(
-    ctx: click.Context,
-    ids: tuple[int, ...],
-    *,
-    owner: str | None,
-    role: str | None,
-) -> None:
-    """Assign owner and/or role to containers (bulk)."""
-    body: dict[str, Any] = {}
-    if owner is not None:
-        body["owner_name"] = owner
-    if role is not None:
-        body["role"] = role
-    if not body:
-        output.error(
-            "Provide --owner and/or --role.",
-            kind="usage",
-        )
-        ctx.exit(1)
-        return
-
-    id_str = ", ".join(str(i) for i in ids)
-    details = json.dumps(body, indent=2)
-    if not guard.soar_check(
-        ctx,
-        f"Assign container(s) {id_str}",
-        details=details,
-    ):
-        return
-
-    client = get_soar_client(ctx)
-
-    if len(ids) == 1:
-        try:
-            client.post(f"container/{ids[0]}", body=body)
-        except SOARError as exc:
-            output.error(exc.message, kind=exc.kind, http_status=exc.http_status)
-            ctx.exit(1)
-            return
-        output.info(f"Container {ids[0]} assigned.")
-    else:
-        bulk = [{"id": cid, **body} for cid in ids]
-        try:
-            client.post("container", body=bulk)
-        except SOARError as exc:
-            output.error(exc.message, kind=exc.kind, http_status=exc.http_status)
-            ctx.exit(1)
-            return
-        output.info(f"Containers assigned: {id_str}")
 
 
 @containers_group.command("delete")

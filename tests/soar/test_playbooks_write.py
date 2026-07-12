@@ -123,16 +123,17 @@ class TestPlaybooksTrigger:
     @patch(PATCH_SOAR_RESOLVE)
     @patch(PATCH_CLIENT)
     @patch(PATCH_RESOLVE)
-    def test_trigger_label(
+    def test_trigger_label_rejected(
         self,
         mock_resolve: MagicMock,
         mock_cls: MagicMock,
         mock_guard: MagicMock,
     ) -> None:
+        """'label' is import-metadata only — the REST endpoint rejects it,
+        so the CLI refuses it at the option level (usage error, no I/O)."""
         mock_resolve.return_value = _WRITE_CFG
         mock_guard.return_value = _soar_guard_cfg()
         client = MagicMock()
-        client.post.return_value = {"success": True}
         mock_cls.return_value = client
 
         result = CliRunner().invoke(
@@ -147,9 +148,8 @@ class TestPlaybooksTrigger:
                 "label",
             ],
         )
-        assert result.exit_code == 0
-        body = client.post.call_args[1]["body"]
-        assert body["playbook_trigger"] == "label"
+        assert result.exit_code == 2
+        client.post.assert_not_called()
 
     @patch(PATCH_SOAR_RESOLVE)
     @patch(PATCH_CLIENT)

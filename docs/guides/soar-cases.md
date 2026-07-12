@@ -67,9 +67,10 @@ splunkctl --yes soar cases task update 100 --status complete
 # Mark incomplete
 splunkctl --yes soar cases task update 100 --status incomplete
 
-# Mark in_progress (requires a closing note)
+# Mark in_progress (requires a closing note; only allowed FROM
+# complete — the server rejects 0 -> 1, so complete the task first)
 splunkctl --yes soar cases task update 100 --status in_progress \
-    --note "Starting active investigation"
+    --note "Reopening for active investigation"
 
 # Assign owner
 splunkctl --yes soar cases task update 100 --owner analyst
@@ -88,16 +89,20 @@ splunkctl --yes soar cases task update 100 --status in_progress \
 | `complete` | 2 | No |
 
 The `--status` flag accepts human-readable names; the CLI maps them to
-the integer codes the SOAR API expects. The `in_progress` transition
-requires a closing note -- the SOAR server rejects it with "Closing
-note content is required". The CLI enforces this client-side with a
-clear error message before making any API call.
+the integer codes the SOAR API expects. The server only allows the
+transitions 0 -> 2 (complete) and 2 -> 1 (reopen as in-progress);
+0 -> 1 is rejected with "Invalid status transition". The `in_progress`
+transition also requires a closing note -- the CLI enforces this
+client-side with a clear error message before making any API call.
 
 ### Closing notes
 
-When `--note` is provided, the CLI posts a note to `/rest/note` with
-`task_id` set, linking the note to the specific task. The task's
-`container_id` is resolved automatically via a GET on the task.
+When `--note` accompanies `--status`, the note is sent INLINE in the
+task POST (field `note`) -- the server rejects note-requiring
+transitions otherwise, and the inline note still lands as a regular
+task note. A `--note` without `--status` posts to `/rest/note` with
+`task_id` set; the task's `container_id` is resolved automatically via
+a GET on the task.
 
 ## Workbook templates
 

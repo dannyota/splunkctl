@@ -26,6 +26,7 @@ from splunkctl.mcp.tools import (
     group_summary,
     group_tools,
     has_subgroups,
+    leaf_count,
     subgroup_names,
 )
 
@@ -46,21 +47,35 @@ _FORCE_FLAGS = ["--json"]
 _STRIP_PARAMS = SKIP_PARAMS
 
 
+def _decode_stream(data: bytes) -> str:
+    """Decode subprocess output, tolerating binary payloads.
+
+    Commands like ``soar playbooks export`` emit raw bytes (a tgz) on
+    stdout when ``--out`` is omitted — surface a hint instead of dying
+    on a UTF-8 decode error.
+    """
+    try:
+        return data.decode()
+    except UnicodeDecodeError:
+        return f"(binary output: {len(data)} bytes — pass --out FILE to save it)"
+
+
 def _exec_cli(args: list[str]) -> str:
     """Run ``splunkctl <args>`` as a subprocess and return output."""
     cmd = [sys.executable, "-m", "splunkctl", *args, *_FORCE_FLAGS]
     result = subprocess.run(  # noqa: S603
         cmd,
         capture_output=True,
-        text=True,
         timeout=120,
     )
-    out = result.stdout.strip()
-    err = result.stderr.strip()
+    out = _decode_stream(result.stdout).strip()
+    err = _decode_stream(result.stderr).strip()
     if result.returncode != 0:
         return err or out or f"Command failed with exit code {result.returncode}"
     if err and out:
-        return f"{out}\n\n{err}"
+        # stderr carries the guard banner / info lines — they precede
+        # the payload semantically, so keep them first.
+        return f"{err}\n\n{out}"
     return out or err or "(no output)"
 
 
@@ -103,10 +118,15 @@ def _build_cli_args(entry: ToolEntry, params: dict[str, Any]) -> list[str]:
             items = value if isinstance(value, list) else [value]
             positional[pname] = [str(v) for v in items]
             continue
-        flag = f"--{pname.replace('_', '-')}"
+        # Renamed Click options (--severity → severity_override) make the
+        # schema name diverge from the CLI flag; the entry's flag map is
+        # authoritative.
+        flag = entry.flags.get(pname, f"--{pname.replace('_', '-')}")
         if isinstance(value, bool):
             if value:
                 args.append(flag)
+            elif pname in entry.neg_flags:
+                args.append(entry.neg_flags[pname])
         elif isinstance(value, list):
             for item in value:
                 args.extend([flag, str(item)])
@@ -180,7 +200,7 @@ def create_server() -> FastMCP:
             for s in sg:
                 sub_cmd = top_cmd.commands[s]
                 desc = (sub_cmd.help or "").split("\n")[0]
-                n = len(sub_cmd.commands) if isinstance(sub_cmd, click.Group) else 0
+                n = leaf_count(sub_cmd) if isinstance(sub_cmd, click.Group) else 0
                 lines.append(f"  {grp} {s:16s} {desc} ({n} cmds)")
             if dc:
                 lines.append(f"\n{grp} direct commands:")
@@ -342,9 +362,19 @@ def create_server() -> FastMCP:
     async def run_tool(command: str, yes: bool = False) -> str:
         """Execute a raw splunkctl command string."""
         tokens = _split_command(command)
+        # The tool's yes parameter is the only mutation switch — a --yes
+        # smuggled inside the command string must not bypass the guard.
+        stripped = [t for t in tokens if t not in ("--yes", "-y")]
+        note = ""
+        if len(stripped) != len(tokens) and not yes:
+            note = (
+                "\n\nNote: --yes in the command string is ignored — "
+                "pass yes=true to apply this mutation."
+            )
+        tokens = stripped
         if yes:
             tokens.append("--yes")
-        result = _exec_cli(tokens)
+        result = _exec_cli(tokens) + note
 
         tool_name = "_".join(
             t.replace("-", "_") for t in tokens if not t.startswith("-")
@@ -352,9 +382,17 @@ def create_server() -> FastMCP:
         if tool_name in all_tools and not any(
             tool_name in names for names in focused.values()
         ):
+            if len(tokens) >= 2 and tokens[1] in subgroup_names(cli, tokens[0]):
+                suggestion = f'focus "{tokens[0]} {tokens[1]}"'
+            elif has_subgroups(cli, tokens[0]):
+                # Bare focus on a nested group is refused; point at usage
+                # for direct commands instead.
+                suggestion = f'usage "{" ".join(tokens[:2])}"'
+            else:
+                suggestion = f"focus {tokens[0]}"
             result += (
-                f"\n\nTip: run `focus {tokens[0]}` to load typed tools "
-                f"with validated schemas for this group."
+                f"\n\nTip: run `{suggestion}` to load a typed tool "
+                f"with a validated schema for this command."
             )
         return result
 

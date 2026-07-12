@@ -130,13 +130,20 @@ class TestPlaybooksList:
         }
         mock_cls.return_value = client
 
+        client.get.side_effect = [
+            {"count": 1, "data": [{"id": 1, "name": "local"}]},  # scm lookup
+            {"count": 0, "num_pages": 1, "data": []},  # playbook list
+        ]
+
         result = CliRunner().invoke(
             cli,
             ["--json", "soar", "playbooks", "list", "--repo", "local"],
         )
         assert result.exit_code == 0
+        # The scm filter is id-typed — the repo NAME must be resolved
+        # to its numeric id first (a name string 400s server-side).
         params = client.get.call_args[1].get("params", {})
-        assert '"local"' in params.get("_filter_scm", "")
+        assert params.get("_filter_scm") == "1"
 
 
 # ─── get ──────────────────────────────────────────────────────────────

@@ -346,6 +346,24 @@ def runs_cancel_cmd(ctx: click.Context, *, run_id: int) -> None:
 
     client = get_soar_client(ctx)
 
+    # The server accepts a cancel POST on a finished run and does
+    # nothing — check first so "cancelled" is never reported falsely.
+    try:
+        run = client.get(f"playbook_run/{run_id}", params={})
+    except SOARError as exc:
+        output.error(exc.message, kind=exc.kind, http_status=exc.http_status)
+        ctx.exit(1)
+        return
+    status = str(run.get("status", "")) if isinstance(run, dict) else ""
+    if status in _TERMINAL:
+        output.error(
+            f"Playbook run {run_id} already finished (status: {status}) — "
+            "nothing to cancel.",
+            kind="conflict",
+        )
+        ctx.exit(1)
+        return
+
     try:
         client.post(f"playbook_run/{run_id}", body={"cancel": True})
     except SOARError as exc:

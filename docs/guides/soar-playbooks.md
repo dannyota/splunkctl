@@ -49,14 +49,15 @@ Guarded: dry-run by default, `--yes` to apply.
 ## Trigger
 
 ```bash
-splunkctl soar playbooks trigger 10 --on label --yes
 splunkctl soar playbooks trigger 10 --on artifact_created --yes
 splunkctl soar playbooks trigger 10 --on container_resolved --yes
 ```
 
-Sets the automation trigger type. `label` triggers on container ingest
-(label match). `artifact_created` triggers when an artifact is added.
-`container_resolved` triggers on resolution.
+Sets the automation trigger type. `artifact_created` triggers when an
+artifact is added; `container_resolved` triggers on resolution. The
+`label` trigger seen in playbook metadata is import-only — the REST
+endpoint rejects setting it ("playbook_trigger is set to an invalid
+enum"), so it is not an accepted `--on` value.
 
 Guarded: dry-run by default, `--yes` to apply.
 
@@ -74,8 +75,15 @@ Without `--unpack`, writes raw tgz (to stdout or `--out`). With
 `--unpack`, extracts the `<name>.json` metadata and `<name>.py` code
 into the output directory.
 
-Non-numeric identifiers trigger a name lookup first; if the name is
-ambiguous or not found, an error is returned.
+Non-numeric identifiers trigger a name lookup first — exact scoped
+name (`<dir>/<module>`), then the bare module name as a suffix match
+(`export my_playbook` finds `my-repo-dir/my_playbook`). Ambiguous or
+missing names return an error.
+
+There is no `playbooks delete`: SOAR 8.5 exposes no working REST
+deletion (`DELETE /rest/playbook/<id>` returns 405, and a POST with
+`{"delete": true}` reports success without removing anything).
+Deletion is UI-only; `disable` is the REST-reachable equivalent.
 
 ## Import
 
@@ -142,10 +150,11 @@ Triggers a pull + force sync on an external SCM repo via
 `POST /rest/scm/<id>`. Designed for HTTPS/SSH repos that have a real
 remote to pull from.
 
-**Local repo caveat**: the built-in local repo (`file://` URI) returns
-500 "Operation not supported" because there is no remote to pull from.
-This is expected behavior, not a bug. Use `import` instead for local
-playbook deployment.
+**Local repo caveat**: the built-in local repo (`file://` URI) has no
+remote to pull from, so the server rejects the sync — HTTP 400 "Remote
+named 'origin' didn't exist" on SOAR 8.5 (older versions return 500
+"Operation not supported"). This is expected behavior, not a bug. Use
+`import` instead for local playbook deployment.
 
 Guarded: dry-run by default, `--yes` to apply.
 

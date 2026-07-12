@@ -111,6 +111,10 @@ class TestContainerAssign:
         mock_resolve.return_value = _WRITE_CFG
         mock_guard_resolve.return_value = _soar_guard_cfg()
         client = MagicMock()
+        client.get.side_effect = [
+            {"data": [{"id": 9, "username": "analyst"}]},  # user lookup
+            {"id": 42, "owner": 9},  # read-back verify
+        ]
         client.post.return_value = {"success": True}
         mock_cls.return_value = client
 
@@ -120,7 +124,34 @@ class TestContainerAssign:
         )
         assert result.exit_code == 0
         body = client.post.call_args[1]["body"]
-        assert body["owner_name"] == "analyst"
+        # owner_name is silently ignored by the API — only owner_id sticks.
+        assert body == {"owner_id": 9}
+
+    @patch(PATCH_SOAR_RESOLVE)
+    @patch(PATCH_CLIENT)
+    @patch(PATCH_RESOLVE)
+    def test_assign_owner_not_stuck_errors(
+        self,
+        mock_resolve: MagicMock,
+        mock_cls: MagicMock,
+        mock_guard_resolve: MagicMock,
+    ) -> None:
+        """A write the server accepted but ignored exits 1, not success."""
+        mock_resolve.return_value = _WRITE_CFG
+        mock_guard_resolve.return_value = _soar_guard_cfg()
+        client = MagicMock()
+        client.get.side_effect = [
+            {"data": [{"id": 9, "username": "analyst"}]},
+            {"id": 42, "owner": None, "owner_name": None},  # didn't stick
+        ]
+        client.post.return_value = {"success": True}
+        mock_cls.return_value = client
+
+        result = CliRunner().invoke(
+            cli,
+            ["--yes", "soar", "containers", "assign", "42", "--owner", "analyst"],
+        )
+        assert result.exit_code == 1
 
     @patch(PATCH_SOAR_RESOLVE)
     @patch(PATCH_CLIENT)
@@ -154,6 +185,10 @@ class TestContainerAssign:
         mock_resolve.return_value = _WRITE_CFG
         mock_guard_resolve.return_value = _soar_guard_cfg()
         client = MagicMock()
+        client.get.side_effect = [
+            {"data": [{"id": 3, "username": "admin"}]},  # user lookup
+            {"id": 1, "owner": 3},  # read-back verify (first id)
+        ]
         client.post.return_value = {}
         mock_cls.return_value = client
 
@@ -168,14 +203,45 @@ class TestContainerAssign:
                 "2",
                 "--owner",
                 "admin",
-                "--role",
-                "analyst",
             ],
         )
         assert result.exit_code == 0
         body = client.post.call_args[1]["body"]
         assert isinstance(body, list)
         assert len(body) == 2
+        assert body[0] == {"id": 1, "owner_id": 3}
+
+    @patch(PATCH_SOAR_RESOLVE)
+    @patch(PATCH_CLIENT)
+    @patch(PATCH_RESOLVE)
+    def test_assign_owner_and_role_is_usage_error(
+        self,
+        mock_resolve: MagicMock,
+        mock_cls: MagicMock,
+        mock_guard_resolve: MagicMock,
+    ) -> None:
+        """SOAR assigns a single principal — owner+role together is refused."""
+        mock_resolve.return_value = _WRITE_CFG
+        mock_guard_resolve.return_value = _soar_guard_cfg()
+        client = MagicMock()
+        mock_cls.return_value = client
+
+        result = CliRunner().invoke(
+            cli,
+            [
+                "--yes",
+                "soar",
+                "containers",
+                "assign",
+                "42",
+                "--owner",
+                "admin",
+                "--role",
+                "analyst",
+            ],
+        )
+        assert result.exit_code == 1
+        client.post.assert_not_called()
 
 
 class TestContainerDelete:

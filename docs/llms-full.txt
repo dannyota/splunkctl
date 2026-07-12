@@ -2884,14 +2884,15 @@ Guarded: dry-run by default, `--yes` to apply.
 ## Trigger
 
 ```bash
-splunkctl soar playbooks trigger 10 --on label --yes
 splunkctl soar playbooks trigger 10 --on artifact_created --yes
 splunkctl soar playbooks trigger 10 --on container_resolved --yes
 ```
 
-Sets the automation trigger type. `label` triggers on container ingest
-(label match). `artifact_created` triggers when an artifact is added.
-`container_resolved` triggers on resolution.
+Sets the automation trigger type. `artifact_created` triggers when an
+artifact is added; `container_resolved` triggers on resolution. The
+`label` trigger seen in playbook metadata is import-only — the REST
+endpoint rejects setting it ("playbook_trigger is set to an invalid
+enum"), so it is not an accepted `--on` value.
 
 Guarded: dry-run by default, `--yes` to apply.
 
@@ -2909,8 +2910,15 @@ Without `--unpack`, writes raw tgz (to stdout or `--out`). With
 `--unpack`, extracts the `<name>.json` metadata and `<name>.py` code
 into the output directory.
 
-Non-numeric identifiers trigger a name lookup first; if the name is
-ambiguous or not found, an error is returned.
+Non-numeric identifiers trigger a name lookup first — exact scoped
+name (`<dir>/<module>`), then the bare module name as a suffix match
+(`export my_playbook` finds `my-repo-dir/my_playbook`). Ambiguous or
+missing names return an error.
+
+There is no `playbooks delete`: SOAR 8.5 exposes no working REST
+deletion (`DELETE /rest/playbook/<id>` returns 405, and a POST with
+`{"delete": true}` reports success without removing anything).
+Deletion is UI-only; `disable` is the REST-reachable equivalent.
 
 ## Import
 
@@ -2977,10 +2985,11 @@ Triggers a pull + force sync on an external SCM repo via
 `POST /rest/scm/<id>`. Designed for HTTPS/SSH repos that have a real
 remote to pull from.
 
-**Local repo caveat**: the built-in local repo (`file://` URI) returns
-500 "Operation not supported" because there is no remote to pull from.
-This is expected behavior, not a bug. Use `import` instead for local
-playbook deployment.
+**Local repo caveat**: the built-in local repo (`file://` URI) has no
+remote to pull from, so the server rejects the sync — HTTP 400 "Remote
+named 'origin' didn't exist" on SOAR 8.5 (older versions return 500
+"Operation not supported"). This is expected behavior, not a bug. Use
+`import` instead for local playbook deployment.
 
 Guarded: dry-run by default, `--yes` to apply.
 
@@ -3372,9 +3381,10 @@ splunkctl --yes soar cases task update 100 --status complete
 # Mark incomplete
 splunkctl --yes soar cases task update 100 --status incomplete
 
-# Mark in_progress (requires a closing note)
+# Mark in_progress (requires a closing note; only allowed FROM
+# complete — the server rejects 0 -> 1, so complete the task first)
 splunkctl --yes soar cases task update 100 --status in_progress \
-    --note "Starting active investigation"
+    --note "Reopening for active investigation"
 
 # Assign owner
 splunkctl --yes soar cases task update 100 --owner analyst
@@ -3393,16 +3403,20 @@ splunkctl --yes soar cases task update 100 --status in_progress \
 | `complete` | 2 | No |
 
 The `--status` flag accepts human-readable names; the CLI maps them to
-the integer codes the SOAR API expects. The `in_progress` transition
-requires a closing note -- the SOAR server rejects it with "Closing
-note content is required". The CLI enforces this client-side with a
-clear error message before making any API call.
+the integer codes the SOAR API expects. The server only allows the
+transitions 0 -> 2 (complete) and 2 -> 1 (reopen as in-progress);
+0 -> 1 is rejected with "Invalid status transition". The `in_progress`
+transition also requires a closing note -- the CLI enforces this
+client-side with a clear error message before making any API call.
 
 ### Closing notes
 
-When `--note` is provided, the CLI posts a note to `/rest/note` with
-`task_id` set, linking the note to the specific task. The task's
-`container_id` is resolved automatically via a GET on the task.
+When `--note` accompanies `--status`, the note is sent INLINE in the
+task POST (field `note`) -- the server rejects note-requiring
+transitions otherwise, and the inline note still lands as a regular
+task note. A `--note` without `--status` posts to `/rest/note` with
+`task_id` set; the task's `container_id` is resolved automatically via
+a GET on the task.
 
 ## Workbook templates
 
@@ -4213,14 +4227,14 @@ that are not SDK list surfaces (e.g. `audit rbac`) are exempt by design.
 | Group | Status | Subcommands |
 |---|---|---|
 | `soar` | ✅ built | test, info, health, license, settings, stats, meta — platform reads via `SOARClient`; typed error envelopes; live-verified against lab SOAR 8.5.0.248 |
-| `soar containers` | ✅ built | list (--label/--status/--severity/--owner/--since/--type/--filter/--limit/--offset; status validated via container_status), get (--artifacts/--notes/--comments/--audit/--activity/--playbook-runs/--phases sub-views), create (--name/--label/--severity/--sensitivity/--sdi/--description/--tag/--field; SDI dedup precheck), update (single+bulk array POST; --name/--label/--severity/--sensitivity/--description/--status/--owner/--role/--tag/--field; status by NAME only; tags read-modify-write per container at apply time), close (sugar for status=closed; single+bulk), assign (--owner/--role; single+bulk), delete (Basic auth; cascading) |
+| `soar containers` | ✅ built | list (--label/--status/--severity/--owner/--since/--type/--filter/--limit/--offset; status validated via container_status), get (--artifacts/--notes/--comments/--audit/--activity/--playbook-runs/--phases sub-views), create (--name/--label/--severity/--sensitivity/--sdi/--description/--tag/--field; SDI dedup precheck), update (single+bulk array POST; --name/--label/--severity/--sensitivity/--description/--status/--owner/--role/--tag/--field; status by NAME only; tags read-modify-write per container at apply time), close (sugar for status=closed; single+bulk), assign (--owner OR --role, mutually exclusive; names resolved to owner_id/role_id, read-back verified; single+bulk), delete (Basic auth; cascading) |
 | `soar artifacts` | ✅ built | list (--container, --limit/--offset), get, create (--name/--cef/--cef-file/--cef-type/--sdi/--severity/--type/--no-automation; auto cef_types from CEF contains map; SDI dedup precheck with warning), update (fetch-merge CEF or --replace-cef; --name/--severity/--type), delete |
 | `soar vault` | ✅ built | list (--container), get (vault_id via vault_document hash), upload (--container, base64, >30 MB warning), download (vault_id, --out), delete (container_attachment id; 405 explanation); upload/download byte-identical round-trip verified |
 | `soar notes` | ✅ built | list (--container, --task), add (content arg or --file, --title, --task-id), delete, comment (container_id + text; immutable), comment-delete (exits with immutability explanation, no API call) |
 | `soar apps` | ✅ built | list (--installed via `_exclude_install_status=staged`, --category, --limit), get (config schema + --actions for supported actions) |
 | `soar assets` | ✅ built | list (--limit), get, create (--name/--app-id/--set/--file/--description; secrets masked in preview), update (fetch-merge-post by default, --replace for full replace; --set/--file/--name/--description; secrets masked), delete, test (POST asset/<id>/test + poll app_status; async caveat documented) |
 | `soar ingest-status` | ✅ built | /rest/ingestion_status + app_status rollup; per-poller records with app health |
-| `soar playbooks` | ✅ built | list (--active/--label/--repo), get, enable (guarded; draft_mode caveat), disable (--cancel-runs), trigger (--on label/artifact_created/container_resolved), export (by id or name; --unpack json+py; --out), import (dir or tgz; --scm/--force; base64 POST import_playbook), repos (scm list), sync (pull+force; local-repo 500 explained), run (name or id, --container, --scope all/new, --input k=v, --wait/--timeout; name resolution via GET /rest/playbook; guarded mutation; polls to terminal status), runs list (--container, --status, --limit), runs get (--blocks for block_results), runs cancel (guarded); first playbooks-as-code loop; splunkctl_seed_noop fixture for round-trip testing |
+| `soar playbooks` | ✅ built | list (--active/--label/--repo, repo name resolved to scm id), get, enable (guarded; draft_mode caveat), disable (--cancel-runs), trigger (--on artifact_created/container_resolved; label is import-metadata only, API rejects it), export (by id, scoped name, or bare module name via suffix match; --unpack json+py; --out), import (dir or tgz; --scm/--force; base64 POST import_playbook), repos (scm list), sync (pull+force; local-repo 400/500 explained); no delete — SOAR 8.5 has no working REST playbook deletion (UI-only), run (name or id, --container, --scope all/new, --input k=v, --wait/--timeout; name resolution via GET /rest/playbook; guarded mutation; polls to terminal status), runs list (--container, --status, --limit), runs get (--blocks for block_results), runs cancel (guarded; pre-checks terminal status); first playbooks-as-code loop; splunkctl_seed_noop fixture for round-trip testing |
 | `soar actions` | ✅ built | run (--action/--asset/--app/--container/--param/--type/--name/--wait/--timeout; app_id resolved from asset record; targets[].assets carry names; dry-run previews exact payload), list (--container/--limit/--offset), status (action_run_id), results (per-asset app_runs detail), cancel (guarded) |
 | `soar functions` | ✅ built | list (--limit/--offset), get, import (dir or tgz, base64 POST import_custom_function, force:true), export (tgz via GET custom_function/<id>/export, --out), update (--python/--message, auto SCM id resolution, fetch-merge-post, auto Python 2.7→3 upgrade), delete (Basic auth) |
 | `soar cases` | ✅ built | promote (--template name or id; resolves via workbook_template; atomic container_type+template POST), workbook (phases + nested tasks view), phase add (--container/--name/--order), task add (--phase-id/--name/--description/--order), task update (--status incomplete/in_progress/complete mapped to integer codes 0/1/2, --owner, --note; client-side closing-note enforcement for in_progress); live-verified: NIST 800-61 promote creates 5 phases/19 tasks, 0→2 works, 0→1 without note blocked |

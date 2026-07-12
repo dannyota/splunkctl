@@ -226,8 +226,11 @@ def build_preview(
     """Build the dry-run preview string."""
     lines: list[str] = []
     lines.append(f"Containers: {len(groups)}")
-    for name, grp in groups.items():
-        lines.append(f"  {name}: {len(grp.rows)} artifact(s)")
+    for grp in groups.values():
+        # The dict key is name::sdi (an internal dedup key) — render the
+        # name and SDI separately; SDIs often contain colons themselves.
+        sdi_note = f" (sdi: {grp.sdi})" if grp.sdi else ""
+        lines.append(f"  {grp.name}{sdi_note}: {len(grp.rows)} artifact(s)")
 
     lines.append("")
     lines.append("CIM -> CEF mapping (active):")

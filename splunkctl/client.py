@@ -15,6 +15,7 @@ from typing import Any
 import click
 import requests
 import splunklib.client as splunk_client
+import urllib3
 
 from splunkctl import config as cfg_mod
 
@@ -186,6 +187,10 @@ class _WebSession:
         self._timeout = timeout
         self._session = requests.Session()
         self._session.verify = verify
+        if not verify:
+            # verify=false is an explicit config choice (lab/self-signed);
+            # without this every request spams InsecureRequestWarning.
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
         self._csrf_token: str | None = None
         self._logged_in = False
 

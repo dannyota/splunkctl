@@ -12,7 +12,7 @@ from splunkctl import output
 from splunkctl.commands.soar._client import get_soar_client
 from splunkctl.guard import guarded, soar_check
 from splunkctl.soar.cimcef import CEF_CONTAINS_MAP
-from splunkctl.soar.client import SOARError
+from splunkctl.soar.client import SOARClient, SOARError
 
 
 def _parse_cef_pairs(raw: tuple[str, ...]) -> dict[str, str]:
@@ -49,6 +49,28 @@ def _auto_cef_types(
         elif key in CEF_CONTAINS_MAP:
             types[key] = CEF_CONTAINS_MAP[key]
     return types
+
+
+def _validate_severity(client: SOARClient, severity: str) -> None:
+    """Raise SOARError if *severity* is not in the instance vocabulary.
+
+    The artifact endpoint's own rejection is an opaque 400
+    (``"severity" Not found``) — resolve the name client-side like
+    containers status does. Vocabulary fetch failures fall through to
+    the server's verdict.
+    """
+    try:
+        result = client.get("severity", params={"page_size": "50"})
+    except SOARError:
+        return
+    data = result.get("data", []) if isinstance(result, dict) else []
+    names = {str(s.get("name", "")).lower() for s in data if s.get("name")}
+    if names and severity.lower() not in names:
+        raise SOARError(
+            f"Severity '{severity}' is not defined on this SOAR instance "
+            f"(available: {', '.join(sorted(names))}).",
+            kind="usage",
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -246,6 +268,8 @@ def create_cmd(
         return
 
     try:
+        if severity is not None:
+            _validate_severity(client, severity)
         result = client.post("artifact", body=payload)
     except SOARError as exc:
         output.error(exc.message, kind=exc.kind, http_status=exc.http_status)
@@ -308,6 +332,7 @@ def update_cmd(
     has_cef = bool(new_cef)
 
     # Fetch existing artifact for merge (unless --replace-cef)
+    old_types: dict[str, list[str]] = {}
     if has_cef and not replace_cef:
         try:
             existing = client.get(f"artifact/{artifact_id}", params={})
@@ -318,6 +343,8 @@ def update_cmd(
         old_cef: dict[str, Any] = (
             existing.get("cef", {}) if isinstance(existing, dict) else {}
         )
+        if isinstance(existing, dict):
+            old_types = existing.get("cef_types", {}) or {}
         merged_cef = {**old_cef, **new_cef}
     elif has_cef:
         merged_cef = new_cef
@@ -330,6 +357,10 @@ def update_cmd(
         payload["name"] = name
     if has_cef:
         payload["cef"] = merged_cef
+        # Keep contains-type annotations in step with the merged CEF —
+        # create auto-populates them, so update must too or new keys
+        # land untyped.
+        payload["cef_types"] = _auto_cef_types(merged_cef, old_types)
     if severity is not None:
         payload["severity"] = severity
     if artifact_type is not None:
@@ -345,6 +376,8 @@ def update_cmd(
         return
 
     try:
+        if severity is not None:
+            _validate_severity(client, severity)
         result = client.post(f"artifact/{artifact_id}", body=payload)
     except SOARError as exc:
         output.error(exc.message, kind=exc.kind, http_status=exc.http_status)

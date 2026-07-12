@@ -159,7 +159,8 @@ class TestEvidenceAdd:
         assert call_args[0][0] == "evidence"
         body = call_args[1]["body"]
         assert body["container_id"] == 100
-        assert body["object_type"] == "artifact"
+        # The API's discriminator field is content_type, not object_type.
+        assert body["content_type"] == "artifact"
         assert body["object_id"] == 42
         assert "Evidence added: id=77" in result.stderr
 
@@ -189,7 +190,8 @@ class TestEvidenceAdd:
         )
         assert result.exit_code == 0
         body = client.post.call_args[1]["body"]
-        assert body["object_type"] == "action_run"
+        # The API spells action runs without the underscore.
+        assert body["content_type"] == "actionrun"
 
     @patch(PATCH_CLIENT)
     @patch(PATCH_RESOLVE)

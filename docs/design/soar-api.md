@@ -79,9 +79,13 @@ GET /rest/<type>?page=0&page_size=10&sort=<field>&order=asc|desc
   source_data_identifier, description, run_automation:false}` →
   `{"success": true, "id": N, "new_artifact_ids": []}`. Duplicate SDI →
   400 `{"failed": true, "existing_container_id": N}`.
-- Update `POST /rest/container/<id>` — status by **name**, `owner_name`
-  (verified; doc said `owner_id` — both work), `role_id`, `sensitivity`,
-  `tags[]` (read-modify-write), `custom_fields{}`.
+- Update `POST /rest/container/<id>` — status by **name**, `owner_id`
+  / `role_id` (numeric ONLY: `owner_name` and role-by-name return
+  success but silently change nothing — verify by read-back), owner
+  and role are mutually exclusive per request AND per container
+  (writing one clears the other; "Container cannot be assigned both
+  an owner and a role"), `sensitivity`, `tags[]` (read-modify-write),
+  `custom_fields{}`.
 - Promote + workbook in one call:
   `{"container_type": "case", "template": <workbook_template_id>}` —
   atomic; phases/tasks instantiate immediately.
@@ -267,8 +271,25 @@ Corrections to the original discovery doc, all verified during the build:
   at least `content: []`.
 - **`external_prompt` respond**: shape remains docs-only (no live
   approval prompts exercised on the lab).
-- **Container owner update**: `owner_name` works live (doc originally
-  said `owner_id` only).
+- **Container owner/role assign**: only numeric `owner_id`/`role_id`
+  stick; `owner_name` returns success but writes nothing (the earlier
+  "works live" note here trusted the 200 without a read-back). Owner
+  and role are mutually exclusive — writing one clears the other.
+- **Evidence create**: the discriminator field is `content_type`
+  (values: `containerattachment`, `artifact`, `actionrun`,
+  `container`, `note`) — NOT `object_type`; action runs drop the
+  underscore.
+- **Task status+note**: note-requiring transitions take the closing
+  note INLINE in the `workbook_task` POST as `note` (singular); a
+  separate `/rest/note` POST arrives too late. Allowed transitions:
+  0→2, 2→1 only.
+- **Playbook deletion**: no working REST route on 8.5 —
+  `DELETE /rest/playbook/<id>` → 405; `POST` with `{"delete": true}`
+  returns success without deleting. UI-only.
+- **Playbook run cancel**: the server accepts `{"cancel": true}` on a
+  finished run and does nothing — pre-check status client-side.
+- **Playbook list `_filter_scm`**: id-typed; a repo *name* 400s —
+  resolve via `/rest/scm` first.
 
 ## Prior art & versions
 

@@ -294,6 +294,13 @@ def task_update_cmd(
     body: dict[str, Any] = {}
     if status is not None:
         body["status"] = _STATUS_MAP[status]
+        if note is not None:
+            # The server wants the closing note INLINE with the status
+            # transition (field name: singular ``note``) — a separate
+            # note POST arrives too late, the transition itself is
+            # rejected without it. The inline note still lands as a
+            # regular task note object.
+            body["note"] = note
     if owner is not None:
         body["owner"] = owner
 
@@ -326,8 +333,8 @@ def task_update_cmd(
             ctx.exit(1)
             return
 
-    # Post closing note if provided.
-    if note is not None:
+    # Post a standalone note only when it wasn't carried inline above.
+    if note is not None and "note" not in body:
         # Fetch the task to get its container_id.
         try:
             task_data = client.get(f"workbook_task/{task_id}", params={})

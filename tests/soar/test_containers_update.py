@@ -120,10 +120,18 @@ class TestContainerUpdate:
         mock_cls: MagicMock,
         mock_guard_resolve: MagicMock,
     ) -> None:
-        """--role passes the role payload key (same as assign)."""
+        """--role resolves the name and sends the numeric role_id.
+
+        Name-shaped fields (``role``) return success but silently write
+        nothing — only ``role_id`` sticks.
+        """
         mock_resolve.return_value = _WRITE_CFG
         mock_guard_resolve.return_value = _soar_guard_cfg()
         client = MagicMock()
+        client.get.side_effect = [
+            {"data": [{"id": 7, "name": "analyst"}]},  # role lookup
+            {"id": 42, "role": 7},  # read-back verify
+        ]
         client.post.return_value = {"success": True}
         mock_cls.return_value = client
 
@@ -141,7 +149,8 @@ class TestContainerUpdate:
         )
         assert result.exit_code == 0
         body = client.post.call_args[1]["body"]
-        assert body["role"] == "analyst"
+        assert body["role_id"] == 7
+        assert "role" not in body
 
     @patch(PATCH_SOAR_RESOLVE)
     @patch(PATCH_CLIENT)
@@ -287,7 +296,9 @@ class TestContainerUpdate:
         )
         assert result.exit_code == 0
         assert "[DRY RUN]" in result.stderr
-        # Merge is deferred to apply time — preview says so, no I/O.
-        assert "merged at apply time" in result.stderr
+        # Merge is deferred to apply time — the preview body carries the
+        # merge note (never a bare {}), and no I/O happens.
+        assert '"tags"' in result.stderr
+        assert "merged at apply" in result.stderr
         client.get.assert_not_called()
         client.post.assert_not_called()

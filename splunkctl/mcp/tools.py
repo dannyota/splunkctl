@@ -6,22 +6,10 @@ import click
 
 from splunkctl.guard import is_guarded
 
-SKIP_PARAMS = frozenset(
-    {
-        "help",
-        "json",
-        "use_json",
-        "fmt",
-        "format",
-        "fields",
-        "out",
-        "debug",
-        "timeout",
-        "config",
-        "profile",
-        "yes",
-    }
-)
+# Global flags live on the root group only (main._CLI hoists them from
+# the token stream) — leaf commands never carry them, so the only names
+# to skip are Click's own help and the guard's yes (re-added per schema).
+SKIP_PARAMS = frozenset({"help", "yes"})
 
 _YES_PROP: dict[str, Any] = {
     "type": "boolean",
@@ -32,7 +20,7 @@ _YES_PROP: dict[str, Any] = {
 
 def _param_schema(p: click.Parameter) -> dict[str, Any] | None:
     """Convert a Click parameter to a JSON Schema property."""
-    if p.name in SKIP_PARAMS or p.name == "help":
+    if p.name in SKIP_PARAMS:
         return None
     if isinstance(p, click.Option) and p.hidden:
         return None
@@ -88,6 +76,8 @@ class ToolEntry:
         "guarded",
         "positional",
         "arg_order",
+        "flags",
+        "neg_flags",
     )
 
     def __init__(  # noqa: D107
@@ -100,6 +90,8 @@ class ToolEntry:
         guarded: bool = False,
         positional: frozenset[str] = frozenset(),
         arg_order: tuple[str, ...] = (),
+        flags: dict[str, str] | None = None,
+        neg_flags: dict[str, str] | None = None,
     ) -> None:
         self.name = name
         self.description = description
@@ -108,6 +100,8 @@ class ToolEntry:
         self.guarded = guarded
         self.positional = positional
         self.arg_order = arg_order
+        self.flags = flags or {}
+        self.neg_flags = neg_flags or {}
 
 
 def _tool_name(path: list[str]) -> str:
@@ -115,26 +109,51 @@ def _tool_name(path: list[str]) -> str:
     return "_".join(seg.replace("-", "_") for seg in path)
 
 
+def _long_flag(p: click.Option) -> str | None:
+    """Return the option's canonical long CLI flag (``--like-this``)."""
+    longs = [o for o in p.opts if o.startswith("--")]
+    if longs:
+        return longs[0]
+    return p.opts[0] if p.opts else None
+
+
 def _make_entry(cmd: click.Command, path: list[str]) -> ToolEntry:
     """Build a ToolEntry (schema, positional order, guard) for one command."""
     properties: dict[str, Any] = {}
     required: list[str] = []
     pos: list[str] = []
+    flags: dict[str, str] = {}
+    neg_flags: dict[str, str] = {}
     for p in cmd.params:
         if p.name is None:
             continue
         prop = _param_schema(p)
         if prop is None:
             continue
+        # Schema names come from the Python param name; a trailing
+        # underscore (keyword-avoidance like ``wait_``) is stripped for
+        # callers — the flag map below keeps invocation correct either way.
         pname = p.name.replace("-", "_")
-        properties[pname] = prop
+        display = pname.rstrip("_") or pname
+        if display in properties:
+            display = pname
+        properties[display] = prop
         if isinstance(p, click.Argument):
-            required.append(pname)
-            pos.append(pname)
-        elif isinstance(p, click.Option) and (p.required or p.prompt):
-            # prompt=True options would hang the MCP subprocess waiting
-            # for TTY input, so force callers to always supply them.
-            required.append(pname)
+            required.append(display)
+            pos.append(display)
+            continue
+        if isinstance(p, click.Option):
+            flag = _long_flag(p)
+            if flag is not None:
+                flags[display] = flag
+            if p.secondary_opts:
+                neg = [o for o in p.secondary_opts if o.startswith("--")]
+                if neg:
+                    neg_flags[display] = neg[0]
+            if p.required or p.prompt:
+                # prompt=True options would hang the MCP subprocess waiting
+                # for TTY input, so force callers to always supply them.
+                required.append(display)
 
     guarded = is_guarded(cmd)
     if guarded:
@@ -160,6 +179,8 @@ def _make_entry(cmd: click.Command, path: list[str]) -> ToolEntry:
         guarded=guarded,
         positional=frozenset(pos),
         arg_order=tuple(pos),
+        flags=flags,
+        neg_flags=neg_flags,
     )
 
 
@@ -235,6 +256,17 @@ def has_subgroups(root: click.Group, group: str) -> bool:
     return bool(subgroup_names(root, group))
 
 
+def leaf_count(cmd: click.Command) -> int:
+    """Count leaf commands, recursing into nested subgroups.
+
+    Matches the number of typed tools a full focus of the group would
+    load — a nested subgroup counts its commands, not itself.
+    """
+    if not isinstance(cmd, click.Group):
+        return 1
+    return sum(leaf_count(c) for c in cmd.commands.values())
+
+
 def direct_commands(root: click.Group, group: str) -> list[str]:
     """Return direct (non-group) command names under a top-level group."""
     top = root.commands.get(group)
@@ -264,7 +296,7 @@ def group_summary(root: click.Group) -> list[dict[str, str]]:
                 "group": name,
                 "description": desc,
                 "subcommands": ", ".join(sorted(subs)),
-                "count": str(len(subs)),
+                "count": str(leaf_count(cmd)),
             }
             sg = subgroup_names(root, name)
             if sg:
