@@ -51,21 +51,27 @@ def _auto_cef_types(
     return types
 
 
+_SEVERITY_PAGE_SIZE = 50
+
+
 def _validate_severity(client: SOARClient, severity: str) -> None:
     """Raise SOARError if *severity* is not in the instance vocabulary.
 
     The artifact endpoint's own rejection is an opaque 400
     (``"severity" Not found``) — resolve the name client-side like
     containers status does. Vocabulary fetch failures fall through to
-    the server's verdict.
+    the server's verdict, as does a full page: only a complete listing
+    can prove a name absent.
     """
     try:
-        result = client.get("severity", params={"page_size": "50"})
+        result = client.get("severity", params={"page_size": str(_SEVERITY_PAGE_SIZE)})
     except SOARError:
         return
     data = result.get("data", []) if isinstance(result, dict) else []
     names = {str(s.get("name", "")).lower() for s in data if s.get("name")}
-    if names and severity.lower() not in names:
+    if severity.lower() in names or len(data) >= _SEVERITY_PAGE_SIZE:
+        return
+    if names:
         raise SOARError(
             f"Severity '{severity}' is not defined on this SOAR instance "
             f"(available: {', '.join(sorted(names))}).",

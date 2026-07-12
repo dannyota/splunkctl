@@ -383,3 +383,32 @@ class TestArtifactsCreate:
             ],
         )
         assert "soar.lab.local" in result.stderr
+
+
+class TestValidateSeverity:
+    def test_unknown_name_rejected(self) -> None:
+        import pytest
+
+        from splunkctl.commands.soar.artifacts import _validate_severity
+        from splunkctl.soar.client import SOARError
+
+        client = MagicMock()
+        client.get.return_value = {"data": [{"name": "low"}, {"name": "high"}]}
+        with pytest.raises(SOARError, match="not defined"):
+            _validate_severity(client, "bogus")
+
+    def test_known_name_passes(self) -> None:
+        from splunkctl.commands.soar.artifacts import _validate_severity
+
+        client = MagicMock()
+        client.get.return_value = {"data": [{"name": "High"}]}
+        _validate_severity(client, "high")  # no raise
+
+    def test_full_page_falls_through_to_server(self) -> None:
+        """>=50 severities means the page may be truncated — a name missing
+        from a full page must not be rejected client-side."""
+        from splunkctl.commands.soar.artifacts import _validate_severity
+
+        client = MagicMock()
+        client.get.return_value = {"data": [{"name": f"s{i}"} for i in range(50)]}
+        _validate_severity(client, "not-on-first-page")  # no raise

@@ -275,6 +275,10 @@ Corrections to the original discovery doc, all verified during the build:
   stick; `owner_name` returns success but writes nothing (the earlier
   "works live" note here trusted the 200 without a read-back). Owner
   and role are mutually exclusive — writing one clears the other.
+- **Workbook task owner is the opposite**: `workbook_task` `owner`
+  accepts a *username* and resolves it server-side; an unknown name is
+  a loud 400 (`Invalid value ... for parameter "owner"`), never a
+  silent ignore. Verified live on 8.5.0.248.
 - **Evidence create**: the discriminator field is `content_type`
   (values: `containerattachment`, `artifact`, `actionrun`,
   `container`, `note`) — NOT `object_type`; action runs drop the
