@@ -38,6 +38,24 @@ jobs:
       - run: pip install -e ".[dev]"
       - run: pytest --tb=short -q
 
+  # Install the BUILT WHEEL in a clean env and import the full command
+  # tree — a hardcoded package list once shipped wheels missing
+  # splunkctl.commands.soar (v0.7.0–v0.10.0) that only editable
+  # installs concealed.
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - run: pip install build
+      - run: python -m build --wheel --outdir dist
+      - run: pip install dist/*.whl
+      - run: splunkctl --version
+      - run: splunkctl commands --json > /dev/null
+      - run: splunkctl soar playbooks --help > /dev/null
+
   semgrep:
     runs-on: ubuntu-latest
     steps:

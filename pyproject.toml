@@ -51,8 +51,10 @@ Homepage = "https://github.com/dannyota/splunkctl"
 Repository = "https://github.com/dannyota/splunkctl"
 Issues = "https://github.com/dannyota/splunkctl/issues"
 
-[tool.setuptools]
-packages = ["splunkctl", "splunkctl.commands", "splunkctl.mcp", "splunkctl.soar"]
+# Auto-discover subpackages — a hardcoded list silently dropped
+# splunkctl.commands.soar from every wheel (v0.7.0–v0.10.0).
+[tool.setuptools.packages.find]
+include = ["splunkctl*"]
 
 [tool.setuptools.dynamic]
 version = { attr = "splunkctl.__version__" }
