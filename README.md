@@ -63,8 +63,10 @@ ingest. Built for humans and LLM agents alike: deterministic flags,
   envelopes.
 - **Playbooks as code** — `soar playbooks export --unpack` / `import`
   round-trips playbook tgz bundles (the first such tool anywhere);
-  `soar playbooks run --wait` drives and polls runs to completion;
-  `soar actions run --wait` does the same for connector actions.
+  `soar playbooks delete` removes them through the Web UI route (no
+  REST deletion exists); `soar playbooks run --wait` drives and polls
+  runs to completion; `soar actions run --wait` does the same for
+  connector actions.
 - **SIEM-to-SOAR ingest** — `soar ingest --spl` runs a SIEM search and
   creates SOAR containers + typed CEF artifacts using the official CIM-to-CEF
   field map, with SDI dedup, severity mapping, and last-artifact automation
