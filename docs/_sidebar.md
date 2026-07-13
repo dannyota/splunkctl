@@ -1,6 +1,7 @@
 - [Home](/)
 
 - **Getting started**
+  - [MCP server](guides/mcp.md)
   - [Install](guides/install.md)
   - [Configure](guides/configure.md)
   - [Doctor](guides/doctor.md)

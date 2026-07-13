@@ -63,7 +63,7 @@ sitemap="$outdir/sitemap.xml"
     [ -z "$path" ] && continue
     pri="0.7"
     case "$path" in
-      guides/install|guides/search|guides/rules) pri="0.9" ;;
+      guides/mcp|guides/install|guides/search|guides/rules) pri="0.9" ;;
       guides/configure|guides/doctor|guides/alerts|guides/lookups|guides/state|guides/es|guides/audit) pri="0.8" ;;
       design/*) pri="0.6" ;;
     esac
@@ -79,7 +79,7 @@ llms="$outdir/llms.txt"
 {
   echo "# splunkctl"
   echo ""
-  echo "> CLI tool to operate Splunk Enterprise and Splunk SOAR as code — for SOC teams, detection engineers, and AI agents. Python, Click, REST API. Every mutation is dry-run by default; nothing changes until you pass --yes."
+  echo "> Open-source MCP server and CLI for Splunk Enterprise SIEM and Splunk SOAR. Give AI agents access to 238 Splunk commands via Model Context Protocol, or operate your instances as code from the terminal."
   echo ""
 
   while IFS= read -r line; do
@@ -134,7 +134,7 @@ llmsfull="$outdir/llms-full.txt"
 {
   echo "# splunkctl — full documentation"
   echo ""
-  echo "> CLI tool to operate Splunk Enterprise and Splunk SOAR as code — for SOC teams, detection engineers, and AI agents."
+  echo "> Open-source MCP server and CLI for Splunk Enterprise SIEM and Splunk SOAR. Give AI agents access to 238 Splunk commands via Model Context Protocol, or operate your instances as code from the terminal."
   echo ""
   echo "---"
 

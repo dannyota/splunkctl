@@ -5,13 +5,13 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "splunkctl"
 dynamic = ["version"]
-description = "CLI tool for Splunk Enterprise SIEM operations."
+description = "Open-source MCP server and CLI for Splunk Enterprise SIEM and Splunk SOAR."
 readme = "README.md"
 requires-python = ">=3.13"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 authors = [{ name = "dannyota" }]
-keywords = ["splunk", "siem", "security", "cli", "detection", "spl"]
+keywords = ["splunk", "mcp", "model-context-protocol", "siem", "soar", "security", "cli", "detection", "spl"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",

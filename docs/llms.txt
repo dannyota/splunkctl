@@ -1,11 +1,12 @@
 # splunkctl
 
-> CLI tool to operate Splunk Enterprise and Splunk SOAR as code — for SOC teams, detection engineers, and AI agents. Python, Click, REST API. Every mutation is dry-run by default; nothing changes until you pass --yes.
+> Open-source MCP server and CLI for Splunk Enterprise SIEM and Splunk SOAR. Give AI agents access to 238 Splunk commands via Model Context Protocol, or operate your instances as code from the terminal.
 
-- [Home](https://splunkctl.danny.vn/#/): CLI tool for Splunk Enterprise and Splunk SOAR operations -- query, inspect, and manage remote Splunk instances from your laptop. SIEM commands are
+- [Home](https://splunkctl.danny.vn/#/): Open-source MCP server and CLI for Splunk Enterprise SIEM and Splunk SOAR. One tool, two interfaces — operate your Splunk environment from any AI
 
 ## Getting started
 
+- [MCP server](https://splunkctl.danny.vn/#/guides/mcp): Use splunkctl as a Model Context Protocol server to give AI agents — Claude Code, Claude Desktop, Cursor, Windsurf, or any MCP client — direct access
 - [Install](https://splunkctl.danny.vn/#/guides/install): This pulls the forked SDK (splunkctl branch) automatically as a dependency.
 - [Configure](https://splunkctl.danny.vn/#/guides/configure): Prompts for host, port, auth method (token or username/password), tests the connection, and writes ~/.splunkctl/config.yaml with 0600 permissions.
 - [Doctor](https://splunkctl.danny.vn/#/guides/doctor): Diagnose connection, authentication, server health, and user permissions in a single command.

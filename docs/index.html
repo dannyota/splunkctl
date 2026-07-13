@@ -3,16 +3,16 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1">
-  <title>splunkctl — operate Splunk Enterprise as code</title>
-  <meta name="description" content="Python CLI to query, inspect, and manage a remote Splunk Enterprise instance as code. Detection-as-code, config-as-code, dry-run by default. For SOC teams, detection engineers, and AI agents.">
+  <title>splunkctl — Splunk MCP Server and CLI for SIEM and SOAR</title>
+  <meta name="description" content="Open-source MCP server and CLI for Splunk Enterprise SIEM and Splunk SOAR. Give AI agents access to 238 Splunk commands via Model Context Protocol, or operate your instances as code from the terminal.">
   <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
   <link rel="canonical" href="https://splunkctl.danny.vn/">
 
   <!-- Open Graph -->
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="splunkctl">
-  <meta property="og:title" content="splunkctl — operate Splunk Enterprise as code">
-  <meta property="og:description" content="Python CLI to query, inspect, and manage a remote Splunk Enterprise instance as code. Detection-as-code, config-as-code, dry-run by default.">
+  <meta property="og:title" content="splunkctl — Splunk MCP Server and CLI for SIEM and SOAR">
+  <meta property="og:description" content="Open-source MCP server and CLI for Splunk Enterprise SIEM and Splunk SOAR. Give AI agents access to 238 Splunk commands via Model Context Protocol.">
   <meta property="og:url" content="https://splunkctl.danny.vn">
   <meta property="og:image" content="https://splunkctl.danny.vn/assets/og.png">
   <meta property="og:image:width" content="1200">
@@ -20,8 +20,8 @@
 
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="splunkctl — operate Splunk Enterprise as code">
-  <meta name="twitter:description" content="Python CLI to query, inspect, and manage a remote Splunk Enterprise instance as code. For SOC teams, detection engineers, and AI agents.">
+  <meta name="twitter:title" content="splunkctl — Splunk MCP Server and CLI for SIEM and SOAR">
+  <meta name="twitter:description" content="Open-source MCP server and CLI for Splunk Enterprise SIEM and Splunk SOAR. Give AI agents access to 238 Splunk commands via Model Context Protocol.">
   <meta name="twitter:image" content="https://splunkctl.danny.vn/assets/og.png">
 
   <!-- Structured data -->
@@ -30,16 +30,18 @@
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
     "name": "splunkctl",
-    "description": "Python CLI to operate Splunk Enterprise as code — query, inspect, and manage a remote Splunk instance. Detection-as-code, config-as-code, dry-run by default.",
+    "alternateName": "Splunk MCP Server",
+    "description": "Open-source MCP server and CLI for Splunk Enterprise SIEM and Splunk SOAR",
     "applicationCategory": "DeveloperApplication",
+    "keywords": "Splunk, MCP, Model Context Protocol, CLI, SIEM, SOAR, security automation, detection-as-code",
     "operatingSystem": "Linux, macOS, Windows",
     "programmingLanguage": "Python",
+    "softwareRequirements": "Python 3.13+",
     "offers": { "@type": "Offer", "price": "0" },
     "author": { "@type": "Person", "name": "Danny", "url": "https://danny.vn" },
     "url": "https://splunkctl.danny.vn",
     "codeRepository": "https://github.com/dannyota/splunkctl",
     "downloadUrl": "https://github.com/dannyota/splunkctl",
-    "softwareRequirements": "Python 3.13+",
     "license": "https://www.apache.org/licenses/LICENSE-2.0"
   }
   </script>
@@ -502,9 +504,11 @@
       hook.doneEach(function () {
         var h1 = document.querySelector('.markdown-section h1');
         var base = 'splunkctl';
-        document.title = h1
-          ? h1.textContent.trim() + ' — ' + base
-          : base + ' — operate Splunk Enterprise as code';
+        var full = base + ' — Splunk MCP Server and CLI for SIEM and SOAR';
+        var page = h1 ? h1.textContent.trim() : '';
+        document.title = (page && page !== base)
+          ? page + ' — ' + base
+          : full;
       });
     }
     window.$docsify = window.$docsify || {};

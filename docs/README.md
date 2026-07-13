@@ -1,26 +1,57 @@
 # splunkctl
 
-CLI tool for Splunk Enterprise and Splunk SOAR operations -- query, inspect,
-and manage remote Splunk instances from your laptop. SIEM commands are built
-on the
-[splunk-sdk-python](https://github.com/dannyota/splunk-sdk-python/tree/splunkctl)
-fork with [Click](https://click.palletsprojects.com/); SOAR commands use
-`SOARClient`, a requests-based Django REST client with dual auth.
+Open-source **MCP server** and **CLI** for Splunk Enterprise SIEM and Splunk
+SOAR. One tool, two interfaces — operate your Splunk environment from any AI
+agent that speaks [Model Context Protocol](https://modelcontextprotocol.io), or
+from the terminal.
 
-> All write operations are **dry-run by default** -- nothing changes until you
-> pass `--yes`.
+> Community project. Not affiliated with or endorsed by Splunk, Inc.
 
-## Quick start
+## Two ways in
+
+| Interface | What it does | Get started |
+|-----------|-------------|-------------|
+| **MCP Server** | Give Claude, Cursor, or any MCP client full access to your Splunk SIEM and SOAR — 238 tools with dynamic loading | [MCP guide](guides/mcp.md) |
+| **CLI** | `splunkctl search run`, `splunkctl rules export`, `splunkctl soar containers list` — operate Splunk as code from your laptop | [Install](guides/install.md) |
+
+## MCP server — quick start
 
 ```bash
-pip install git+https://github.com/dannyota/splunkctl
+pip install splunkctl
+
+export SPLUNK_HOST=your-splunk-host
+export SPLUNK_PORT=8089
+export SPLUNK_USER=admin
+export SPLUNK_PASS=your-password
+
+splunkctl mcp install   # writes .mcp.json in the current project
+```
+
+Restart your MCP client. The server exposes five meta-tools (`help`, `run`,
+`focus`, `unfocus`, `usage`) and loads group-specific typed tools on demand —
+staying within context limits while covering every command.
+
+[Full MCP setup guide &rarr;](guides/mcp.md)
+
+## CLI — quick start
+
+```bash
+pip install splunkctl
+
 splunkctl config init                    # interactive SIEM setup
 splunkctl config init --soar             # add SOAR credentials
 splunkctl doctor                         # check SIEM connection
 splunkctl soar test                      # check SOAR connection
+
 splunkctl search run 'index=main | head 10'
+splunkctl rules list
 splunkctl soar containers list
 ```
+
+All write operations are **dry-run by default** — nothing changes until you
+pass `--yes`.
+
+[Full CLI quickstart &rarr;](guides/install.md)
 
 ## Commands
 
@@ -30,7 +61,7 @@ splunkctl soar containers list
 | `config` | Setup, profiles (dev/UAT/prod), test connectivity |
 | `info` | Server info (version, OS, license) |
 | `search` | Run, export, oneshot, upload, job management |
-| `rules` | Detection rules -- CRUD, import/export (YAML), alert-action flags |
+| `rules` | Detection rules — CRUD, import/export (YAML), alert-action flags |
 | `alerts` | Fired alerts, alert actions, suppression |
 | `dashboards` | Dashboard CRUD (XML/JSON) |
 | `indexes` | Index management |
@@ -39,7 +70,7 @@ splunkctl soar containers list
 | `hec` | HEC token management |
 | `parsers` | Source types, field extractions, import/export |
 | `conf` | Generic conf file/stanza editor (any .conf) |
-| `macros` | Search macros -- list, get, set |
+| `macros` | Search macros — list, get, set |
 | `apps` | App install (.spl/.tar.gz), uninstall, update |
 | `users` | User and role management |
 | `server` | Messages, license, KV store, cluster/SHC/deployment health |
@@ -48,8 +79,6 @@ splunkctl soar containers list
 | `kvstore` | KV store collection + document CRUD |
 | `state` | Config-as-code pull/diff/push with change-evidence reports |
 | `soar` | SOAR: containers, artifacts, vault, playbooks, actions, cases, ingest |
-| `commands` | Machine-readable command tree (JSON) |
-| `mcp` | Built-in MCP server for AI agent integration |
 
 ## Key features
 
@@ -89,13 +118,6 @@ splunkctl --yes lookups upload threats.csv --file threats.csv --app search
 splunkctl --yes apps install --path TA_windows.spl
 ```
 
-### Diagnostics
-
-```bash
-splunkctl doctor             # check everything
-splunkctl doctor --json      # machine-readable output
-```
-
 ## Global flags
 
 ```
@@ -110,33 +132,6 @@ splunkctl doctor --json      # machine-readable output
 --debug             HTTP request/response logging
 ```
 
-## Output formats
+## License
 
-```bash
-splunkctl rules list                      # table (TTY) or JSON (pipe)
-splunkctl rules list --json               # force JSON
-splunkctl rules list --format csv         # CSV
-splunkctl rules list --fields name,cron   # project fields
-splunkctl rules list --out rules.json     # write to file
-```
-
-## SDK fork
-
-splunkctl depends on a [fork of splunk-sdk-python](https://github.com/dannyota/splunk-sdk-python/tree/splunkctl)
-that adds entity classes missing from the upstream SDK:
-
-| Entity | Service property | Purpose |
-|---|---|---|
-| `Dashboard` | `service.dashboards` | Dashboard CRUD |
-| `LookupTableFile` | `service.lookup_table_files` | Lookup table metadata + download |
-| `HECToken` | `service.hec_tokens` | HEC token management |
-
-## Agent integration (MCP)
-
-splunkctl ships with a built-in MCP server with 237 auto-generated tools:
-
-```bash
-splunkctl mcp install              # register in .mcp.json
-splunkctl mcp serve                # start stdio MCP server
-splunkctl commands --json          # JSON command tree for discovery
-```
+Apache 2.0. See [GitHub](https://github.com/dannyota/splunkctl) for source.
