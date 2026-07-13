@@ -95,7 +95,7 @@ that are not SDK list surfaces (e.g. `audit rbac`) are exempt by design.
 
 | Feature | Status | Notes |
 |---|---|---|
-| MCP server | ✅ built | 5 meta-tools (help/usage/focus/unfocus/run), 238 auto-generated typed tools (array schemas for variadic/repeated params, explicit `yes` on guarded schemas, additionalProperties:false), subgroup-granular focus for the nested soar tree, 33 guide resources, protocol-level test suite |
+| MCP server | ✅ built | 5 meta-tools (help/usage/focus/unfocus/run), 229 auto-generated typed tools (array schemas for variadic/repeated params, explicit `yes` on guarded schemas, additionalProperties:false), subgroup-granular focus for the nested soar tree, 33 guide resources, protocol-level test suite |
 | `mcp install` | ✅ built | Write `.mcp.json` for Claude Code registration |
 | `commands --json` | ✅ built | Guard markers, global options, note field |
 | `doctor --strict` | ✅ built | CI-friendly health gate |

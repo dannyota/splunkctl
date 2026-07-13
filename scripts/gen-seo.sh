@@ -79,7 +79,7 @@ llms="$outdir/llms.txt"
 {
   echo "# splunkctl"
   echo ""
-  echo "> Open-source MCP server and CLI for Splunk Enterprise SIEM and Splunk SOAR. Give AI agents access to 238 Splunk commands via Model Context Protocol, or operate your instances as code from the terminal."
+  echo "> Open-source MCP server and CLI for Splunk Enterprise SIEM and Splunk SOAR. Give AI agents access to 229 Splunk commands via Model Context Protocol, or operate your instances as code from the terminal."
   echo ""
 
   while IFS= read -r line; do
@@ -134,7 +134,7 @@ llmsfull="$outdir/llms-full.txt"
 {
   echo "# splunkctl — full documentation"
   echo ""
-  echo "> Open-source MCP server and CLI for Splunk Enterprise SIEM and Splunk SOAR. Give AI agents access to 238 Splunk commands via Model Context Protocol, or operate your instances as code from the terminal."
+  echo "> Open-source MCP server and CLI for Splunk Enterprise SIEM and Splunk SOAR. Give AI agents access to 229 Splunk commands via Model Context Protocol, or operate your instances as code from the terminal."
   echo ""
   echo "---"
 

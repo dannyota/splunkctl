@@ -1,6 +1,6 @@
 # splunkctl — full documentation
 
-> Open-source MCP server and CLI for Splunk Enterprise SIEM and Splunk SOAR. Give AI agents access to 238 Splunk commands via Model Context Protocol, or operate your instances as code from the terminal.
+> Open-source MCP server and CLI for Splunk Enterprise SIEM and Splunk SOAR. Give AI agents access to 229 Splunk commands via Model Context Protocol, or operate your instances as code from the terminal.
 
 ---
 
@@ -13,7 +13,7 @@ server to give AI agents — Claude Code, Claude Desktop, Cursor, Windsurf, or
 any MCP client — direct access to your Splunk Enterprise SIEM and Splunk SOAR
 instances.
 
-The server uses **dynamic tool loading**: instead of exposing all 238 commands
+The server uses **dynamic tool loading**: instead of exposing all 229 tools
 upfront, it starts with 5 meta-tools and loads group-specific typed tools on
 demand. This keeps the agent's context window small while covering every
 command.
@@ -4471,7 +4471,7 @@ that are not SDK list surfaces (e.g. `audit rbac`) are exempt by design.
 
 | Feature | Status | Notes |
 |---|---|---|
-| MCP server | ✅ built | 5 meta-tools (help/usage/focus/unfocus/run), 238 auto-generated typed tools (array schemas for variadic/repeated params, explicit `yes` on guarded schemas, additionalProperties:false), subgroup-granular focus for the nested soar tree, 33 guide resources, protocol-level test suite |
+| MCP server | ✅ built | 5 meta-tools (help/usage/focus/unfocus/run), 229 auto-generated typed tools (array schemas for variadic/repeated params, explicit `yes` on guarded schemas, additionalProperties:false), subgroup-granular focus for the nested soar tree, 33 guide resources, protocol-level test suite |
 | `mcp install` | ✅ built | Write `.mcp.json` for Claude Code registration |
 | `commands --json` | ✅ built | Guard markers, global options, note field |
 | `doctor --strict` | ✅ built | CI-friendly health gate |

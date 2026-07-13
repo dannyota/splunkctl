@@ -1,12 +1,29 @@
 """Tests for the docs generate maintainer command."""
 
 import json
+import re
 from pathlib import Path
 
 from click.testing import CliRunner, Result
 
 from splunkctl.main import cli
 from splunkctl.mcp.tools import build_tool_index
+
+REPO = Path(__file__).resolve().parent.parent.parent
+
+# Every hand-written MCP tool count in the docs, with the regex that captures
+# it. The generated reference keeps the command pages honest; this keeps the
+# prose honest — these counts had drifted to 237 and 238 while the real
+# number was 229.
+TOOL_COUNT_CLAIMS = [
+    ("README.md", r"MCP server with (\d+) auto-generated tools"),
+    ("README.md", r"auto-generates (\d+) typed tools"),
+    ("docs/README.md", r"(\d+) tools with dynamic loading"),
+    ("docs/guides/mcp.md", r"exposing all (\d+) tools"),
+    ("docs/design/catalog.md", r"(\d+) auto-generated typed tools"),
+    ("docs/index.html", r"access to (\d+) Splunk commands"),
+    ("scripts/gen-seo.sh", r"access to (\d+) Splunk commands"),
+]
 
 SIDEBAR_SEED = """- [Home](/)
 
@@ -148,3 +165,15 @@ def test_docs_group_hidden_from_discovery() -> None:
 def test_docs_group_excluded_from_mcp_tools() -> None:
     index = build_tool_index(cli)
     assert not [n for n in index if n.startswith("docs_")]
+
+
+def test_documented_tool_counts_match_the_mcp_index() -> None:
+    """Every prose tool count must equal the real MCP tool count."""
+    actual = str(len(build_tool_index(cli)))
+    stale: list[str] = []
+    for rel, pattern in TOOL_COUNT_CLAIMS:
+        text = (REPO / rel).read_text(encoding="utf-8")
+        found = re.findall(pattern, text)
+        assert found, f"{rel}: nothing matched /{pattern}/ — did the wording change?"
+        stale += [f"{rel}: claims {n}, actual {actual}" for n in found if n != actual]
+    assert not stale, "stale MCP tool counts: " + "; ".join(stale)

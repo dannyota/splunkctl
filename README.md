@@ -71,7 +71,7 @@ ingest. Built for humans and LLM agents alike: deterministic flags,
   creates SOAR containers + typed CEF artifacts using the official CIM-to-CEF
   field map, with SDI dedup, severity mapping, and last-artifact automation
   batching.
-- **Built for agents** — built-in MCP server with 237 auto-generated tools,
+- **Built for agents** — built-in MCP server with 229 auto-generated tools,
   progressive discovery (5 meta-tools + focus/unfocus), 33 guide resources,
   guard markers on every mutation, dual output (TTY = table, pipe = JSON).
 
