@@ -367,6 +367,7 @@
     }
     @media (max-width: 1100px) {
       .page_toc { display: none; }
+      #toc-toggle { display: none; }
     }
 
     /* center mermaid diagrams */
@@ -384,10 +385,42 @@
       margin: 0 auto;
     }
 
+    /* scrollable tables */
+    .table-wrap {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      margin: 16px 0;
+    }
+    .table-wrap table {
+      margin: 0;
+    }
+
+    /* scrollable code blocks */
+    .markdown-section pre {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .markdown-section pre > code {
+      white-space: pre;
+    }
+
     /* scrollbar */
     ::-webkit-scrollbar { width: 8px; height: 8px; }
     ::-webkit-scrollbar-thumb { background: var(--sb-thumb); border-radius: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
+
+    /* mobile: wide diagrams scroll horizontally instead of shrinking */
+    @media (max-width: 768px) {
+      .mermaid {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        justify-content: flex-start;
+      }
+      .mermaid svg {
+        max-width: none !important;
+        min-width: var(--mmd-natural-width, 100%);
+      }
+    }
   </style>
 </head>
 <body>
@@ -469,7 +502,11 @@
         el.removeAttribute('data-processed');
         el.innerHTML = el.textContent;
       });
-      mermaid.run({ querySelector: '.mermaid' });
+      mermaid.run({ querySelector: '.mermaid' }).then(function () {
+        document.querySelectorAll('.mermaid svg').forEach(function (svg) {
+          if (svg.style.maxWidth) svg.style.setProperty('--mmd-natural-width', svg.style.maxWidth);
+        });
+      });
     }
     function initMermaid(hook) {
       hook.doneEach(function () {
@@ -511,8 +548,19 @@
           : full;
       });
     }
+    function wrapTables(hook) {
+      hook.doneEach(function () {
+        document.querySelectorAll('.markdown-section table').forEach(function (t) {
+          if (t.parentElement.classList.contains('table-wrap')) return;
+          var wrap = document.createElement('div');
+          wrap.className = 'table-wrap';
+          t.parentNode.insertBefore(wrap, t);
+          wrap.appendChild(t);
+        });
+      });
+    }
     window.$docsify = window.$docsify || {};
-    window.$docsify.plugins = (window.$docsify.plugins || []).concat(initMermaid, initTocState, initHomeActive, updateTitle);
+    window.$docsify.plugins = (window.$docsify.plugins || []).concat(initMermaid, initTocState, initHomeActive, updateTitle, wrapTables);
   </script>
   <script>
     function sysDark() {
