@@ -141,6 +141,9 @@ llmsfull="$outdir/llms-full.txt"
   seen=""
   grep -oP '\(([^)]+)\)' "$sidebar" | tr -d '()' | while read -r href; do
     case "$href" in http*) continue ;; esac
+    # Generated per-group reference pages would triple the file; the index
+    # (commands/README.md) alone represents the command reference.
+    case "$href" in commands/README.md) ;; commands/*) continue ;; esac
     file="$docs/$href"
     [ "$href" = "/" ] && file="$docs/README.md"
     [[ "$href" == */ ]] && file="${file}README.md"

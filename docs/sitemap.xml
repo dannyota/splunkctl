@@ -35,6 +35,32 @@
   <url><loc>https://splunkctl.danny.vn/#/guides/soar-indicators</loc><priority>0.7</priority></url>
   <url><loc>https://splunkctl.danny.vn/#/guides/soar-admin</loc><priority>0.7</priority></url>
   <url><loc>https://splunkctl.danny.vn/#/guides/soar-ingest</loc><priority>0.7</priority></url>
+  <url><loc>https://splunkctl.danny.vn/#/commands/README</loc><priority>0.7</priority></url>
+  <url><loc>https://splunkctl.danny.vn/#/commands/alerts</loc><priority>0.7</priority></url>
+  <url><loc>https://splunkctl.danny.vn/#/commands/apps</loc><priority>0.7</priority></url>
+  <url><loc>https://splunkctl.danny.vn/#/commands/audit</loc><priority>0.7</priority></url>
+  <url><loc>https://splunkctl.danny.vn/#/commands/conf</loc><priority>0.7</priority></url>
+  <url><loc>https://splunkctl.danny.vn/#/commands/config</loc><priority>0.7</priority></url>
+  <url><loc>https://splunkctl.danny.vn/#/commands/dashboards</loc><priority>0.7</priority></url>
+  <url><loc>https://splunkctl.danny.vn/#/commands/datamodels</loc><priority>0.7</priority></url>
+  <url><loc>https://splunkctl.danny.vn/#/commands/es</loc><priority>0.7</priority></url>
+  <url><loc>https://splunkctl.danny.vn/#/commands/eventtypes</loc><priority>0.7</priority></url>
+  <url><loc>https://splunkctl.danny.vn/#/commands/global</loc><priority>0.7</priority></url>
+  <url><loc>https://splunkctl.danny.vn/#/commands/hec</loc><priority>0.7</priority></url>
+  <url><loc>https://splunkctl.danny.vn/#/commands/indexes</loc><priority>0.7</priority></url>
+  <url><loc>https://splunkctl.danny.vn/#/commands/inputs</loc><priority>0.7</priority></url>
+  <url><loc>https://splunkctl.danny.vn/#/commands/kvstore</loc><priority>0.7</priority></url>
+  <url><loc>https://splunkctl.danny.vn/#/commands/lookups</loc><priority>0.7</priority></url>
+  <url><loc>https://splunkctl.danny.vn/#/commands/macros</loc><priority>0.7</priority></url>
+  <url><loc>https://splunkctl.danny.vn/#/commands/mcp</loc><priority>0.7</priority></url>
+  <url><loc>https://splunkctl.danny.vn/#/commands/parsers</loc><priority>0.7</priority></url>
+  <url><loc>https://splunkctl.danny.vn/#/commands/rules</loc><priority>0.7</priority></url>
+  <url><loc>https://splunkctl.danny.vn/#/commands/search</loc><priority>0.7</priority></url>
+  <url><loc>https://splunkctl.danny.vn/#/commands/server</loc><priority>0.7</priority></url>
+  <url><loc>https://splunkctl.danny.vn/#/commands/soar</loc><priority>0.7</priority></url>
+  <url><loc>https://splunkctl.danny.vn/#/commands/state</loc><priority>0.7</priority></url>
+  <url><loc>https://splunkctl.danny.vn/#/commands/tags</loc><priority>0.7</priority></url>
+  <url><loc>https://splunkctl.danny.vn/#/commands/users</loc><priority>0.7</priority></url>
   <url><loc>https://splunkctl.danny.vn/#/design/architecture</loc><priority>0.6</priority></url>
   <url><loc>https://splunkctl.danny.vn/#/design/catalog</loc><priority>0.6</priority></url>
 </urlset>

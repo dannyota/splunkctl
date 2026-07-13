@@ -39,6 +39,8 @@ def _walk(group: click.Group) -> list[dict[str, Any]]:
     """Recursively build the command tree."""
     nodes: list[dict[str, Any]] = []
     for name, cmd in sorted(group.commands.items()):
+        if cmd.hidden:
+            continue
         node: dict[str, Any] = {
             "name": name,
             "help": (cmd.help or "").split("\n")[0],

@@ -99,6 +99,7 @@ that are not SDK list surfaces (e.g. `audit rbac`) are exempt by design.
 | `mcp install` | ✅ built | Write `.mcp.json` for Claude Code registration |
 | `commands --json` | ✅ built | Guard markers, global options, note field |
 | `doctor --strict` | ✅ built | CI-friendly health gate |
+| `docs generate` | ✅ built | Hidden maintainer command: per-group reference pages in `docs/commands/` + sidebar sync from the Click tree; `--check` is the CI freshness gate |
 | JSON error envelope | ✅ built | `--json`/`--format json` errors as one `jq`-able stderr line: kind + http_status + message |
 | Multi-instance profiles | ✅ built | `profiles:`/`current:` config schema v2, `--profile` global flag, guard banner (`profile`/`env`/`flags` source) on every dry-run and `--yes` confirmation, no network I/O |
 

@@ -5,6 +5,10 @@
 # splunkctl/skill/SKILL.md is exempt (detailed agent reference, completeness
 # beats brevity).
 #
+# docs/commands/*.md are EXEMPT: generated verbatim from the command tree
+# (`splunkctl docs generate`), so page size follows the CLI, not authored
+# prose.
+#
 # Exit 1 on any violation.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -23,7 +27,7 @@ while IFS= read -r f; do
     echo "DOC TOO LONG  $f: $n lines (max $MD_MAX) — split or trim"
     violations=$((violations + 1))
   fi
-done < <(find . -name '*.md' -not -path './.git/*' -not -path './.claude/*' | sed 's#^\./##' | sort)
+done < <(find . -name '*.md' -not -path './.git/*' -not -path './.claude/*' -not -path './docs/commands/*' | sed 's#^\./##' | sort)
 
 # --- Python source ---
 while IFS= read -r f; do

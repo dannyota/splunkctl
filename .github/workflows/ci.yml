@@ -70,5 +70,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - run: pip install -e .
       - run: bash scripts/check-lengths.sh
       - run: bash scripts/gen-seo.sh --check
+      # Command-reference freshness: docs/commands/ + the sidebar block must
+      # match the committed command tree (regenerate with `splunkctl docs generate`).
+      - run: splunkctl docs generate --check

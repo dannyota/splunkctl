@@ -11,6 +11,11 @@ from splunkctl.guard import is_guarded
 # to skip are Click's own help and the guard's yes (re-added per schema).
 SKIP_PARAMS = frozenset({"help", "yes"})
 
+# Internal/maintainer groups that never become MCP tools.
+INTERNAL_GROUPS = frozenset(
+    {"mcp", "commands", "skill", "config", "doctor", "info", "docs"}
+)
+
 _YES_PROP: dict[str, Any] = {
     "type": "boolean",
     "default": False,
@@ -202,12 +207,11 @@ def _walk_commands(
 def build_tool_index(root: click.Group) -> ToolIndex:
     """Build a full tool index from the CLI root group.
 
-    Skips internal groups (mcp, commands, skill, config, doctor, info).
+    Skips internal groups (mcp, commands, skill, config, doctor, info, docs).
     """
-    skip = {"mcp", "commands", "skill", "config", "doctor", "info"}
     index: ToolIndex = {}
     for name, cmd in sorted(root.commands.items()):
-        if name in skip:
+        if name in INTERNAL_GROUPS:
             continue
         if isinstance(cmd, click.Group):
             _walk_commands(cmd, [name], index)
@@ -219,11 +223,10 @@ def build_tool_index(root: click.Group) -> ToolIndex:
 
 def group_names(root: click.Group) -> list[str]:
     """Return the names of top-level command groups (excluding internals)."""
-    skip = {"mcp", "commands", "skill", "config", "doctor", "info"}
     return sorted(
         name
         for name, cmd in root.commands.items()
-        if isinstance(cmd, click.Group) and name not in skip
+        if isinstance(cmd, click.Group) and name not in INTERNAL_GROUPS
     )
 
 
@@ -284,10 +287,9 @@ def group_summary(root: click.Group) -> list[dict[str, str]]:
     ``subgroups`` key with the two-level layout so agents can discover
     subgroup focus paths without flooding context.
     """
-    skip = {"mcp", "commands", "skill", "config", "doctor", "info"}
     rows: list[dict[str, str]] = []
     for name, cmd in sorted(root.commands.items()):
-        if name in skip:
+        if name in INTERNAL_GROUPS:
             continue
         if isinstance(cmd, click.Group):
             subs = list(cmd.commands.keys())

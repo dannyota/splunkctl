@@ -42,6 +42,36 @@
   - [Users, roles & audit](guides/soar-admin.md)
   - [Ingest (SIEM to SOAR)](guides/soar-ingest.md)
 
+<!-- commands:start -->
+- **Command reference**
+  - [Overview](commands/README.md)
+  - [alerts](commands/alerts.md)
+  - [apps](commands/apps.md)
+  - [audit](commands/audit.md)
+  - [conf](commands/conf.md)
+  - [config](commands/config.md)
+  - [dashboards](commands/dashboards.md)
+  - [datamodels](commands/datamodels.md)
+  - [es](commands/es.md)
+  - [eventtypes](commands/eventtypes.md)
+  - [global](commands/global.md)
+  - [hec](commands/hec.md)
+  - [indexes](commands/indexes.md)
+  - [inputs](commands/inputs.md)
+  - [kvstore](commands/kvstore.md)
+  - [lookups](commands/lookups.md)
+  - [macros](commands/macros.md)
+  - [mcp](commands/mcp.md)
+  - [parsers](commands/parsers.md)
+  - [rules](commands/rules.md)
+  - [search](commands/search.md)
+  - [server](commands/server.md)
+  - [soar](commands/soar.md)
+  - [state](commands/state.md)
+  - [tags](commands/tags.md)
+  - [users](commands/users.md)
+<!-- commands:end -->
+
 - **Design**
   - [Architecture](design/architecture.md)
   - [Catalog & status](design/catalog.md)

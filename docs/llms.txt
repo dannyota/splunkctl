@@ -50,6 +50,35 @@
 - [Users, roles & audit](https://splunkctl.danny.vn/#/guides/soar-admin): Manage SOAR platform users, inspect role permissions, and query the audit trail. User mutations are guarded (dry-run by default, --yes to apply).
 - [Ingest (SIEM to SOAR)](https://splunkctl.danny.vn/#/guides/soar-ingest): Ingest SIEM search results into Splunk SOAR as containers and artifacts, using the official CIM-to-CEF field mapping and connector conventions.
 
+## Command reference
+
+- [Overview](https://splunkctl.danny.vn/#/commands/README): Generated from the Click command tree — run splunkctl docs generate after changing a command. "Guarded" commands are live mutations behind the
+- [alerts](https://splunkctl.danny.vn/#/commands/alerts): Manage fired alerts and alert actions.
+- [apps](https://splunkctl.danny.vn/#/commands/apps): Manage Splunk apps.
+- [audit](https://splunkctl.danny.vn/#/commands/audit): Change audit and RBAC attestation — regulator evidence, read-only.
+- [conf](https://splunkctl.danny.vn/#/commands/conf): Generic conf file/stanza editor (any conf, including sensitive ones).
+- [config](https://splunkctl.danny.vn/#/commands/config): Manage splunkctl configuration.
+- [dashboards](https://splunkctl.danny.vn/#/commands/dashboards): Dashboard management.
+- [datamodels](https://splunkctl.danny.vn/#/commands/datamodels): CIM/tstats data models — definitions and acceleration health.
+- [es](https://splunkctl.danny.vn/#/commands/es): Enterprise Security — notable-event triage (requires ES installed).
+- [eventtypes](https://splunkctl.danny.vn/#/commands/eventtypes): Event classification rules (eventtypes.conf) — read-only.
+- [global](https://splunkctl.danny.vn/#/commands/global): Top-level commands
+- [hec](https://splunkctl.danny.vn/#/commands/hec): Manage HTTP Event Collector tokens.
+- [indexes](https://splunkctl.danny.vn/#/commands/indexes): Manage Splunk indexes.
+- [inputs](https://splunkctl.danny.vn/#/commands/inputs): Manage data inputs.
+- [kvstore](https://splunkctl.danny.vn/#/commands/kvstore): KV store — collections and document CRUD (allowlists, threat intel).
+- [lookups](https://splunkctl.danny.vn/#/commands/lookups): Manage lookup table files.
+- [macros](https://splunkctl.danny.vn/#/commands/macros): Reusable SPL macro fragments (macros.conf).
+- [mcp](https://splunkctl.danny.vn/#/commands/mcp): Built-in MCP server for agent integration.
+- [parsers](https://splunkctl.danny.vn/#/commands/parsers): Manage source types and field extractions.
+- [rules](https://splunkctl.danny.vn/#/commands/rules): Manage detection rules (saved searches).
+- [search](https://splunkctl.danny.vn/#/commands/search): Search and job management.
+- [server](https://splunkctl.danny.vn/#/commands/server): Server operations — messages, license, KV store, topology health.
+- [soar](https://splunkctl.danny.vn/#/commands/soar): Splunk SOAR operations — platform reads, containers, playbooks.
+- [state](https://splunkctl.danny.vn/#/commands/state): Unified config-as-code across rules, parsers, macros, lookups, dashboards.
+- [tags](https://splunkctl.danny.vn/#/commands/tags): CIM/eventtype tag assignments (tags.conf) — read-only.
+- [users](https://splunkctl.danny.vn/#/commands/users): Manage users and roles.
+
 ## Design
 
 - [Architecture](https://splunkctl.danny.vn/#/design/architecture): How splunkctl is built — the layers, the data flow, and the design decisions.
