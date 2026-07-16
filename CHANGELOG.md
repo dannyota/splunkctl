@@ -1,5 +1,113 @@
 # Changelog
 
+## 0.11.0
+
+Whole-repo hardening + feature expansion, driven by a max-effort code
+review (75 agents, 25 verified findings) and two feature-gap scouts
+(SIEM + SOAR/MCP/DX). Live smoke-tested against Splunk 10.4.1 and
+SOAR 8.5.0.248: 23 pass, 0 failures.
+
+### Breaking
+
+- **TLS verification defaults to ON** — new profiles verify server
+  certificates by default. Self-signed lab instances need explicit
+  `verify: false` in the profile (`config init` now asks). A one-time
+  stderr warning fires when verification is disabled.
+
+### Security
+
+- **GitHub Actions pinned to commit SHAs** — all third-party actions
+  use immutable refs; workflow-level `permissions:` blocks enforce
+  least privilege (`contents: read` default; `id-token: write` only
+  for PyPI OIDC).
+- **SPL injection fixed** — lookup names in `| inputlookup` are now
+  quoted via a shared helper; names with SPL metacharacters are
+  rejected with a typed error.
+- **Password handling** — `users create/update` gains `--password-stdin`
+  and interactive prompt; passwords never appear in dry-run previews,
+  error envelopes, or MCP tool output.
+
+### Fixed
+
+- `hec send` no longer crashes with NameError on connection errors;
+  TLS verification reads from the profile (not a missing SDK attribute).
+- Web-session failures (lookup upload, app install with expired creds)
+  produce typed error envelopes instead of raw tracebacks.
+- SOAR client sets HTTP timeouts (10s connect, 60s read) — no more
+  indefinite hangs on unresponsive servers.
+- `soar ingest` run_automation triggers correctly when the last input
+  row is deduplicated.
+- Tag read-modify-write aborts on fetch failure instead of silently
+  wiping all tags.
+- Broad `except Exception` in dashboards, lookups, and SOAR views
+  narrowed to specific errors — auth failures no longer masquerade as
+  "not found" or "unavailable".
+- `soar functions list` paging aligned with other SOAR commands.
+- Vault upload warns based on base64-encoded size (not raw); download
+  `--out` handles directory paths.
+- `mcp install` handles `"mcpServers": null` in existing config.
+- Network reads moved after the guard in SOAR cases/artifacts/assets
+  so dry-run stays offline.
+- `_resolve_template` routes through the structured error envelope.
+
+### Added
+
+- **Doctor SOAR section** — connection, auth, health, and license
+  checks with graceful skip when no SOAR profile is configured.
+- **MCP output cap** — success output > 4 MiB spills to a temp file
+  with a JSON pointer and steering hint; error output is UTF-8-safe
+  truncated; subprocess timeout raised to 300s with clean messaging;
+  stale spill files swept on startup (24h).
+- **MCP prompts** — four `@mcp.prompt` workflows: `investigate-ioc`,
+  `triage-notable`, `audit-detection`, `export-state`.
+- **MCP streamable-HTTP transport** — `mcp serve --transport http`
+  for team/remote use; `mcp install` generates URL-based config.
+- **ES correlation-search admin** — `es correlations list/get/
+  enable/disable` with security_domain and severity fields.
+- **ES threat-intel management** — `es threat-intel list/upload/
+  delete` via `/services/data/threat_intel`.
+- **Scheduler health** — `rules schedule` view (cron, next_run,
+  window, enabled) and `--scheduled` filter on `rules list`.
+- **Auth-token management** — `server tokens list/create/revoke`
+  via `/services/authorization/tokens`.
+- **Deployment-server serverclasses** — `server serverclasses
+  list/get/reload` with feature detection for disabled deployment
+  server.
+- **SAML/LDAP auth config read** — `server auth show/ldap/saml/
+  role-mapping` for compliance visibility.
+- **Workload management read** — `server workloads pools/rules/
+  status` for resource allocation visibility (Splunk 8.1+).
+- **Metrics catalog** — `search metrics --index` wraps `| mcatalog`
+  for metric name and dimension discovery.
+- **SOAR workbook-template CRUD** — `soar workbook-templates
+  list/get/create/update/delete`.
+- **SOAR app install/uninstall** — tgz upload and deletion via
+  `/rest/app`.
+- **Watch mode** — `--watch N` re-runs read-only commands every N
+  seconds; rejects mutations; requires TTY.
+- **Shell completion** — `splunkctl completion bash/zsh/fish` prints
+  activation scripts.
+- **Exit-code contract** — documented and normalized: 0 = success,
+  1 = error, 2 = usage.
+- **SOAR config-as-code** — `state pull/diff/push` extended with
+  `soar-playbooks` (tgz round-trip), `soar-lists` (JSON round-trip),
+  and `soar-assets` (JSON with secret masking, fetch-merge-post).
+  Mixed SIEM+SOAR type requests work in one call.
+
+### Structure
+
+- Server-side paths removed from user output (remote-first).
+- Duplicated `read_results` helpers consolidated.
+- Phase/ticket-named test files renamed to feature names.
+- Near-cap files split: `soar/admin.py` → users + roles/audit;
+  oversized test files split by topic.
+- Private cross-module imports promoted to public API.
+
+### Stats
+
+- 1728 tests (was 1424), ruff + mypy-strict + file-length budget
+  all clean.
+
 ## 0.10.1
 
 ### Fixed
@@ -254,40 +362,17 @@ and a live SIEM audit (2026-07-11).
 
 ## 0.5.0
 
-- **Built-in MCP server** — `splunkctl mcp serve` (stdio transport):
-  5 meta-tools (`help`, `focus`, `unfocus`, `run`, `usage`) with
-  progressive discovery; typed tools auto-generated from the Click
-  command tree; `guide://` resources served from `docs/guides/`.
-  `mcp install` registers the server in `.mcp.json`.
-- **SKILL.md removed** — the embedded skill and `skill` command are
-  replaced by the MCP server; `doctor` drops the skill-freshness check
-  and gains a KV store health check.
-- **vmlab** — reusable unattended provisioning scripts for the
-  SIEM + SOAR VMware lab (`installers/vmlab/`).
+- **Built-in MCP server** — 5 meta-tools with progressive discovery;
+  typed tools auto-generated from Click; `guide://` resources.
+- **vmlab** — unattended SIEM + SOAR lab provisioning scripts.
 
-## 0.4.1
+## 0.4.0 – 0.4.1
 
-Cleanup pass after v0.4.0.
-
-- Consolidated `_app_scope` (3 copies) and `_trunc` (2 copies) into
-  shared helpers in `common.py`.
-- `conf get` gains `--app` scoping (was the only conf subcommand without
-  it).
-- Polling-timeout errors (`search run`/`rules test`) now emit
-  `kind: "timeout"` instead of the generic fallback.
-- `_RULE_CHANGE` in `state_io.py` uses `.get()` with a fallback so a
-  future `_rule_diff` kind cannot crash `state diff`.
-- `users roles` list options (`--limit`/`--offset`/`--filter`) moved from
-  the group callback to `roles list` specifically, so they no longer
-  silently no-op on `roles get`/`create`/`update`/`delete`.
-- Doc/test fixes: datamodels percent-rounding wording, copy-named test
-  rename, lookups wiring test docstring.
-
-## 0.4.0
-
-Bank-SOC readiness release: agent reliability, ES triage, compliance
-audit, KV store, detection-engineering depth, and config-as-code change
-control — all driven by a 2026-07 gap analysis against real SOC workflows.
+Bank-SOC readiness: ES triage, compliance audit, KV store CRUD,
+config-as-code `state pull/diff/push`, generic conf editor, macros,
+eventtypes/tags, datamodels, structured JSON error envelopes, uniform
+list paging, multi-instance profiles, lookup wiring, alert-action
+flags. 0.4.1: cleanup pass (shared helpers, timeout kinds, scoping).
 
 ### New command groups
 - **es notables** — ES incident-review loop (list/get/update with
@@ -352,99 +437,9 @@ control — all driven by a 2026-07 gap analysis against real SOC workflows.
 - **datamodels rebuild** uses the resolved canonical model name on the
   wire (not the user's possibly wrong-cased input).
 
-## 0.3.1
+## 0.3.1 and earlier
 
-SOC bug-fix wave: fixes found while auditing detection coverage and
-alert investigation workflows against a live instance.
-
-### Fixes
-- **rules list/get** `--app` without `--owner` now wildcards the owner
-  (`owner="-"`), so app-private saved searches owned by other users are
-  no longer silently excluded from an app audit — matches the
-  `dashboards`/`lookups` scoping pattern. `--app`+`--owner` and the
-  default-namespace/`--owner`-only paths are unchanged.
-- **search jobs** `owner` column reads the real submitting user from the
-  job's ACL (`entry.acl.owner`); the job's internal `author` field is
-  always blank and was being shown instead.
-- **server kvstore** parses the REST response's nested `content.current`
-  object instead of looking up flat dotted keys, so a failed KV store
-  reports `status: failed` instead of a blank row with exit 0.
-
-### Enhancements
-- **rules get** surfaces every enabled action's non-empty
-  `action.<name>.*` params (e.g. `action.email.to`,
-  `action.notable.param.severity`) inline, without a full YAML export.
-- **rules create/update** `--actions email`/`--actions webhook` warn on
-  stderr during dry-run when the action's required companion field
-  (`action.email.to`, `action.webhook.param.url`) is missing, instead of
-  failing on `--yes`.
-- **rules import** `--json`/`--format json` emits a full, untruncated
-  dry-run diff array (one object per rule: name/action/changes) for
-  programmatic verification before applying; text-mode preview marks
-  truncated values explicitly instead of a bare ellipsis.
-- **SKILL.md** documents ES recipes (notable/risk read, correlation
-  search authoring, asset/identity CSVs) and rewrites the alert
-  investigation workflow to pivot from a firing sid to `search job
-  <sid>`, falling back to SPL re-run only once the job TTL has expired.
-
-## 0.3.0
-
-### New commands
-- **`server messages`** — list/dismiss system messages
-- **`server license`** — license pool usage
-- **`server kvstore`** — KV store status
-- **`hec settings`** — global HEC state (port, SSL, enable/disable)
-- **`hec send`** — send an event through HEC
-- **`users roles get/create/update/delete`** — full role CRUD
-- **`dashboards share`** — change dashboard sharing/ownership
-- **`alerts unsuppress`** — remove alert throttling
-- **`parsers set/unset`** — edit props/transforms keys
-- **`parsers reload`** — reload parser configs
-- **`parsers export/import`** — YAML round-trip for props/transforms
-
-### Enhancements
-- **search run** `--detach` starts a job and returns the SID without polling
-- **search run** prints truncation notice when results are capped
-- **search jobs** shows `owner` and `spl` preview columns
-- **search job** gains `--offset`, `--count`, `--events`, `--status-only`
-- **dashboards list** shows `type` column (classic/studio)
-- **dashboards get/export** `--definition` extracts Studio JSON
-- **dashboards create** `--type classic|studio|auto` with JSON-to-XML wrapping
-- **dashboards create** `--sharing` sets ACL on creation
-- **dashboards update** shows unified diff preview in dry-run
-- **dashboards export** `--all --dir` for bulk export
-- **hec create** `--set key=value` for arbitrary token properties
-- **users update** `--password` for password reset (masked in dry-run)
-- **rules list** `--filter key=value` for field filtering
-- **rules share** sets sharing/ownership
-- **rules create/update** `--set` passthrough for full alert semantics
-- **rules import** shows diff in dry-run, fails on skip-only imports
-- **parsers get** `--key` for single key retrieval
-- **parsers sourcetypes** `--sourcetype` filter
-- **doctor** `--strict` treats warnings as failures
-- **doctor** prints remediation hints for failures/warnings
-- **doctor** checks skill freshness (installed vs embedded SKILL.md)
-- **commands --json** exposes `guarded` markers, `global_options`, and `note`
-
-### Fixes
-- Output contracts: JSON always emits `[]` on empty, CSV uses column union
-- Info messages to stderr only in table mode; clean stdout for piping
-- `indexes --max-size` maps to correct REST arg `maxTotalDataSizeMB`
-- `indexes clean --clean-timeout` with graceful error handling
-- `lookups download` fails with clear error when lookup doesn't exist
-- `dashboards list` hides non-dashboard views by default (`--all` to show)
-- Capabilities never truncated in machine-readable output
-- Global flags work after subcommands without shadowing leaf options
-- Web UI session ported from urllib to requests (fixes Splunk 10.4 redirects)
-- XML parsing uses `defusedxml` to prevent XXE attacks
-
-### Infrastructure
-- `@guard.guarded` decorator on all 52 mutation commands with AST tripwire test
-- `defusedxml` added as dependency
-- `click>=8.2` required for CliRunner stderr separation
-- 321 tests passing
-
-## 0.2.0 and earlier
-
-Initial public release (0.2.0) and internal scaffold (0.1.0) — see
-[GitHub releases](https://github.com/dannyota/splunkctl/releases).
+See [GitHub releases](https://github.com/dannyota/splunkctl/releases)
+for the full history: 0.3.1 (SOC bug-fix wave), 0.3.0 (server/HEC/
+parsers/dashboards expansion, 321 tests), 0.2.0 (initial public
+release), 0.1.0 (scaffold).
