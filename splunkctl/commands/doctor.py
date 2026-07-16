@@ -10,6 +10,7 @@ from typing import Any
 
 import click
 
+from splunkctl import config as cfg_mod
 from splunkctl.client import get_client
 
 _KEY_CAPABILITIES = (
@@ -35,6 +36,10 @@ _HINTS: dict[str, str] = {
     "Web UI reachable": ("Web UI is optional; lookup-upload and some ops need it."),
     "KV Store": ("Ask your Splunk admin to restart Splunk or check mongod.log."),
     "MCP registered": "Run 'splunkctl mcp install' to register the MCP server.",
+    "SOAR connection": ("Check SOAR_HOST/SOAR_PORT and that SOAR is running."),
+    "SOAR auth": "Verify SOAR_TOKEN or SOAR_USER/SOAR_PASS credentials.",
+    "SOAR health": "Run 'splunkctl soar health' to inspect daemon status.",
+    "SOAR license": "Run 'splunkctl soar license' to inspect license state.",
 }
 
 
@@ -229,11 +234,119 @@ def doctor_cmd(ctx: click.Context, *, strict: bool = False) -> None:
             )
         )
 
-    # --- 8. MCP registration ---
+    # --- 8. SOAR ---
+    _check_soar(ctx, results)
+
+    # --- 9. MCP registration ---
     click.echo("[MCP]", err=True)
     _check_mcp_registered(results)
 
     _finish(ctx, results, strict=strict)
+
+
+def _check_soar(ctx: click.Context, results: list[dict[str, str]]) -> None:
+    """Run SOAR connectivity, auth, health, and license checks.
+
+    Gracefully skipped when no ``soar:`` section exists in the active profile.
+    """
+    obj: dict[str, Any] = ctx.obj or {}
+    cfg_path = obj.get("config")
+    profile = obj.get("profile")
+    config_path = Path(cfg_path) if cfg_path else None
+    soar_cfg = cfg_mod.resolve_soar(config_path, profile=profile)
+
+    host = soar_cfg.get("host")
+    if not host:
+        click.echo("[SOAR] skipped — no soar profile configured", err=True)
+        results.append(
+            {
+                "check": "SOAR",
+                "status": "SKIP",
+                "detail": "no soar profile configured",
+            }
+        )
+        return
+
+    click.echo("[SOAR]", err=True)
+
+    from splunkctl.soar.client import SOARClient
+
+    client = SOARClient(
+        host=host,
+        port=int(soar_cfg.get("port", 8443)),
+        token=soar_cfg.get("token"),
+        username=soar_cfg.get("username"),
+        password=soar_cfg.get("password"),
+        verify=bool(soar_cfg.get("verify", False)),
+    )
+
+    # -- SOAR connection: GET /rest/version --
+    try:
+        ver_data = client.get("version")
+        version = (
+            ver_data.get("version", "unknown")
+            if isinstance(ver_data, dict)
+            else "unknown"
+        )
+        results.append(_check("SOAR connection", True, f"{host} v{version}"))
+    except Exception as exc:
+        results.append(_check("SOAR connection", False, str(exc)))
+        return  # cannot continue without connectivity
+
+    # -- SOAR auth --
+    auth_method = "set" if soar_cfg.get("token") else "basic"
+    results.append(_check("SOAR auth", True, f"token={auth_method}"))
+
+    # -- SOAR health: GET /rest/health --
+    try:
+        health_data = client.get("health")
+        if isinstance(health_data, dict):
+            status_map = health_data.get("status", {})
+            if isinstance(status_map, dict) and status_map:
+                failed = [d for d, s in status_map.items() if s != "running"]
+                if failed:
+                    results.append(
+                        _check(
+                            "SOAR health",
+                            False,
+                            f"degraded: {', '.join(failed)}",
+                            warn=True,
+                        )
+                    )
+                else:
+                    results.append(_check("SOAR health", True, "all daemons running"))
+            else:
+                results.append(_check("SOAR health", True, "ok"))
+        else:
+            results.append(_check("SOAR health", True, "ok"))
+    except Exception:
+        results.append(_check("SOAR health", False, "could not query", warn=True))
+
+    # -- SOAR license: GET /rest/license --
+    try:
+        lic_data = client.get("license")
+        if isinstance(lic_data, dict):
+            info_block = lic_data.get("license_info", {})
+            usage = lic_data.get("current_usage", {})
+            max_actions = (
+                info_block.get("maximum_actions_per_day")
+                if isinstance(info_block, dict)
+                else None
+            )
+            used = (
+                usage.get("recent_app_run_count") if isinstance(usage, dict) else None
+            )
+            if max_actions is not None:
+                detail = f"quota {used or 0}/{max_actions} actions/day"
+                lic_ok = used is None or int(used) < int(max_actions)
+                results.append(_check("SOAR license", lic_ok, detail, warn=not lic_ok))
+            else:
+                lic_type = lic_data.get("status", "unknown")
+                results.append(_check("SOAR license", True, lic_type))
+        else:
+            results.append(_check("SOAR license", True, "ok"))
+    except Exception:
+        results.append(_check("SOAR license", False, "could not query", warn=True))
 
 
 def _check_mcp_registered(results: list[dict[str, str]]) -> None:

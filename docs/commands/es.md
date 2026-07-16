@@ -4,6 +4,49 @@
 
 Enterprise Security — notable-event triage (requires ES installed).
 
+## es correlations disable
+
+Disable one or more correlation searches.
+
+> Guarded mutation — dry-run by default; apply with `--yes`.
+
+```text
+splunkctl es correlations disable [OPTIONS] NAMES...
+```
+
+## es correlations enable
+
+Enable one or more correlation searches.
+
+> Guarded mutation — dry-run by default; apply with `--yes`.
+
+```text
+splunkctl es correlations enable [OPTIONS] NAMES...
+```
+
+## es correlations get
+
+Get full detail for one correlation search.
+
+```text
+splunkctl es correlations get [OPTIONS] NAME
+```
+
+## es correlations list
+
+List correlation searches with ES-specific fields.
+
+```text
+splunkctl es correlations list [OPTIONS]
+```
+
+**Flags**
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--enabled / --disabled` | flag | - | Show only enabled or disabled correlation searches. |
+| `--security-domain` | text | - | Filter by security domain (e.g. access, endpoint, network). |
+
 ## es notables get
 
 Get one notable event's full field set, by event_id.

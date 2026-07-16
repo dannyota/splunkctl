@@ -4,6 +4,7 @@ import sys
 from typing import Any
 
 import click
+from click.shell_completion import get_completion_class
 
 from splunkctl import __version__, output
 from splunkctl import config as cfg_mod
@@ -125,7 +126,15 @@ class _CLI(click.Group):
             raise
 
 
-@click.group(cls=_CLI)
+_EPILOG = """\b
+Exit codes:
+  0  Success.
+  1  Command error (auth failure, not found, API error, runtime fault).
+  2  Usage error (invalid arguments, missing required options).
+"""
+
+
+@click.group(cls=_CLI, epilog=_EPILOG)
 @click.version_option(version=__version__, prog_name="splunkctl")
 @click.option("--json", "use_json", is_flag=True, help="Force JSON output.")
 @click.option(
@@ -177,6 +186,22 @@ def cli(
     ctx.obj["profile"] = profile
     ctx.obj["debug"] = debug
     ctx.obj["timeout"] = timeout
+
+
+_SHELLS = ("bash", "zsh", "fish")
+_PROG = "splunkctl"
+_COMP_VAR = f"_{_PROG.upper()}_COMPLETE"
+
+
+@cli.command("completion")
+@click.argument("shell", type=click.Choice(_SHELLS))
+def completion_cmd(shell: str) -> None:
+    """Print shell completion script for bash, zsh, or fish."""
+    comp_cls = get_completion_class(shell)
+    if comp_cls is None:
+        raise click.ClickException(f"Unsupported shell: {shell}")
+    comp = comp_cls(cli, {}, _PROG, _COMP_VAR)
+    click.echo(comp.source())
 
 
 cli.add_command(alerts_group)

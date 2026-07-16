@@ -1,4 +1,4 @@
-# ES notable-event triage
+# ES notable-event triage and correlation-search admin
 
 The SOC daily loop: see what's queued, pull the full detail on one
 notable, then assign, set status/urgency/disposition, or leave a comment
@@ -6,6 +6,11 @@ notable, then assign, set status/urgency/disposition, or leave a comment
 `search` command (`index=notable`); this group adds the incident-review
 mutation ES's `notable_update` endpoint provides, plus normalized reads
 that don't require hand-writing SPL.
+
+The `correlations` subgroup adds admin operations over correlation
+searches — the saved searches scoped to the ES app that generate
+notables. List, inspect, enable, and disable them without touching
+Splunk Web.
 
 > **Requires Enterprise Security.** Every `es` subcommand checks for the
 > `SplunkEnterpriseSecuritySuite` app first (one cheap entity fetch, not a
@@ -132,10 +137,54 @@ configured dispositions (Incident Review > disposition dropdown, or
 | `--comment` | `update` | Analyst comment |
 | `--yes` | `update` | Apply the mutation (skip dry-run preview) |
 
+## Correlation searches
+
+Correlation searches are saved searches scoped to the
+`SplunkEnterpriseSecuritySuite` app. They generate notable events when
+their SPL triggers. The `es correlations` subgroup provides admin
+operations over them using `service.saved_searches` with ES app scoping.
+
+```bash
+splunkctl es correlations list                              # all correlation searches
+splunkctl es correlations list --enabled                    # only enabled
+splunkctl es correlations list --disabled                   # only disabled
+splunkctl es correlations list --security-domain access     # filter by domain
+splunkctl es correlations get "Brute Force Access Behavior" # full detail
+splunkctl es correlations enable "Brute Force" --yes        # enable one
+splunkctl es correlations enable "Rule A" "Rule B" --yes    # enable multiple
+splunkctl es correlations disable "DNS Exfil" --yes         # disable one
+```
+
+### Correlation-search fields
+
+The summary view (`list`) surfaces: `name`, `security_domain`,
+`severity`, `enabled`, `cron_schedule`, `next_scheduled_time`. The
+detail view (`get`) adds: `search`, `description`, `is_scheduled`,
+`actions`, `dispatch.earliest_time`, `dispatch.latest_time`, `app`,
+`owner`, `sharing`.
+
+### Enable / disable
+
+Both `enable` and `disable` are guarded mutations — they preview in
+dry-run mode and require `--yes` to apply. They accept one or more
+correlation search names:
+
+```bash
+splunkctl es correlations enable "Rule A" "Rule B" --yes
+splunkctl es correlations disable "Rule A" --yes
+```
+
 ## Implementation notes
 
-`list`/`get` run over the existing oneshot-search infrastructure against
-`index=notable` (no SDK entity class — ES ships no REST collection for
-notables, just the raw index and the `notable_update` action endpoint).
-`update` POSTs to `/services/notable_update` through the SDK's `service.post`
-via `client.py`'s existing request plumbing — no new HTTP stack.
+`list`/`get` (notables) run over the existing oneshot-search
+infrastructure against `index=notable` (no SDK entity class — ES ships
+no REST collection for notables, just the raw index and the
+`notable_update` action endpoint). `update` POSTs to
+`/services/notable_update` through the SDK's `service.post` via
+`client.py`'s existing request plumbing — no new HTTP stack.
+
+Correlation searches use `service.saved_searches` with
+`app=SplunkEnterpriseSecuritySuite` and `owner="-"` to fetch across all
+owners. The `security_domain` is read from the
+`action.correlationsearch.label` content key (the standard ES field for
+this), falling back to `security_domain` if absent.

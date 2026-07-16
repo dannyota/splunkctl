@@ -1,6 +1,6 @@
 # splunkctl — full documentation
 
-> Open-source MCP server and CLI for Splunk Enterprise SIEM and Splunk SOAR. Give AI agents access to 229 Splunk commands via Model Context Protocol, or operate your instances as code from the terminal.
+> Open-source MCP server and CLI for Splunk Enterprise SIEM and Splunk SOAR. Give AI agents access to 238 Splunk commands via Model Context Protocol, or operate your instances as code from the terminal.
 
 ---
 
@@ -13,7 +13,7 @@ server to give AI agents — Claude Code, Claude Desktop, Cursor, Windsurf, or
 any MCP client — direct access to your Splunk Enterprise SIEM and Splunk SOAR
 instances.
 
-The server uses **dynamic tool loading**: instead of exposing all 229 tools
+The server uses **dynamic tool loading**: instead of exposing all 238 tools
 upfront, it starts with 5 meta-tools and loads group-specific typed tools on
 demand. This keeps the agent's context window small while covering every
 command.
@@ -177,6 +177,31 @@ pip install -e .
 splunkctl --version
 splunkctl doctor           # check connection + auth + permissions
 ```
+
+## Shell completion
+
+Tab completion for commands, options, and arguments. Add the eval line to
+your shell profile:
+
+**Bash** (`~/.bashrc`):
+
+```bash
+eval "$(splunkctl completion bash)"
+```
+
+**Zsh** (`~/.zshrc`):
+
+```bash
+eval "$(splunkctl completion zsh)"
+```
+
+**Fish** (`~/.config/fish/config.fish`):
+
+```fish
+splunkctl completion fish | source
+```
+
+Restart your shell (or `source` the profile) to activate.
 
 ## Requirements
 
@@ -511,6 +536,8 @@ splunkctl rules delete <name> --yes
 splunkctl rules enable <name> --yes
 splunkctl rules disable <name> --yes
 splunkctl rules history <name>            # run history
+splunkctl rules schedule                  # scheduler health view
+splunkctl rules list --scheduled          # list only scheduled rules
 ```
 
 ### Alert-action flags
@@ -562,6 +589,22 @@ scope to a single user's rules:
 splunkctl rules list --app Splunk_Security_Essentials
 splunkctl rules get 'Generate MITRE Detections Lookup' --app Splunk_Security_Essentials
 ```
+
+## Scheduler health
+
+`rules schedule` shows scheduling details for all scheduled saved searches
+-- cron expression, next run time, dispatch window, and enabled state.
+
+```bash
+splunkctl rules schedule                  # table: name, cron, next_run, window, enabled
+splunkctl rules schedule --json           # full detail including qualifiedSearch
+splunkctl rules schedule --app search     # scoped to an app
+splunkctl rules list --scheduled          # list view filtered to scheduled only
+```
+
+JSON output includes `cron_schedule`, `next_scheduled_time`,
+`dispatch.earliest_time`, `dispatch.latest_time`, `is_scheduled`,
+`disabled`, and `qualifiedSearch`.
 
 ## Detection-as-code workflow
 
@@ -1745,7 +1788,7 @@ drift-classification helpers) -- split across files to stay under the
 
 ---
 
-# ES notable-event triage
+# ES notable-event triage and correlation-search admin
 
 The SOC daily loop: see what's queued, pull the full detail on one
 notable, then assign, set status/urgency/disposition, or leave a comment
@@ -1753,6 +1796,11 @@ notable, then assign, set status/urgency/disposition, or leave a comment
 `search` command (`index=notable`); this group adds the incident-review
 mutation ES's `notable_update` endpoint provides, plus normalized reads
 that don't require hand-writing SPL.
+
+The `correlations` subgroup adds admin operations over correlation
+searches — the saved searches scoped to the ES app that generate
+notables. List, inspect, enable, and disable them without touching
+Splunk Web.
 
 > **Requires Enterprise Security.** Every `es` subcommand checks for the
 > `SplunkEnterpriseSecuritySuite` app first (one cheap entity fetch, not a
@@ -1879,13 +1927,57 @@ configured dispositions (Incident Review > disposition dropdown, or
 | `--comment` | `update` | Analyst comment |
 | `--yes` | `update` | Apply the mutation (skip dry-run preview) |
 
+## Correlation searches
+
+Correlation searches are saved searches scoped to the
+`SplunkEnterpriseSecuritySuite` app. They generate notable events when
+their SPL triggers. The `es correlations` subgroup provides admin
+operations over them using `service.saved_searches` with ES app scoping.
+
+```bash
+splunkctl es correlations list                              # all correlation searches
+splunkctl es correlations list --enabled                    # only enabled
+splunkctl es correlations list --disabled                   # only disabled
+splunkctl es correlations list --security-domain access     # filter by domain
+splunkctl es correlations get "Brute Force Access Behavior" # full detail
+splunkctl es correlations enable "Brute Force" --yes        # enable one
+splunkctl es correlations enable "Rule A" "Rule B" --yes    # enable multiple
+splunkctl es correlations disable "DNS Exfil" --yes         # disable one
+```
+
+### Correlation-search fields
+
+The summary view (`list`) surfaces: `name`, `security_domain`,
+`severity`, `enabled`, `cron_schedule`, `next_scheduled_time`. The
+detail view (`get`) adds: `search`, `description`, `is_scheduled`,
+`actions`, `dispatch.earliest_time`, `dispatch.latest_time`, `app`,
+`owner`, `sharing`.
+
+### Enable / disable
+
+Both `enable` and `disable` are guarded mutations — they preview in
+dry-run mode and require `--yes` to apply. They accept one or more
+correlation search names:
+
+```bash
+splunkctl es correlations enable "Rule A" "Rule B" --yes
+splunkctl es correlations disable "Rule A" --yes
+```
+
 ## Implementation notes
 
-`list`/`get` run over the existing oneshot-search infrastructure against
-`index=notable` (no SDK entity class — ES ships no REST collection for
-notables, just the raw index and the `notable_update` action endpoint).
-`update` POSTs to `/services/notable_update` through the SDK's `service.post`
-via `client.py`'s existing request plumbing — no new HTTP stack.
+`list`/`get` (notables) run over the existing oneshot-search
+infrastructure against `index=notable` (no SDK entity class — ES ships
+no REST collection for notables, just the raw index and the
+`notable_update` action endpoint). `update` POSTs to
+`/services/notable_update` through the SDK's `service.post` via
+`client.py`'s existing request plumbing — no new HTTP stack.
+
+Correlation searches use `service.saved_searches` with
+`app=SplunkEnterpriseSecuritySuite` and `owner="-"` to fetch across all
+owners. The `security_domain` is read from the
+`action.correlationsearch.label` content key (the standard ES field for
+this), falling back to `security_domain` if absent.
 
 ---
 
@@ -2342,6 +2434,28 @@ splunkctl server kvstore     # status, port, version, storage engine
 
 Reports an explicit status word (`ready`, `failed`, `starting`,
 `unknown`) so a down KV store is never mistaken for a healthy result.
+
+## Auth Tokens
+
+Manage Splunk authentication tokens (Splunk 7.3+). Tokens are an
+alternative to password-based auth for service accounts and automation.
+
+```bash
+splunkctl server tokens list                      # list all tokens
+splunkctl server tokens list --user admin          # filter by user
+splunkctl server tokens create --user admin --yes  # create a token
+splunkctl server tokens create --user svc \
+    --audience my-app --expires-in 30 --yes        # with audience + expiry
+splunkctl server tokens revoke <token-id> --yes    # revoke a token
+```
+
+`list` shows: `id`, `user`, `audience`, `status`, `last_used`, `expires`.
+Tokens that never expire show `never`; unused tokens show `last_used: never`.
+
+`create` returns the token value **once** -- save it immediately. The
+token cannot be retrieved after creation. Requires `--yes` (guarded).
+
+`revoke` permanently deletes a token by its ID. Requires `--yes` (guarded).
 
 ## Health Report
 
@@ -4287,7 +4401,7 @@ the standard dry-run/`--yes` gate; everything else is a read.
 | [config](config.md) | 4 | Manage splunkctl configuration. |
 | [dashboards](dashboards.md) | 7 | Dashboard management. |
 | [datamodels](datamodels.md) | 4 | CIM/tstats data models — definitions and acceleration health. |
-| [es](es.md) | 3 | Enterprise Security — notable-event triage (requires ES installed). |
+| [es](es.md) | 7 | Enterprise Security — notable-event triage (requires ES installed). |
 | [eventtypes](eventtypes.md) | 2 | Event classification rules (eventtypes.conf) — read-only. |
 | [hec](hec.md) | 8 | Manage HTTP Event Collector tokens. |
 | [indexes](indexes.md) | 7 | Manage Splunk indexes. |
@@ -4297,14 +4411,14 @@ the standard dry-run/`--yes` gate; everything else is a read.
 | [macros](macros.md) | 3 | Reusable SPL macro fragments (macros.conf). |
 | [mcp](mcp.md) | 2 | Built-in MCP server for agent integration. |
 | [parsers](parsers.md) | 11 | Manage source types and field extractions. |
-| [rules](rules.md) | 12 | Manage detection rules (saved searches). |
+| [rules](rules.md) | 13 | Manage detection rules (saved searches). |
 | [search](search.md) | 7 | Search and job management. |
-| [server](server.md) | 8 | Server operations — messages, license, KV store, topology health. |
+| [server](server.md) | 11 | Server operations — messages, license, KV store, topology health. |
 | [soar](soar.md) | 98 | Splunk SOAR operations — platform reads, containers, playbooks. |
 | [state](state.md) | 3 | Unified config-as-code across rules, parsers, macros, lookups, dashboards. |
 | [tags](tags.md) | 2 | CIM/eventtype tag assignments (tags.conf) — read-only. |
 | [users](users.md) | 10 | Manage users and roles. |
-| [global](global.md) | 3 | Top-level commands |
+| [global](global.md) | 4 | Top-level commands |
 
 ---
 
@@ -4500,7 +4614,7 @@ that are not SDK list surfaces (e.g. `audit rbac`) are exempt by design.
 
 | Feature | Status | Notes |
 |---|---|---|
-| MCP server | ✅ built | 5 meta-tools (help/usage/focus/unfocus/run), 229 auto-generated typed tools (array schemas for variadic/repeated params, explicit `yes` on guarded schemas, additionalProperties:false), subgroup-granular focus for the nested soar tree, 33 guide resources, protocol-level test suite |
+| MCP server | ✅ built | 5 meta-tools (help/usage/focus/unfocus/run), 238 auto-generated typed tools (array schemas for variadic/repeated params, explicit `yes` on guarded schemas, additionalProperties:false), subgroup-granular focus for the nested soar tree, 33 guide resources, protocol-level test suite |
 | `mcp install` | ✅ built | Write `.mcp.json` for Claude Code registration |
 | `commands --json` | ✅ built | Guard markers, global options, note field |
 | `doctor --strict` | ✅ built | CI-friendly health gate |

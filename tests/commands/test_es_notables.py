@@ -1,4 +1,4 @@
-"""Tests for the es (Enterprise Security notable triage) commands."""
+"""Tests for the es notables (notable triage) commands."""
 
 import json
 from unittest.mock import MagicMock, patch

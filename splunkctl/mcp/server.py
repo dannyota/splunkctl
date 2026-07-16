@@ -15,6 +15,14 @@ from mcp.types import ToolAnnotations
 from pydantic import ConfigDict
 
 from splunkctl import __version__
+from splunkctl.mcp.output_cap import (
+    MAX_OUTPUT_BYTES,
+    SUBPROCESS_TIMEOUT,
+    spill_output,
+    sweep_spill_dir,
+    timeout_message,
+    truncate_utf8,
+)
 from splunkctl.mcp.resources import load_guides
 from splunkctl.mcp.tools import (
     SKIP_PARAMS,
@@ -63,20 +71,26 @@ def _decode_stream(data: bytes) -> str:
 def _exec_cli(args: list[str]) -> str:
     """Run ``splunkctl <args>`` as a subprocess and return output."""
     cmd = [sys.executable, "-m", "splunkctl", *args, *_FORCE_FLAGS]
-    result = subprocess.run(  # noqa: S603
-        cmd,
-        capture_output=True,
-        timeout=120,
-    )
+    try:
+        result = subprocess.run(  # noqa: S603
+            cmd,
+            capture_output=True,
+            timeout=SUBPROCESS_TIMEOUT,
+        )
+    except subprocess.TimeoutExpired:
+        return timeout_message()
     out = _decode_stream(result.stdout).strip()
     err = _decode_stream(result.stderr).strip()
     if result.returncode != 0:
-        return err or out or f"Command failed with exit code {result.returncode}"
+        text = err or out or f"Command failed with exit code {result.returncode}"
+        return truncate_utf8(text, MAX_OUTPUT_BYTES)
     if err and out:
-        # stderr carries the guard banner / info lines — they precede
-        # the payload semantically, so keep them first.
-        return f"{err}\n\n{out}"
-    return out or err or "(no output)"
+        text = f"{err}\n\n{out}"
+    else:
+        text = out or err or "(no output)"
+    if len(text.encode()) > MAX_OUTPUT_BYTES:
+        return spill_output(text)
+    return text
 
 
 def _split_command(raw: str) -> list[str]:
@@ -399,6 +413,12 @@ def create_server() -> FastMCP:
             )
         return result
 
+    # --- Prompts ---
+
+    from splunkctl.mcp.prompts import register_prompts
+
+    register_prompts(mcp)
+
     # --- Guide resources ---
 
     for guide in load_guides():
@@ -472,5 +492,6 @@ def _register_tool(mcp: FastMCP, entry: ToolEntry) -> None:
 
 def run_server() -> None:
     """Create and run the MCP server on stdio."""
+    sweep_spill_dir()
     server = create_server()
     server.run(transport="stdio")

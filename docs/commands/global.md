@@ -12,6 +12,14 @@ Print the command tree as JSON (for agent discovery).
 splunkctl commands [OPTIONS]
 ```
 
+## completion
+
+Print shell completion script for bash, zsh, or fish.
+
+```text
+splunkctl completion [OPTIONS] {bash|zsh|fish}
+```
+
 ## doctor
 
 Check connection, auth, server health, and user permissions.

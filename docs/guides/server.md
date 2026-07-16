@@ -29,6 +29,28 @@ splunkctl server kvstore     # status, port, version, storage engine
 Reports an explicit status word (`ready`, `failed`, `starting`,
 `unknown`) so a down KV store is never mistaken for a healthy result.
 
+## Auth Tokens
+
+Manage Splunk authentication tokens (Splunk 7.3+). Tokens are an
+alternative to password-based auth for service accounts and automation.
+
+```bash
+splunkctl server tokens list                      # list all tokens
+splunkctl server tokens list --user admin          # filter by user
+splunkctl server tokens create --user admin --yes  # create a token
+splunkctl server tokens create --user svc \
+    --audience my-app --expires-in 30 --yes        # with audience + expiry
+splunkctl server tokens revoke <token-id> --yes    # revoke a token
+```
+
+`list` shows: `id`, `user`, `audience`, `status`, `last_used`, `expires`.
+Tokens that never expire show `never`; unused tokens show `last_used: never`.
+
+`create` returns the token value **once** -- save it immediately. The
+token cannot be retrieved after creation. Requires `--yes` (guarded).
+
+`revoke` permanently deletes a token by its ID. Requires `--yes` (guarded).
+
 ## Health Report
 
 ```bash

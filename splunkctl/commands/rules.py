@@ -10,6 +10,7 @@ from splunkctl.client import get_client
 from splunkctl.commands import common
 from splunkctl.commands.common import read_results, spl_quote
 from splunkctl.commands.rules_io import export_rules, import_rules
+from splunkctl.commands.rules_schedule import schedule_cmd
 
 
 def _resolve_rule(
@@ -119,6 +120,7 @@ def rules_group() -> None:
 
 rules_group.add_command(export_rules)
 rules_group.add_command(import_rules)
+rules_group.add_command(schedule_cmd)
 
 
 @rules_group.command("list")
@@ -133,6 +135,12 @@ rules_group.add_command(import_rules)
     default=None,
     help="Only saved searches owned by this user (default: current namespace).",
 )
+@click.option(
+    "--scheduled",
+    is_flag=True,
+    default=False,
+    help="Show only scheduled saved searches.",
+)
 @common.list_options
 @click.pass_context
 def list_rules(
@@ -140,6 +148,7 @@ def list_rules(
     *,
     app: str | None,
     owner: str | None,
+    scheduled: bool,
     limit: int | None,
     offset: int,
     name_filter: str | None,
@@ -158,6 +167,8 @@ def list_rules(
         offset=offset,
         name_filter=name_filter,
     )
+    if scheduled:
+        items = [ss for ss in items if str(ss.content.get("is_scheduled", "0")) == "1"]
     rows = [_summarize(ss) for ss in items]
     output.render(ctx, rows, empty="No saved searches found.")
 

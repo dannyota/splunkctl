@@ -1,4 +1,4 @@
-"""Enterprise Security — notable-event triage.
+"""Enterprise Security — notable-event triage and correlation-search admin.
 
 Feature-detected: every subcommand checks for the ``SplunkEnterpriseSecuritySuite``
 app before acting, since ES ships as an app on top of core Splunk Enterprise
@@ -237,3 +237,181 @@ def update_notables(
         return
     svc.post("/services/notable_update", **payload)
     output.info(f"Updated {len(event_ids)} notable(s).")
+
+
+# --- correlation searches ---
+
+_CORR_SUMMARY_FIELDS = (
+    "security_domain",
+    "severity",
+    "cron_schedule",
+    "next_scheduled_time",
+)
+
+
+def _corr_summarize(ss: Any) -> dict[str, Any]:
+    """Build a summary row for a correlation search."""
+    c: dict[str, Any] = ss.content
+    return {
+        "name": ss.name,
+        "security_domain": c.get("action.correlationsearch.label", "")
+        or c.get("security_domain", ""),
+        "severity": c.get("alert.severity", ""),
+        "enabled": "0" if c.get("disabled", "0") == "1" else "1",
+        "cron_schedule": c.get("cron_schedule", ""),
+        "next_scheduled_time": c.get("next_scheduled_time", ""),
+    }
+
+
+def _corr_detail(ss: Any) -> dict[str, Any]:
+    """Build a full detail dict for a correlation search."""
+    c: dict[str, Any] = ss.content
+    acl: dict[str, Any] = ss.access
+    row: dict[str, Any] = {
+        "name": ss.name,
+        "app": acl.get("app", ""),
+        "owner": acl.get("owner", ""),
+        "sharing": acl.get("sharing", ""),
+        "security_domain": c.get("action.correlationsearch.label", "")
+        or c.get("security_domain", ""),
+        "severity": c.get("alert.severity", ""),
+        "enabled": "0" if c.get("disabled", "0") == "1" else "1",
+        "disabled": c.get("disabled", "0"),
+        "search": c.get("search", ""),
+        "description": c.get("description", ""),
+        "cron_schedule": c.get("cron_schedule", ""),
+        "is_scheduled": c.get("is_scheduled", "0"),
+        "next_scheduled_time": c.get("next_scheduled_time", ""),
+        "actions": c.get("actions", ""),
+        "dispatch.earliest_time": c.get("dispatch.earliest_time", ""),
+        "dispatch.latest_time": c.get("dispatch.latest_time", ""),
+    }
+    return row
+
+
+def _resolve_corr(
+    ctx: click.Context,
+    svc: Any,
+    name: str,
+) -> Any | None:
+    """Fetch a correlation search (saved search scoped to the ES app).
+
+    Returns ``None`` on not-found (after printing the error envelope).
+    """
+    matches = svc.saved_searches.list(
+        search=f"name={spl_quote(name)}",
+        count=10,
+        app=_ES_APP,
+        owner="-",
+    )
+    for m in matches:
+        if m.name == name:
+            return m
+    output.error(
+        f"Correlation search not found: {name}",
+        kind="not_found",
+    )
+    ctx.exit(1)
+    return None
+
+
+@es_group.group("correlations")
+def correlations_group() -> None:
+    """Manage correlation searches (ES-scoped saved searches)."""
+
+
+@correlations_group.command("list")
+@click.option(
+    "--enabled/--disabled",
+    "enabled_filter",
+    default=None,
+    help="Show only enabled or disabled correlation searches.",
+)
+@click.option(
+    "--security-domain",
+    default=None,
+    help="Filter by security domain (e.g. access, endpoint, network).",
+)
+@click.pass_context
+def corr_list(
+    ctx: click.Context,
+    enabled_filter: bool | None,
+    security_domain: str | None,
+) -> None:
+    """List correlation searches with ES-specific fields."""
+    svc = _require_es(ctx)
+    if svc is None:
+        return
+
+    items = svc.saved_searches.list(app=_ES_APP, owner="-")
+    rows = [_corr_summarize(ss) for ss in items]
+
+    if enabled_filter is not None:
+        want = "1" if enabled_filter else "0"
+        rows = [r for r in rows if r["enabled"] == want]
+    if security_domain is not None:
+        needle = security_domain.lower()
+        rows = [r for r in rows if needle in r["security_domain"].lower()]
+
+    output.render(ctx, rows, empty="No correlation searches found.")
+
+
+@correlations_group.command("get")
+@click.argument("name")
+@click.pass_context
+def corr_get(ctx: click.Context, name: str) -> None:
+    """Get full detail for one correlation search."""
+    svc = _require_es(ctx)
+    if svc is None:
+        return
+
+    ss = _resolve_corr(ctx, svc, name)
+    if ss is None:
+        return
+    output.render(ctx, _corr_detail(ss))
+
+
+@correlations_group.command("enable")
+@guard.guarded
+@click.argument("names", nargs=-1, required=True)
+@click.pass_context
+def corr_enable(ctx: click.Context, names: tuple[str, ...]) -> None:
+    """Enable one or more correlation searches."""
+    detail = "  names: " + ", ".join(names)
+    if not guard.check(
+        ctx, f"Enable {len(names)} correlation search(es)", details=detail
+    ):
+        return
+
+    svc = _require_es(ctx)
+    if svc is None:
+        return
+    for name in names:
+        ss = _resolve_corr(ctx, svc, name)
+        if ss is None:
+            return
+        ss.update(disabled="0", is_scheduled="1").refresh()
+    output.info(f"Enabled {len(names)} correlation search(es).")
+
+
+@correlations_group.command("disable")
+@guard.guarded
+@click.argument("names", nargs=-1, required=True)
+@click.pass_context
+def corr_disable(ctx: click.Context, names: tuple[str, ...]) -> None:
+    """Disable one or more correlation searches."""
+    detail = "  names: " + ", ".join(names)
+    if not guard.check(
+        ctx, f"Disable {len(names)} correlation search(es)", details=detail
+    ):
+        return
+
+    svc = _require_es(ctx)
+    if svc is None:
+        return
+    for name in names:
+        ss = _resolve_corr(ctx, svc, name)
+        if ss is None:
+            return
+        ss.update(disabled="1").refresh()
+    output.info(f"Disabled {len(names)} correlation search(es).")

@@ -151,6 +151,25 @@ splunkctl rules list [OPTIONS]
 |---|---|---|---|
 | `--app` | text | - | Only saved searches in this app (default: current namespace, which may miss app-private rules — pass --app to see them). |
 | `--owner` | text | - | Only saved searches owned by this user (default: current namespace). |
+| `--scheduled` | flag | false | Show only scheduled saved searches. |
+| `--limit` | integer range | - | Return at most N entries (default: all). |
+| `--offset` | integer range | 0 | Skip the first N entries. |
+| `--filter` | text | - | Case-insensitive name substring; --limit/--offset then apply to the filtered set. |
+
+## rules schedule
+
+Show scheduling info for saved searches (scheduler health).
+
+```text
+splunkctl rules schedule [OPTIONS]
+```
+
+**Flags**
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--app` | text | - | Only saved searches in this app. |
+| `--owner` | text | - | Only saved searches owned by this user. |
 | `--limit` | integer range | - | Return at most N entries (default: all). |
 | `--offset` | integer range | 0 | Skip the first N entries. |
 | `--filter` | text | - | Case-insensitive name substring; --limit/--offset then apply to the filtered set. |

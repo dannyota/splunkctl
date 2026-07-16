@@ -107,3 +107,45 @@ splunkctl server shcluster [OPTIONS]
 ```text
 On a non-SHC instance, reports mode=disabled and exits 0.
 ```
+
+## server tokens create
+
+Create an auth token. The token value is shown ONCE.
+
+> Guarded mutation — dry-run by default; apply with `--yes`.
+
+```text
+splunkctl server tokens create [OPTIONS]
+```
+
+**Flags**
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--user` | text | - | Username to issue the token for. [required] |
+| `--audience` | text | - | Token audience claim. |
+| `--expires-in` | integer | - | Token lifetime in days (omit for non-expiring). |
+
+## server tokens list
+
+List auth tokens, optionally filtered by user.
+
+```text
+splunkctl server tokens list [OPTIONS]
+```
+
+**Flags**
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--user` | text | - | Filter by username. |
+
+## server tokens revoke
+
+Revoke (delete) an auth token by its ID.
+
+> Guarded mutation — dry-run by default; apply with `--yes`.
+
+```text
+splunkctl server tokens revoke [OPTIONS] TOKEN_ID
+```

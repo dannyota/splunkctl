@@ -23,6 +23,8 @@ splunkctl rules delete <name> --yes
 splunkctl rules enable <name> --yes
 splunkctl rules disable <name> --yes
 splunkctl rules history <name>            # run history
+splunkctl rules schedule                  # scheduler health view
+splunkctl rules list --scheduled          # list only scheduled rules
 ```
 
 ### Alert-action flags
@@ -74,6 +76,22 @@ scope to a single user's rules:
 splunkctl rules list --app Splunk_Security_Essentials
 splunkctl rules get 'Generate MITRE Detections Lookup' --app Splunk_Security_Essentials
 ```
+
+## Scheduler health
+
+`rules schedule` shows scheduling details for all scheduled saved searches
+-- cron expression, next run time, dispatch window, and enabled state.
+
+```bash
+splunkctl rules schedule                  # table: name, cron, next_run, window, enabled
+splunkctl rules schedule --json           # full detail including qualifiedSearch
+splunkctl rules schedule --app search     # scoped to an app
+splunkctl rules list --scheduled          # list view filtered to scheduled only
+```
+
+JSON output includes `cron_schedule`, `next_scheduled_time`,
+`dispatch.earliest_time`, `dispatch.latest_time`, `is_scheduled`,
+`disabled`, and `qualifiedSearch`.
 
 ## Detection-as-code workflow
 
