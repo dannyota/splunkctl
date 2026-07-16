@@ -121,8 +121,14 @@ def test_dashboards_has_no_apply_entrypoint() -> None:
 
 
 def test_types_registry_order() -> None:
-    assert state_io.TYPES == ("rules", "parsers", "macros", "lookups", "dashboards")
-    assert state_io.APPLICABLE_TYPES == ("rules", "parsers", "macros", "lookups")
+    # Core SIEM types always come first in canonical order.
+    siem_types = ("rules", "parsers", "macros", "lookups", "dashboards")
+    assert state_io.TYPES[:5] == siem_types
+    # soar-playbooks is registered and applicable.
+    assert "soar-playbooks" in state_io.TYPES
+    assert "soar-playbooks" in state_io.APPLICABLE_TYPES
+    # dashboards remain pull+diff only.
+    assert "dashboards" not in state_io.APPLICABLE_TYPES
 
 
 def test_write_manifest_no_wall_clock(tmp_path: Path) -> None:

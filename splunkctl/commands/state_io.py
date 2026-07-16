@@ -48,6 +48,19 @@ from splunkctl.commands.state_io_confs import (
     pull_macros,
     pull_parsers,
 )
+from splunkctl.commands.state_io_soar import (
+    apply_soar_lists,
+    apply_soar_playbooks,
+    diff_soar_lists,
+    diff_soar_playbooks,
+    pull_soar_lists,
+    pull_soar_playbooks,
+)
+from splunkctl.commands.state_io_soar_assets import (
+    apply_soar_assets,
+    diff_soar_assets,
+    pull_soar_assets,
+)
 from splunkctl.commands.state_types import (
     Change,
     _doc_app,
@@ -58,9 +71,29 @@ from splunkctl.commands.state_types import ChangeRecord as ChangeRecord
 from splunkctl.commands.state_types import DriftEntry as DriftEntry
 from splunkctl.commands.state_types import change_record as change_record
 
-TYPES: tuple[str, ...] = ("rules", "parsers", "macros", "lookups", "dashboards")
+TYPES: tuple[str, ...] = (
+    "rules",
+    "parsers",
+    "macros",
+    "lookups",
+    "dashboards",
+    "soar-playbooks",
+    "soar-assets",
+    "soar-lists",
+)
 # Types `state push` can actually apply -- dashboards is pull+diff only.
-APPLICABLE_TYPES: tuple[str, ...] = ("rules", "parsers", "macros", "lookups")
+APPLICABLE_TYPES: tuple[str, ...] = (
+    "rules",
+    "parsers",
+    "macros",
+    "lookups",
+    "soar-playbooks",
+    "soar-assets",
+    "soar-lists",
+)
+
+# Types that require a SOAR client instead of the SIEM (Splunk) client.
+SOAR_TYPES: frozenset[str] = frozenset({"soar-playbooks", "soar-assets", "soar-lists"})
 
 
 # --------------------------------------------------------------------------
@@ -157,6 +190,9 @@ PULL_FNS: dict[str, Callable[[Any, Path, str | None], int]] = {
     "macros": pull_macros,
     "lookups": pull_lookups,
     "dashboards": pull_dashboards,
+    "soar-playbooks": pull_soar_playbooks,
+    "soar-lists": pull_soar_lists,
+    "soar-assets": pull_soar_assets,
 }
 
 DIFF_FNS: dict[str, Callable[[Any, Path, str | None], list[DriftEntry]]] = {
@@ -165,6 +201,9 @@ DIFF_FNS: dict[str, Callable[[Any, Path, str | None], list[DriftEntry]]] = {
     "macros": diff_macros,
     "lookups": diff_lookups,
     "dashboards": diff_dashboards,
+    "soar-playbooks": diff_soar_playbooks,
+    "soar-lists": diff_soar_lists,
+    "soar-assets": diff_soar_assets,
 }
 
 # dashboards intentionally absent -- no import/apply path exists (brief SCOPE 1).
@@ -173,6 +212,9 @@ APPLY_FNS: dict[str, Callable[[Any, Path, str | None], list[ChangeRecord]]] = {
     "parsers": apply_parsers,
     "macros": apply_macros,
     "lookups": apply_lookups,
+    "soar-playbooks": apply_soar_playbooks,
+    "soar-lists": apply_soar_lists,
+    "soar-assets": apply_soar_assets,
 }
 
 

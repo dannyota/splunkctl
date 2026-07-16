@@ -25,7 +25,7 @@ One row per object: ``{type, name, change, fields?}`` where
 |---|---|---|---|
 | `--dir` | directory | - | Directory previously written by `state pull`. [required] |
 | `--app` | text | - | Only objects in this app (default: all apps). |
-| `--types` | text | - | Comma-separated object types to include (default: all — rules, parsers, macros, lookups, dashboards). |
+| `--types` | text | - | Comma-separated object types to include (default: all — rules, parsers, macros, lookups, dashboards, soar-playbooks, soar-assets, soar-lists). |
 
 ## state pull
 
@@ -48,7 +48,7 @@ per-type object counts). Read-only against the instance.
 |---|---|---|---|
 | `--dir` | directory | - | Target directory — owned by this snapshot (pull overwrites the pulled types' files). [required] |
 | `--app` | text | - | Only objects in this app (default: all apps). |
-| `--types` | text | - | Comma-separated object types to include (default: all — rules, parsers, macros, lookups, dashboards). |
+| `--types` | text | - | Comma-separated object types to include (default: all — rules, parsers, macros, lookups, dashboards, soar-playbooks, soar-assets, soar-lists). |
 
 ## state push
 
@@ -77,5 +77,5 @@ approval, the latter as the change evidence.
 |---|---|---|---|
 | `--dir` | directory | - | Directory previously written by `state pull`. [required] |
 | `--app` | text | - | Only objects in this app (default: all apps). |
-| `--types` | text | - | Comma-separated object types to include (default: all — rules, parsers, macros, lookups, dashboards). |
+| `--types` | text | - | Comma-separated object types to include (default: all — rules, parsers, macros, lookups, dashboards, soar-playbooks, soar-assets, soar-lists). |
 | `--report` | file | - | Write the before→after change-ticket evidence artifact (JSON). |

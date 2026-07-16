@@ -1729,6 +1729,9 @@ none, for all three) when lookups or dashboards are in play.
 | `macros` | explicit-key conf read | key-level | `conf_ops.set_keys` |
 | `lookups` | CSV download | content hash | CSV upload/update |
 | `dashboards` | XML export | content hash | **not supported** -- no import path |
+| `soar-playbooks` | tgz export | content hash | tgz import |
+| `soar-lists` | JSON content export | content hash | create/full-replace |
+| `soar-assets` | JSON config export | field-level | fetch-merge-post |
 
 Every read/diff/apply path reuses the existing per-type machinery
 (`rules_io`, `parsers_io`, `conf_ops`, `client.upload_lookup`) -- `state`
@@ -1848,6 +1851,69 @@ was (or would be) actually created/updated. `removed` drift and
 dashboard apply-unsupported drift are surfaced as console notes, not
 as report entries, since neither is ever applied.
 
+## SOAR types
+
+Three SOAR types extend the state workflow to Splunk SOAR: playbooks,
+custom lists, and assets. They require a configured SOAR profile
+(`splunkctl config init --soar` or `SOAR_HOST` env var). If SOAR types
+are requested without a configured SOAR host, the CLI exits with a
+clear error. Mixed SIEM + SOAR types in a single command work -- the
+orchestrator creates each client lazily and routes each type to the
+correct backend.
+
+```bash
+# SOAR-only pulls
+splunkctl state pull --dir ./snap --types soar-playbooks
+splunkctl state pull --dir ./snap --types soar-lists,soar-assets
+
+# Mixed SIEM + SOAR
+splunkctl state pull --dir ./snap --types rules,soar-playbooks
+
+# Diff and push work identically
+splunkctl state diff --dir ./snap --types soar-lists
+splunkctl state push --dir ./snap --types soar-assets --yes
+```
+
+### The pulled tree (SOAR types)
+
+```
+snapshot/
+  soar-playbooks/
+    index.json                  # id/name/filename map for diff/push
+    local__detect_malware.tgz   # one tgz per playbook (slash -> __)
+  soar-lists/
+    blocklist.json              # JSON array-of-arrays content
+  soar-assets/
+    firewall.json               # asset config (passwords masked)
+```
+
+### soar-playbooks
+
+Playbooks are opaque tgz archives. Pull exports each via the SOAR REST
+API; diff compares content hashes (SHA-256 of the tgz bytes); push
+imports via `POST /rest/import_playbook` with the tgz base64-encoded.
+Filenames replace `/` with `__` (SOAR playbook names are scoped as
+`<dir>/<module>`).
+
+### soar-lists
+
+Custom lists (decided lists) are JSON arrays-of-arrays. Pull downloads
+the content; diff compares content hashes; push creates new lists or
+full-replaces existing ones via the SOAR REST API.
+
+### soar-assets
+
+Assets are JSON config blobs. Pull exports each asset's configuration
+with password-type fields masked as `****` so secrets never land on
+disk. Diff does field-level comparison, ignoring masked fields to avoid
+false-positive drift. Push uses fetch-merge-post semantics (same as
+`soar assets update`): masked values are skipped during merge so
+existing secrets are preserved on the server.
+
+**Note on `--app`:** the `--app` flag is accepted by all commands for
+signature consistency but is ignored for SOAR types -- SOAR objects are
+not scoped by Splunk app.
+
 ## Implementation notes
 
 `splunkctl/commands/state.py` is pure CLI orchestration (guard
@@ -1855,10 +1921,12 @@ integration, preview text, `--report`/`--types`/`--app` handling).
 Every per-type read/diff/apply call is delegated to
 `splunkctl/commands/state_io.py` and its topic siblings
 (`state_io_confs.py` for parsers/macros, `state_io_blobs.py` for
-lookups/dashboards, `state_types.py` for the shared TypedDicts and
-drift-classification helpers) -- split across files to stay under the
-500-line budget, but `state_io` re-exports everything so
-`state_io.<name>` is the one import surface callers and tests use.
+lookups/dashboards, `state_io_soar.py` for SOAR playbooks/lists,
+`state_io_soar_assets.py` for SOAR assets, `state_types.py` for the
+shared TypedDicts and drift-classification helpers) -- split across
+files to stay under the 500-line budget, but `state_io` re-exports
+everything so `state_io.<name>` is the one import surface callers and
+tests use.
 
 ---
 

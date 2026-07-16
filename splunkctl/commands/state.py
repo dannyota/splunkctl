@@ -27,8 +27,30 @@ import click
 from splunkctl import guard, output
 from splunkctl.client import get_client
 from splunkctl.commands import state_io
+from splunkctl.commands.soar._client import get_soar_client
 
 _TYPES_HELP = ", ".join(state_io.TYPES)
+
+
+def _resolve_clients(ctx: click.Context, types: tuple[str, ...]) -> dict[str, Any]:
+    """Build per-type clients lazily.
+
+    SIEM client for SIEM types, SOAR client for SOAR types.
+    Each underlying client is created at most once.
+    """
+    clients: dict[str, Any] = {}
+    siem_client: Any = None
+    soar_client: Any = None
+    for t in types:
+        if t in state_io.SOAR_TYPES:
+            if soar_client is None:
+                soar_client = get_soar_client(ctx)
+            clients[t] = soar_client
+        else:
+            if siem_client is None:
+                siem_client = get_client(ctx)
+            clients[t] = siem_client
+    return clients
 
 
 def _parse_types(types_csv: str | None) -> tuple[str, ...]:
@@ -95,15 +117,19 @@ def state_pull(
     per-type object counts). Read-only against the instance.
     """
     types = _parse_types(types_csv)
-    client = get_client(ctx)
+    clients = _resolve_clients(ctx, types)
     target = Path(dir_path)
     target.mkdir(parents=True, exist_ok=True)
 
     counts: dict[str, int] = {}
     for t in types:
-        counts[t] = state_io.PULL_FNS[t](client, target, app)
+        counts[t] = state_io.PULL_FNS[t](clients[t], target, app)
 
-    state_io.write_manifest(target, host=state_io.resolve_host(client), counts=counts)
+    # Use SIEM client for host label when available, else first available.
+    siem_types = [t for t in types if t not in state_io.SOAR_TYPES]
+    host_client = clients[siem_types[0]] if siem_types else None
+    host = state_io.resolve_host(host_client) if host_client is not None else "soar"
+    state_io.write_manifest(target, host=host, counts=counts)
     total = sum(counts.values())
     summary = ", ".join(f"{k}={v}" for k, v in counts.items())
     output.info(f"Pulled {total} object(s) to {target}: {summary}.")
@@ -131,25 +157,28 @@ def state_diff(
     ``unchanged``. Exit code is always 0 — diff is a report, not a gate.
     """
     types = _parse_types(types_csv)
-    client = get_client(ctx)
+    clients = _resolve_clients(ctx, types)
     target = Path(dir_path)
 
     rows: list[dict[str, Any]] = [
         {"type": t, **entry}
         for t in types
-        for entry in state_io.DIFF_FNS[t](client, target, app)
+        for entry in state_io.DIFF_FNS[t](clients[t], target, app)
     ]
     output.render(ctx, rows, empty="No objects found for the selected type(s).")
 
 
 def _plan(
-    client: Any, target: Path, app: str | None, types: tuple[str, ...]
+    clients: dict[str, Any],
+    target: Path,
+    app: str | None,
+    types: tuple[str, ...],
 ) -> tuple[dict[str, list[state_io.DriftEntry]], dict[str, int]]:
     """Full diff per type, split into the apply plan and the removed counts."""
     plan: dict[str, list[state_io.DriftEntry]] = {}
     removed: dict[str, int] = {}
     for t in types:
-        entries = state_io.DIFF_FNS[t](client, target, app)
+        entries = state_io.DIFF_FNS[t](clients[t], target, app)
         removed[t] = sum(1 for e in entries if e["change"] == "removed")
         plan[t] = [e for e in entries if e["change"] in ("added", "modified")]
     return plan, removed
@@ -235,10 +264,10 @@ def state_push(
     approval, the latter as the change evidence.
     """
     types = _parse_types(types_csv)
-    client = get_client(ctx)
+    clients = _resolve_clients(ctx, types)
     target = Path(dir_path)
 
-    plan, removed = _plan(client, target, app, types)
+    plan, removed = _plan(clients, target, app, types)
     lines, total = _preview_lines(types, plan)
     detail = "\n".join(lines) if lines else "  (no drift)"
 
@@ -252,7 +281,7 @@ def state_push(
     if applied:
         for t in applicable:
             if plan[t]:
-                changes.extend(state_io.APPLY_FNS[t](client, target, app))
+                changes.extend(state_io.APPLY_FNS[t](clients[t], target, app))
     else:
         for t in applicable:
             changes.extend(state_io.change_record(t, e) for e in plan[t])
@@ -261,9 +290,12 @@ def state_push(
             output.render(ctx, [dict(c) for c in changes])
 
     if report_path is not None:
+        siem_types = [t for t in types if t not in state_io.SOAR_TYPES]
+        host_client = clients[siem_types[0]] if siem_types else None
+        host = state_io.resolve_host(host_client) if host_client is not None else "soar"
         state_io.write_report(
             Path(report_path),
-            host=state_io.resolve_host(client),
+            host=host,
             types=list(types),
             changes=changes,
             applied=applied,
