@@ -3,30 +3,25 @@
 from __future__ import annotations
 
 import json
-import shlex
-import subprocess
-import sys
 from typing import Any
 
 import click
 from mcp.server.fastmcp import Context, FastMCP
-from mcp.server.fastmcp.utilities.func_metadata import ArgModelBase, FuncMetadata
 from mcp.types import ToolAnnotations
-from pydantic import ConfigDict
 
 from splunkctl import __version__
-from splunkctl.mcp.output_cap import (
-    MAX_OUTPUT_BYTES,
-    SUBPROCESS_TIMEOUT,
-    spill_output,
-    sweep_spill_dir,
-    timeout_message,
-    truncate_utf8,
-)
+from splunkctl.mcp.output_cap import sweep_spill_dir
 from splunkctl.mcp.resources import load_guides
+from splunkctl.mcp.runner import (
+    exec_cli as _exec_cli,
+)
+from splunkctl.mcp.runner import (
+    register_tool as _register_tool_impl,
+)
+from splunkctl.mcp.runner import (
+    split_command as _split_command,
+)
 from splunkctl.mcp.tools import (
-    SKIP_PARAMS,
-    ToolEntry,
     ToolIndex,
     build_tool_index,
     direct_commands,
@@ -50,116 +45,24 @@ The soar tree has nested subgroups (containers, playbooks, actions, ...); \
 focus at subgroup granularity: `focus "soar containers"`, not `focus soar`. \
 `help soar` lists available subgroups."""
 
-_FORCE_FLAGS = ["--json"]
 
-_STRIP_PARAMS = SKIP_PARAMS
+def create_server(
+    host: str = "127.0.0.1",
+    port: int = 8765,
+) -> FastMCP:
+    """Build the MCP server with meta-tools and guide resources.
 
-
-def _decode_stream(data: bytes) -> str:
-    """Decode subprocess output, tolerating binary payloads.
-
-    Commands like ``soar playbooks export`` emit raw bytes (a tgz) on
-    stdout when ``--out`` is omitted — surface a hint instead of dying
-    on a UTF-8 decode error.
+    Args:
+        host: Bind address for HTTP transport (ignored for stdio).
+        port: Port for HTTP transport (ignored for stdio).
     """
-    try:
-        return data.decode()
-    except UnicodeDecodeError:
-        return f"(binary output: {len(data)} bytes — pass --out FILE to save it)"
-
-
-def _exec_cli(args: list[str]) -> str:
-    """Run ``splunkctl <args>`` as a subprocess and return output."""
-    cmd = [sys.executable, "-m", "splunkctl", *args, *_FORCE_FLAGS]
-    try:
-        result = subprocess.run(  # noqa: S603
-            cmd,
-            capture_output=True,
-            timeout=SUBPROCESS_TIMEOUT,
-        )
-    except subprocess.TimeoutExpired:
-        return timeout_message()
-    out = _decode_stream(result.stdout).strip()
-    err = _decode_stream(result.stderr).strip()
-    if result.returncode != 0:
-        text = err or out or f"Command failed with exit code {result.returncode}"
-        return truncate_utf8(text, MAX_OUTPUT_BYTES)
-    if err and out:
-        text = f"{err}\n\n{out}"
-    else:
-        text = out or err or "(no output)"
-    if len(text.encode()) > MAX_OUTPUT_BYTES:
-        return spill_output(text)
-    return text
-
-
-def _split_command(raw: str) -> list[str]:
-    """Shell-style tokenizer that respects quotes."""
-    try:
-        return shlex.split(raw)
-    except ValueError:
-        return raw.split()
-
-
-def _coerce_array(entry: ToolEntry, pname: str, value: Any) -> Any:
-    """Parse a JSON-encoded array string for array-typed params.
-
-    Some MCP clients serialize list arguments as JSON strings; the
-    pass-through arg model does no pre-parsing, so unwrap here.
-    """
-    prop = entry.schema.get("properties", {}).get(pname, {})
-    if prop.get("type") == "array" and isinstance(value, str):
-        try:
-            parsed = json.loads(value)
-        except json.JSONDecodeError:
-            return value
-        if isinstance(parsed, list):
-            return parsed
-    return value
-
-
-def _build_cli_args(entry: ToolEntry, params: dict[str, Any]) -> list[str]:
-    """Convert typed tool parameters to CLI arg list."""
-    args = list(entry.cmd_path)
-    positional: dict[str, list[str]] = {}
-    for pname, raw in params.items():
-        if pname in _STRIP_PARAMS:
-            if pname == "yes" and raw:
-                args.append("--yes")
-            continue
-        value = _coerce_array(entry, pname, raw)
-        if pname in entry.positional:
-            items = value if isinstance(value, list) else [value]
-            positional[pname] = [str(v) for v in items]
-            continue
-        # Renamed Click options (--severity → severity_override) make the
-        # schema name diverge from the CLI flag; the entry's flag map is
-        # authoritative.
-        flag = entry.flags.get(pname, f"--{pname.replace('_', '-')}")
-        if isinstance(value, bool):
-            if value:
-                args.append(flag)
-            elif pname in entry.neg_flags:
-                args.append(entry.neg_flags[pname])
-        elif isinstance(value, list):
-            for item in value:
-                args.extend([flag, str(item)])
-        else:
-            args.extend([flag, str(value)])
-    for pname in entry.arg_order:
-        args.extend(positional.pop(pname, []))
-    for leftovers in positional.values():
-        args.extend(leftovers)
-    return args
-
-
-def create_server() -> FastMCP:
-    """Build the MCP server with meta-tools and guide resources."""
     from splunkctl.main import cli
 
     mcp = FastMCP(
         name="splunkctl",
         instructions=_INSTRUCTIONS,
+        host=host,
+        port=port,
     )
     mcp._mcp_server.version = __version__
 
@@ -244,7 +147,7 @@ def create_server() -> FastMCP:
             return f"Unknown command: {command}"
 
         if not any(tool_name in names for names in focused.values()):
-            _register_tool(mcp, entry)
+            _register_tool_impl(mcp, entry, exec_fn=_exec_cli)
             focused.setdefault("_usage", []).append(tool_name)
             await ctx.session.send_tool_list_changed()
 
@@ -304,7 +207,7 @@ def create_server() -> FastMCP:
 
         names: list[str] = []
         for entry in entries:
-            _register_tool(mcp, entry)
+            _register_tool_impl(mcp, entry, exec_fn=_exec_cli)
             names.append(entry.name)
         focused[group] = names
         await ctx.session.send_tool_list_changed()
@@ -376,11 +279,6 @@ def create_server() -> FastMCP:
     async def run_tool(command: str, yes: bool = False) -> str:
         """Execute a raw splunkctl command string."""
         tokens = _split_command(command)
-        # The tool's yes parameter is the only mutation switch — a --yes
-        # smuggled inside the command string must not bypass the guard.
-        # Reject rather than silently strip: after shlex a quoted option
-        # VALUE of '-y' is indistinguishable from the flag, and eating
-        # it would shift arguments or corrupt the value.
         if any(t in ("--yes", "-y") for t in tokens):
             return (
                 "Error: '--yes'/'-y' is not accepted inside the command "
@@ -402,8 +300,6 @@ def create_server() -> FastMCP:
             if len(tokens) >= 2 and tokens[1] in subgroup_names(cli, tokens[0]):
                 suggestion = f'focus "{tokens[0]} {tokens[1]}"'
             elif has_subgroups(cli, tokens[0]):
-                # Bare focus on a nested group is refused; point at usage
-                # for direct commands instead.
                 suggestion = f'usage "{" ".join(tokens[:2])}"'
             else:
                 suggestion = f"focus {tokens[0]}"
@@ -442,56 +338,21 @@ def create_server() -> FastMCP:
     return mcp
 
 
-class _PassThroughArgs(ArgModelBase):
-    """Arg model that forwards arbitrary fields to the CLI unvalidated.
+def run_server(
+    transport: str = "stdio",
+    host: str = "127.0.0.1",
+    port: int = 8765,
+) -> None:
+    """Create and run the MCP server.
 
-    Focused tools advertise a Click-derived JSON Schema, but runtime
-    validation belongs to Click itself — the subprocess rejects bad args
-    with a usage error. FastMCP's default ``func_metadata`` would instead
-    validate against the runner's ``**kwargs`` signature, which no client
-    payload can ever satisfy.
+    Args:
+        transport: Transport type — ``stdio`` (default) or ``streamable-http``.
+        host: Bind address for HTTP transport (ignored for stdio).
+        port: Port for HTTP transport (ignored for stdio).
     """
-
-    model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
-
-    def model_dump_one_level(self) -> dict[str, Any]:
-        """Return the extra (client-sent) fields as-is."""
-        return dict(self.__pydantic_extra__ or {})
-
-
-def _register_tool(mcp: FastMCP, entry: ToolEntry) -> None:
-    """Register a focused tool that executes via subprocess.
-
-    Constructs a Tool object directly to use the Click-derived JSON
-    Schema instead of FastMCP's auto-generation from function signatures.
-    """
-    from mcp.server.fastmcp.tools import Tool as MCPTool
-
-    annotations = ToolAnnotations(
-        readOnlyHint=not entry.guarded,
-        destructiveHint=entry.guarded,
-    )
-
-    async def _runner(**kwargs: Any) -> str:
-        cli_args = _build_cli_args(entry, kwargs)
-        return _exec_cli(cli_args)
-
-    tool = MCPTool(
-        fn=_runner,
-        name=entry.name,
-        title=None,
-        description=entry.description,
-        parameters=entry.schema,
-        fn_metadata=FuncMetadata(arg_model=_PassThroughArgs),
-        is_async=True,
-        context_kwarg=None,
-        annotations=annotations,
-    )
-    mcp._tool_manager._tools[tool.name] = tool
-
-
-def run_server() -> None:
-    """Create and run the MCP server on stdio."""
     sweep_spill_dir()
-    server = create_server()
-    server.run(transport="stdio")
+    server = create_server(host=host, port=port)
+    if transport == "streamable-http":
+        server.run(transport="streamable-http")
+    else:
+        server.run(transport="stdio")

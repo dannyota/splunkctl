@@ -51,6 +51,119 @@ token cannot be retrieved after creation. Requires `--yes` (guarded).
 
 `revoke` permanently deletes a token by its ID. Requires `--yes` (guarded).
 
+## Serverclasses
+
+Manage deployment-server serverclasses -- the mapping of apps to
+forwarder groups. Requires the deployment server to be enabled; reports
+a clean disabled status (exit 0) when it is not.
+
+```bash
+splunkctl server serverclasses list                     # list all serverclasses
+splunkctl server serverclasses get linux_forwarders      # detail + apps
+splunkctl server serverclasses reload linux_forwarders --yes  # push updated apps
+```
+
+`list` shows: `name`, `restartSplunkd`, `stateOnClient`, `whitelist`,
+`blacklist`.
+
+`get <name>` adds `repositoryLocation`, `targetRepositoryLocation`,
+`endpoint`, `filterType`, and an `apps` list (each with `app`,
+`restartSplunkd`, `stateOnClient`).
+
+`reload <name>` triggers a serverclass reload to push updated app
+configurations to matching clients. Guarded: requires `--yes`.
+
+## Workload Management
+
+Read-only view of Splunk's workload management configuration and
+current load. Requires Splunk 8.1+ with workload management enabled;
+reports a clean not-available status (exit 0) on older or unconfigured
+instances.
+
+### Pools
+
+```bash
+splunkctl server workloads pools          # list workload pools
+splunkctl server workloads pools --json   # machine-readable
+```
+
+Output: one row per pool (`name`, `cpu_weight`, `mem_weight`,
+`default_category`, `category`).
+
+### Admission Rules
+
+```bash
+splunkctl server workloads rules          # list admission rules
+splunkctl server workloads rules --json
+```
+
+Output: one row per rule (`name`, `predicate`, `workload_pool`,
+`action`, `order`, `schedule`).
+
+### Status
+
+```bash
+splunkctl server workloads status         # current workload status/load
+splunkctl server workloads status --json
+```
+
+Reports `status` (enabled/disabled) and `admission_rules_enabled`. When
+pool-level utilisation data is available, includes a nested `pools` list
+with `cpu_usage`, `mem_usage`, and `search_count` per pool.
+
+## Authentication
+
+Inspect the active authentication provider and its configuration
+(read-only -- no writes).
+
+### Show Provider
+
+```bash
+splunkctl server auth show             # current auth method (Splunk/LDAP/SAML)
+splunkctl server auth show --json
+```
+
+Output: one row per provider-services entry with `name`, `auth_type`
+(detected: `Splunk`, `LDAP`, or `SAML`), and `active_authmodule`.
+
+### LDAP
+
+```bash
+splunkctl server auth ldap             # LDAP servers, base DNs
+splunkctl server auth ldap --json
+```
+
+Feature-detects the active auth type first. When LDAP is not configured,
+returns `{"status": "not_configured", "active_auth": "..."}` and exits 0.
+
+When configured, shows: `name`, `host`, `port`, `SSLEnabled`,
+`userBaseDN`, `groupBaseDN`, `bindDN`, `userNameAttribute`,
+`groupMemberAttribute`.
+
+### SAML
+
+```bash
+splunkctl server auth saml             # SAML IdP group mappings
+splunkctl server auth saml --json
+```
+
+Feature-detects the active auth type first. When SAML is not configured,
+returns `{"status": "not_configured", "active_auth": "..."}` and exits 0.
+
+When configured, shows: `name` (group name) and `roles` (mapped Splunk
+roles, comma-separated).
+
+### Role Mapping
+
+```bash
+splunkctl server auth role-mapping     # roles with auth mapping info
+splunkctl server auth role-mapping --json
+```
+
+Shows all roles with: `name`, `imported_roles`, `srchFilter`,
+`srchIndexesAllowed`, `defaultApp`. Useful for auditing which external
+groups map to which Splunk roles.
+
 ## Health Report
 
 ```bash

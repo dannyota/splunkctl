@@ -1,17 +1,22 @@
 """Tests for shared command helpers."""
 
 from typing import Any
+from unittest.mock import MagicMock, patch
 
 import click
 import pytest
+from click.testing import CliRunner
 
 from splunkctl.commands.common import (
     fetch_page,
     filter_by_name,
     page_slice,
     parse_set,
+    resolve_leaf_command,
     warn_missing_action_fields,
+    watch_loop,
 )
+from splunkctl.main import cli
 
 
 def test_parse_set_happy_path() -> None:
@@ -181,3 +186,74 @@ def test_spl_quote_backslash_then_quote() -> None:
     from splunkctl.commands.common import spl_quote
 
     assert spl_quote('x\\"') == '"x\\\\\\""'
+
+
+# --- resolve_leaf_command ---
+
+
+def test_resolve_leaf_command_finds_subcommand() -> None:
+    leaf = resolve_leaf_command(cli, ["indexes", "list"])
+    assert leaf is not None
+    assert leaf.name == "list"
+
+
+def test_resolve_leaf_command_returns_none_for_no_args() -> None:
+    assert resolve_leaf_command(cli, []) is None
+
+
+# --- watch_loop ---
+
+
+def test_watch_loop_runs_twice_then_exits() -> None:
+    """watch_loop re-invokes the command until KeyboardInterrupt."""
+    calls: list[int] = []
+
+    def fake_invoke(ctx: click.Context) -> None:
+        calls.append(1)
+        if len(calls) >= 2:
+            raise KeyboardInterrupt
+
+    ctx = click.Context(cli, obj={"watch": 2})
+    with pytest.raises(KeyboardInterrupt):
+        with patch("splunkctl.commands.common.time.sleep"):
+            with patch("splunkctl.commands.common.subprocess.run"):
+                # stdout is not a tty in tests, so clear is skipped
+                watch_loop(ctx, 2, fake_invoke)
+    assert len(calls) == 2
+
+
+@patch("splunkctl.commands.common.time.sleep")
+def test_watch_loop_survives_errors(mock_sleep: MagicMock) -> None:
+    """Errors inside the loop are printed but don't stop the loop."""
+    calls: list[int] = []
+
+    def failing_invoke(ctx: click.Context) -> None:
+        calls.append(1)
+        if len(calls) == 1:
+            raise RuntimeError("transient failure")
+        raise KeyboardInterrupt
+
+    ctx = click.Context(cli, obj={"watch": 1})
+    with pytest.raises(KeyboardInterrupt):
+        watch_loop(ctx, 1, failing_invoke)
+    assert len(calls) == 2
+
+
+# --- --watch integration via CLI ---
+
+
+def test_watch_rejected_for_mutation_command() -> None:
+    """--watch must be rejected when used with a guarded mutation command."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--watch", "5", "indexes", "create"])
+    assert result.exit_code != 0
+    assert "mutation" in result.output.lower()
+
+
+def test_watch_rejected_without_tty() -> None:
+    """--watch requires an interactive terminal."""
+    runner = CliRunner()
+    # CliRunner does not emulate a TTY, so this should be rejected.
+    result = runner.invoke(cli, ["--watch", "5", "info"])
+    assert result.exit_code != 0
+    assert "tty" in result.output.lower()

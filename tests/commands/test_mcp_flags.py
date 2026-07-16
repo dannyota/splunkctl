@@ -10,7 +10,8 @@ import asyncio
 from unittest.mock import patch
 
 from splunkctl.main import cli
-from splunkctl.mcp.server import _build_cli_args, _decode_stream, create_server
+from splunkctl.mcp.runner import _decode_stream, build_cli_args
+from splunkctl.mcp.server import create_server
 from splunkctl.mcp.tools import build_tool_index, leaf_count
 
 IDX = build_tool_index(cli)
@@ -19,7 +20,7 @@ IDX = build_tool_index(cli)
 def test_renamed_option_maps_to_real_flag() -> None:
     """soar ingest's renamed options must invoke their real CLI flags."""
     entry = IDX["soar_ingest"]
-    args = _build_cli_args(
+    args = build_cli_args(
         entry,
         {
             "severity_override": "high",
@@ -41,7 +42,7 @@ def test_trailing_underscore_param_normalized() -> None:
     props = entry.schema["properties"]
     assert "wait" in props
     assert "wait_" not in props
-    args = _build_cli_args(entry, {"playbook": "p", "container_id": 1, "wait": True})
+    args = build_cli_args(entry, {"playbook": "p", "container_id": 1, "wait": True})
     assert "--wait" in args
     assert "--container" in args
 
@@ -54,16 +55,16 @@ def test_leaf_options_shadowing_global_names_survive() -> None:
     """
     assert "fields" in IDX["soar_containers_create"].schema["properties"]
     assert "out" in IDX["soar_playbooks_export"].schema["properties"]
-    args = _build_cli_args(IDX["soar_containers_create"], {"fields": ["k=v"]})
+    args = build_cli_args(IDX["soar_containers_create"], {"fields": ["k=v"]})
     assert args[-2:] == ["--field", "k=v"]
 
 
 def test_negatable_flag_false_emits_secondary_opt() -> None:
     """--force/--no-force: explicit false sends --no-force."""
     entry = IDX["soar_playbooks_import"]
-    args = _build_cli_args(entry, {"path": "./pb", "force": False})
+    args = build_cli_args(entry, {"path": "./pb", "force": False})
     assert "--no-force" in args
-    args_true = _build_cli_args(entry, {"path": "./pb", "force": True})
+    args_true = build_cli_args(entry, {"path": "./pb", "force": True})
     assert "--force" in args_true
 
 

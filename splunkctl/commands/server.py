@@ -164,6 +164,8 @@ def kvstore_status(ctx: click.Context) -> None:
     output.render(ctx, row)
 
 
+from splunkctl.commands.server_auth import auth_group  # noqa: E402
+from splunkctl.commands.server_deployment import serverclasses_group  # noqa: E402
 from splunkctl.commands.server_tokens import tokens_group  # noqa: E402
 from splunkctl.commands.server_topology import (  # noqa: E402
     cluster_health,
@@ -172,8 +174,12 @@ from splunkctl.commands.server_topology import (  # noqa: E402
     search_peers,
     shcluster_health,
 )
+from splunkctl.commands.server_workloads import workloads_group  # noqa: E402
 
+server_group.add_command(auth_group)
+server_group.add_command(serverclasses_group)
 server_group.add_command(tokens_group)
+server_group.add_command(workloads_group)
 server_group.add_command(cluster_health)
 server_group.add_command(shcluster_health)
 server_group.add_command(deployment_health)

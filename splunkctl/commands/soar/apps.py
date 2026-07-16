@@ -1,20 +1,22 @@
-"""SOAR app reads — list installed/staged apps, get config schema."""
+"""SOAR app management — list, get, install, uninstall."""
 
 from __future__ import annotations
 
+import base64
 import json
+from pathlib import Path
 from typing import Any
 
 import click
 
-from splunkctl import output
+from splunkctl import guard, output
 from splunkctl.commands.soar._client import get_soar_client
 from splunkctl.soar.client import SOARError
 
 
 @click.group("apps")
 def apps_group() -> None:
-    """App catalog — list, get (config schema + actions)."""
+    """App catalog — list, get, install, uninstall."""
 
 
 @apps_group.command("list")
@@ -101,3 +103,109 @@ def get_cmd(
             output.warning(f"could not fetch actions ({exc.message})")
 
     output.render(ctx, result)
+
+
+# ─── install ─────────────────────────────────────────────────────────
+
+
+@apps_group.command("install")
+@guard.guarded
+@click.argument("path", type=click.Path(exists=True))
+@click.pass_context
+def install_cmd(ctx: click.Context, *, path: str) -> None:
+    """Install a SOAR app from a tgz package.
+
+    PATH is a local .tgz file exported from the Splunk SOAR app store or
+    built by the app developer. The file is base64-encoded and POSTed to
+    ``/rest/app``, similar to playbook imports.
+    """
+    src = Path(path)
+    if not src.is_file():
+        output.error(f"Expected a file, got: {path}", kind="usage")
+        ctx.exit(1)
+        return
+
+    tgz_bytes = src.read_bytes()
+    encoded = base64.b64encode(tgz_bytes).decode()
+
+    if not guard.soar_check(ctx, f"Install app from '{src.name}'"):
+        return
+
+    client = get_soar_client(ctx)
+    body: dict[str, Any] = {"app": encoded}
+    try:
+        result = client.post("app", body=body)
+    except SOARError as exc:
+        output.error(exc.message, kind=exc.kind, http_status=exc.http_status)
+        ctx.exit(1)
+        return
+
+    new_id = result.get("id", "?") if isinstance(result, dict) else "?"
+    output.info(f"App installed: id={new_id}")
+    if isinstance(result, dict):
+        output.render(ctx, result)
+
+
+# ─── uninstall ───────────────────────────────────────────────────────
+
+
+def _resolve_app_id(
+    ctx: click.Context,
+    client: Any,
+    ref: str,
+) -> int | None:
+    """Resolve an app name or numeric id to a numeric id.
+
+    Returns None and emits an error if the app cannot be found.
+    """
+    if ref.isascii() and ref.isdigit():
+        return int(ref)
+
+    try:
+        result = client.get("app", params={"_filter_name": json.dumps(ref)})
+    except SOARError as exc:
+        output.error(exc.message, kind=exc.kind, http_status=exc.http_status)
+        ctx.exit(1)
+        return None
+
+    data = result.get("data", []) if isinstance(result, dict) else []
+    if not data:
+        output.error(f"App '{ref}' not found.", kind="not_found")
+        ctx.exit(1)
+        return None
+    if len(data) >= 2:
+        output.error(
+            f"Ambiguous: multiple apps named '{ref}'",
+            kind="ambiguous",
+        )
+        ctx.exit(1)
+        return None
+    return int(data[0]["id"])
+
+
+@apps_group.command("uninstall")
+@guard.guarded
+@click.argument("ref")
+@click.pass_context
+def uninstall_cmd(ctx: click.Context, *, ref: str) -> None:
+    """Uninstall a SOAR app by name or id.
+
+    Uses DELETE /rest/app/<id>. SOAR refuses token auth on DELETE,
+    so username/password credentials must be configured.
+    """
+    if not guard.soar_check(ctx, f"Uninstall app '{ref}'"):
+        return
+
+    client = get_soar_client(ctx)
+    app_id = _resolve_app_id(ctx, client, ref)
+    if app_id is None:
+        return
+
+    try:
+        client.delete(f"app/{app_id}")
+    except SOARError as exc:
+        output.error(exc.message, kind=exc.kind, http_status=exc.http_status)
+        ctx.exit(1)
+        return
+
+    output.info(f"App {app_id} uninstalled.")

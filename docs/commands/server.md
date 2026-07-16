@@ -4,6 +4,50 @@
 
 Server operations — messages, license, KV store, topology health.
 
+## server auth ldap
+
+Show LDAP configuration (servers, base DNs).
+
+```text
+splunkctl server auth ldap [OPTIONS]
+```
+
+```text
+Feature-detects whether LDAP is configured before querying the
+LDAP-config endpoint.  Exits cleanly with a status message when
+LDAP is not the active provider.
+```
+
+## server auth role-mapping
+
+Show roles with their authentication mapping info.
+
+```text
+splunkctl server auth role-mapping [OPTIONS]
+```
+
+## server auth saml
+
+Show SAML IdP / group mappings.
+
+```text
+splunkctl server auth saml [OPTIONS]
+```
+
+```text
+Feature-detects whether SAML is configured before querying the
+SAML-groups endpoint.  Exits cleanly with a status message when
+SAML is not the active provider.
+```
+
+## server auth show
+
+Show the current authentication method and provider config.
+
+```text
+splunkctl server auth show [OPTIONS]
+```
+
 ## server cluster
 
 Indexer cluster health — mode, peers, SF/RF status.
@@ -96,6 +140,42 @@ Lists every search peer this instance fans searches out to. Empty on
 a standalone instance (exit 0).
 ```
 
+## server serverclasses get
+
+Show detail for a single serverclass, including app config.
+
+```text
+splunkctl server serverclasses get [OPTIONS] NAME
+```
+
+## server serverclasses list
+
+List deployment-server serverclasses.
+
+```text
+splunkctl server serverclasses list [OPTIONS]
+```
+
+```text
+Shows name, restartSplunkd, stateOnClient, and client
+whitelist/blacklist filters. Requires the deployment server to be
+enabled; reports a clean disabled status and exits 0 if not.
+```
+
+## server serverclasses reload
+
+Reload a serverclass to push updated apps to clients.
+
+> Guarded mutation — dry-run by default; apply with `--yes`.
+
+```text
+splunkctl server serverclasses reload [OPTIONS] NAME
+```
+
+```text
+Guarded: pass --yes to apply.
+```
+
 ## server shcluster
 
 Search head cluster health — captain, members, replication.
@@ -148,4 +228,45 @@ Revoke (delete) an auth token by its ID.
 
 ```text
 splunkctl server tokens revoke [OPTIONS] TOKEN_ID
+```
+
+## server workloads pools
+
+List workload pools — CPU/memory weights and search types.
+
+```text
+splunkctl server workloads pools [OPTIONS]
+```
+
+```text
+Requires Splunk 8.1+ with workload management enabled. Reports a
+clean not-available status and exits 0 on older or unconfigured
+instances.
+```
+
+## server workloads rules
+
+List workload admission rules.
+
+```text
+splunkctl server workloads rules [OPTIONS]
+```
+
+```text
+Shows rule names, predicates, and the workload pool they route
+searches into. Requires Splunk 8.1+ with workload management
+enabled.
+```
+
+## server workloads status
+
+Show current workload management status and load.
+
+```text
+splunkctl server workloads status [OPTIONS]
+```
+
+```text
+Reports whether workload management is enabled and the current
+resource utilization. Requires Splunk 8.1+.
 ```

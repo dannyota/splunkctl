@@ -128,6 +128,22 @@ splunkctl soar apps get [OPTIONS] APP_ID
 |---|---|---|---|
 | `--actions` | flag | false | Include supported actions. |
 
+## soar apps install
+
+Install a SOAR app from a tgz package.
+
+> Guarded mutation — dry-run by default; apply with `--yes`.
+
+```text
+splunkctl soar apps install [OPTIONS] PATH
+```
+
+```text
+PATH is a local .tgz file exported from the Splunk SOAR app store or
+built by the app developer. The file is base64-encoded and POSTed to
+``/rest/app``, similar to playbook imports.
+```
+
 ## soar apps list
 
 List SOAR apps. Use --installed to exclude staged (uninstalled) apps.
@@ -143,6 +159,21 @@ splunkctl soar apps list [OPTIONS]
 | `--installed` | flag | false | Only installed apps (exclude staged). |
 | `--category` | text | - | Filter by app category. |
 | `--limit` | integer range | - | Page size. |
+
+## soar apps uninstall
+
+Uninstall a SOAR app by name or id.
+
+> Guarded mutation — dry-run by default; apply with `--yes`.
+
+```text
+splunkctl soar apps uninstall [OPTIONS] REF
+```
+
+```text
+Uses DELETE /rest/app/<id>. SOAR refuses token auth on DELETE,
+so username/password credentials must be configured.
+```
 
 ## soar artifacts create
 
@@ -1406,3 +1437,68 @@ splunkctl soar vault upload [OPTIONS] FILE_PATH
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--container` | integer | - | Container ID to attach the file to. [required] |
+
+## soar workbook-templates create
+
+Create a workbook template with named phases.
+
+> Guarded mutation — dry-run by default; apply with `--yes`.
+
+```text
+splunkctl soar workbook-templates create [OPTIONS]
+```
+
+**Flags**
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--name` | text | - | Template name. [required] |
+| `--phases` | text | - | Comma-separated phase names (e.g. 'Detect,Contain,Recover'). [required] |
+
+## soar workbook-templates delete
+
+Delete a workbook template by name or id.
+
+> Guarded mutation — dry-run by default; apply with `--yes`.
+
+```text
+splunkctl soar workbook-templates delete [OPTIONS] REF
+```
+
+## soar workbook-templates get
+
+Get a workbook template by name or id.
+
+```text
+splunkctl soar workbook-templates get [OPTIONS] REF
+```
+
+## soar workbook-templates list
+
+List all workbook templates.
+
+```text
+splunkctl soar workbook-templates list [OPTIONS]
+```
+
+**Flags**
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--limit` | integer range | - | Page size. |
+
+## soar workbook-templates update
+
+Update a workbook template — add phases.
+
+> Guarded mutation — dry-run by default; apply with `--yes`.
+
+```text
+splunkctl soar workbook-templates update [OPTIONS] REF
+```
+
+**Flags**
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--add-phase` | text | - | Phase name to add (repeatable). |

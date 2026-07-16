@@ -174,6 +174,47 @@ splunkctl es correlations enable "Rule A" "Rule B" --yes
 splunkctl es correlations disable "Rule A" --yes
 ```
 
+## Threat intelligence
+
+The `es threat-intel` subgroup manages threat-intelligence items via
+the ES REST endpoints `/services/data/threat_intel/item` and
+`/services/data/threat_intel/upload`. These endpoints are not part of
+the Python SDK — all calls go through `service.get/post/delete` with
+`output_mode=json`.
+
+```bash
+splunkctl es threat-intel list                                # all types, up to 100
+splunkctl es threat-intel list --type ip_intel                 # filter by collection
+splunkctl es threat-intel list --type domain_intel --limit 25  # with limit
+splunkctl es threat-intel upload --type ip_intel \
+    --file iocs.csv --yes                                      # upload indicators
+splunkctl es threat-intel delete <key> --yes                   # remove one item
+```
+
+### Supported collection types
+
+`ip_intel`, `domain_intel`, `file_intel`, `email_intel`, `http_intel`,
+`certificate_intel`, `registry_intel`, `service_intel`, `user_intel`,
+`process_intel`.
+
+### Upload format
+
+The `--file` flag accepts a path to a local CSV or JSON file. The file
+is sent as the request body to the upload endpoint with the collection
+type and filename as query parameters. CSV files should have a header
+row matching the fields for the target collection type (e.g. `ip`,
+`description`, `weight` for `ip_intel`).
+
+### Delete
+
+`delete` takes the item's key (the `name` field from `list` output)
+and issues a DELETE to `/services/data/threat_intel/item/<key>`.
+
+### Dry-run
+
+Both `upload` and `delete` are guarded mutations — they preview in
+dry-run mode and require `--yes` to apply.
+
 ## Implementation notes
 
 `list`/`get` (notables) run over the existing oneshot-search
@@ -188,3 +229,8 @@ Correlation searches use `service.saved_searches` with
 owners. The `security_domain` is read from the
 `action.correlationsearch.label` content key (the standard ES field for
 this), falling back to `security_domain` if absent.
+
+Threat-intel commands use `service.get/post/delete` directly against
+the ES threat_intel REST endpoints. The upload command sends the file
+as the raw request body with collection type and filename as keyword
+arguments (query parameters in the SDK's HTTP layer).

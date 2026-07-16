@@ -15,23 +15,75 @@ def mcp_group() -> None:
 
 
 @mcp_group.command("serve")
-def mcp_serve() -> None:
-    """Start the MCP server on stdio."""
+@click.option(
+    "--transport",
+    type=click.Choice(["stdio", "http"]),
+    default="stdio",
+    show_default=True,
+    help="Transport type. 'http' runs streamable-HTTP.",
+)
+@click.option(
+    "--host",
+    default="127.0.0.1",
+    show_default=True,
+    help="Bind address for HTTP transport (ignored for stdio).",
+)
+@click.option(
+    "--port",
+    type=int,
+    default=8765,
+    show_default=True,
+    help="Port for HTTP transport (ignored for stdio).",
+)
+def mcp_serve(transport: str, host: str, port: int) -> None:
+    """Start the MCP server.
+
+    Default is stdio (standard MCP transport). Use --transport http to run
+    a streamable-HTTP server for shared/team use on trusted networks.
+    """
     from splunkctl.mcp.server import run_server
 
-    run_server()
+    real_transport = "streamable-http" if transport == "http" else "stdio"
+    run_server(transport=real_transport, host=host, port=port)
 
 
 @mcp_group.command("install")
-def mcp_install() -> None:
+@click.option(
+    "--transport",
+    type=click.Choice(["stdio", "http"]),
+    default="stdio",
+    show_default=True,
+    help="Transport for the generated config. 'http' writes a URL-based entry.",
+)
+@click.option(
+    "--host",
+    default="127.0.0.1",
+    show_default=True,
+    help="Host for HTTP config (ignored for stdio).",
+)
+@click.option(
+    "--port",
+    type=int,
+    default=8765,
+    show_default=True,
+    help="Port for HTTP config (ignored for stdio).",
+)
+def mcp_install(transport: str, host: str, port: int) -> None:
     """Write .mcp.json for Claude Code registration."""
-    exe = sys.executable
-    config = {
+    if transport == "http":
+        server_entry: dict[str, object] = {
+            "url": f"http://{host}:{port}/mcp",
+        }
+    else:
+        exe = sys.executable
+        server_entry = {
+            "command": exe,
+            "args": ["-m", "splunkctl", "mcp", "serve"],
+        }
+
+    config: dict[str, object] = {
         "mcpServers": {
-            "splunkctl": {
-                "command": exe,
-                "args": ["-m", "splunkctl", "mcp", "serve"],
-            },
+            "splunkctl": server_entry,
         },
     }
 
@@ -40,9 +92,7 @@ def mcp_install() -> None:
         existing = json.loads(dest.read_text(encoding="utf-8"))
         if existing.get("mcpServers") is None:
             existing["mcpServers"] = {}
-        existing.setdefault("mcpServers", {})["splunkctl"] = config["mcpServers"][
-            "splunkctl"
-        ]
+        existing.setdefault("mcpServers", {})["splunkctl"] = server_entry
         config = existing
 
     dest.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")

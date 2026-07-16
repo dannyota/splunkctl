@@ -30,6 +30,7 @@ from splunkctl.commands.soar.playbooks import playbooks_group
 from splunkctl.commands.soar.search import search
 from splunkctl.commands.soar.system import health, info, license_cmd, test
 from splunkctl.commands.soar.vault import vault_group
+from splunkctl.commands.soar.workbook_templates import workbook_templates_group
 
 
 @click.group("soar")
@@ -62,5 +63,6 @@ soar_group.add_command(evidence_group)
 soar_group.add_command(users_group)
 soar_group.add_command(roles_group)
 soar_group.add_command(audit_cmd)
+soar_group.add_command(workbook_templates_group)
 soar_group.add_command(search)
 soar_group.add_command(ingest_cmd)

@@ -13,6 +13,7 @@ from splunkctl.commands.alerts import alerts_group
 from splunkctl.commands.apps import apps_group
 from splunkctl.commands.audit import audit_group
 from splunkctl.commands.commands_meta import commands_meta
+from splunkctl.commands.common import resolve_leaf_command, watch_loop
 from splunkctl.commands.conf import conf_group
 from splunkctl.commands.config_cmd import config_group
 from splunkctl.commands.dashboards import dashboards_group
@@ -35,6 +36,20 @@ from splunkctl.commands.server import server_group
 from splunkctl.commands.soar import soar_group
 from splunkctl.commands.state import state_group
 from splunkctl.commands.users import users_group
+from splunkctl.guard import is_guarded
+
+
+def _strip_watch(args: list[str]) -> list[str]:
+    """Remove ``--watch N`` from an arg list for re-invocation."""
+    out: list[str] = []
+    i = 0
+    while i < len(args):
+        if args[i] == "--watch" and i + 1 < len(args):
+            i += 2  # skip --watch and its value
+            continue
+        out.append(args[i])
+        i += 1
+    return out
 
 
 class _CLI(click.Group):
@@ -62,6 +77,7 @@ class _CLI(click.Group):
             "--config",
             "-c",
             "--profile",
+            "--watch",
         }
     )
 
@@ -87,7 +103,10 @@ class _CLI(click.Group):
         return frozenset(opts)
 
     def parse_args(self, ctx: click.Context, args: list[str]) -> list[str]:
-        """Move known global flags to the front of the arg list."""
+        """Move known global flags to the front; save args for watch mode."""
+        # Save the original args before hoisting — watch mode needs them
+        # to resolve the leaf command for the guard check.
+        ctx.meta["_watch_orig_args"] = list(args)
         leaf_opts = self._leaf_opts(args)
         prefix: list[str] = []
         rest: list[str] = []
@@ -109,8 +128,20 @@ class _CLI(click.Group):
         return super().parse_args(ctx, prefix + rest)
 
     def invoke(self, ctx: click.Context) -> Any:
+        # Pre-flight checks for --watch (ctx.params is populated by now).
+        interval: int = ctx.params.get("watch") or 0
+        orig_args: list[str] = ctx.meta.get("_watch_orig_args", [])
+        if interval:
+            leaf = resolve_leaf_command(self, _strip_watch(orig_args))
+            if leaf is not None and is_guarded(leaf):
+                raise click.UsageError("--watch cannot be used with mutation commands.")
+            if not sys.stdout.isatty():
+                raise click.UsageError(
+                    "--watch requires an interactive terminal (TTY)."
+                )
+
         try:
-            return super().invoke(ctx)
+            rv = super().invoke(ctx)
         except Exception as exc:
             if isinstance(exc, cfg_mod.ProfileNotFoundError):
                 output.error(f"Profile not found: {exc.name}", kind="not_found")
@@ -124,6 +155,19 @@ class _CLI(click.Group):
                 )
                 sys.exit(1)
             raise
+
+        if not interval:
+            return rv
+
+        def _reinvoke(_ctx: click.Context) -> None:
+            args = _strip_watch(orig_args)
+            self.main(args, standalone_mode=False)
+
+        try:
+            watch_loop(ctx, interval, _reinvoke)
+        except KeyboardInterrupt:
+            pass
+        return rv
 
 
 _EPILOG = """\b
@@ -161,6 +205,12 @@ Exit codes:
 )
 @click.option("--debug", is_flag=True, help="HTTP request/response logging.")
 @click.option("--timeout", type=int, default=30, help="Request timeout in seconds.")
+@click.option(
+    "--watch",
+    type=click.IntRange(min=1),
+    default=None,
+    help="Re-run the command every N seconds (read-only commands only).",
+)
 @click.pass_context
 def cli(
     ctx: click.Context,
@@ -174,6 +224,7 @@ def cli(
     profile: str | None,
     debug: bool,
     timeout: int,
+    watch: int | None,
 ) -> None:
     """CLI tool for Splunk Enterprise SIEM operations."""
     ctx.ensure_object(dict)
@@ -186,6 +237,7 @@ def cli(
     ctx.obj["profile"] = profile
     ctx.obj["debug"] = debug
     ctx.obj["timeout"] = timeout
+    ctx.obj["watch"] = watch or 0
 
 
 _SHELLS = ("bash", "zsh", "fish")

@@ -5,7 +5,7 @@ server to give AI agents — Claude Code, Claude Desktop, Cursor, Windsurf, or
 any MCP client — direct access to your Splunk Enterprise SIEM and Splunk SOAR
 instances.
 
-The server uses **dynamic tool loading**: instead of exposing all 238 tools
+The server uses **dynamic tool loading**: instead of exposing all 259 tools
 upfront, it starts with 5 meta-tools and loads group-specific typed tools on
 demand. This keeps the agent's context window small while covering every
 command.
@@ -132,12 +132,44 @@ The server exposes:
 All tool output is JSON. Mutations are dry-run by default — the agent must
 pass `yes=true` to apply, same as the CLI's `--yes`.
 
+## HTTP transport (shared/team mode)
+
+By default the MCP server uses stdio (one agent, one process). For shared or
+team use you can run it as a streamable-HTTP server:
+
+```bash
+splunkctl mcp serve --transport http
+```
+
+This starts an HTTP listener on `127.0.0.1:8765`. Override with `--host` and
+`--port`:
+
+```bash
+splunkctl mcp serve --transport http --host 0.0.0.0 --port 9000
+```
+
+To generate a client config pointing at the HTTP server:
+
+```bash
+splunkctl mcp install --transport http
+# or with custom host/port:
+splunkctl mcp install --transport http --host 10.0.0.5 --port 9000
+```
+
+This writes a URL-based entry (`"url": "http://host:port/mcp"`) instead of the
+stdio command entry.
+
+> **Trusted networks only.** HTTP mode has no authentication. Run it only on
+> localhost or a private network you control. An auth layer is planned for a
+> future release.
+
 ## Security
 
 - The MCP server inherits the permissions of your Splunk credentials. Use a
   least-privilege account scoped to what the agent needs.
 - All mutations require `yes=true` — the agent cannot accidentally modify your
   environment without explicit confirmation.
-- The server runs locally on stdio. No network listener is opened.
+- **stdio mode** runs locally with no network listener.
+- **HTTP mode** opens a network port — use only on trusted networks (no auth).
 - Credentials live in `~/.splunkctl/config.yaml` (0600) or environment
   variables, never in the MCP config itself.

@@ -415,3 +415,8 @@ def corr_disable(ctx: click.Context, names: tuple[str, ...]) -> None:
             return
         ss.update(disabled="1").refresh()
     output.info(f"Disabled {len(names)} correlation search(es).")
+
+
+from splunkctl.commands.es_threat_intel import threat_intel_group  # noqa: E402
+
+es_group.add_command(threat_intel_group)

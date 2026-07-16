@@ -157,7 +157,7 @@ def test_positional_args_tracked() -> None:
 
 
 def test_build_cli_args_positional() -> None:
-    from splunkctl.mcp.server import _build_cli_args
+    from splunkctl.mcp.runner import build_cli_args as _build_cli_args
 
     idx = build_tool_index(cli)
     entry = idx["search_run"]
@@ -168,7 +168,7 @@ def test_build_cli_args_positional() -> None:
 
 
 def test_build_cli_args_yes_passed() -> None:
-    from splunkctl.mcp.server import _build_cli_args
+    from splunkctl.mcp.runner import build_cli_args as _build_cli_args
 
     idx = build_tool_index(cli)
     guarded = [t for t in idx.values() if t.guarded]
@@ -200,7 +200,7 @@ def test_multiple_option_schema_is_array() -> None:
 
 
 def test_build_cli_args_positional_array_in_order() -> None:
-    from splunkctl.mcp.server import _build_cli_args
+    from splunkctl.mcp.runner import build_cli_args as _build_cli_args
 
     idx = build_tool_index(cli)
     entry = idx["conf_set"]
@@ -215,7 +215,7 @@ def test_build_cli_args_positional_array_in_order() -> None:
 
 
 def test_build_cli_args_multiple_option_repeats_flag() -> None:
-    from splunkctl.mcp.server import _build_cli_args
+    from splunkctl.mcp.runner import build_cli_args as _build_cli_args
 
     idx = build_tool_index(cli)
     entry = idx["rules_export"]
@@ -226,7 +226,7 @@ def test_build_cli_args_multiple_option_repeats_flag() -> None:
 
 
 def test_build_cli_args_json_string_array_coerced() -> None:
-    from splunkctl.mcp.server import _build_cli_args
+    from splunkctl.mcp.runner import build_cli_args as _build_cli_args
 
     idx = build_tool_index(cli)
     entry = idx["conf_set"]

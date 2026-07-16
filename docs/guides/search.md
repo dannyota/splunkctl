@@ -110,6 +110,33 @@ Options: `--index` (default `main`), `--sourcetype` (auto if omitted),
 `--source` (defaults to filename), `--host` (host metadata override).
 Dry-run by default; add `--yes` to execute.
 
+## Metrics catalog
+
+Explore metrics indexes without writing raw `| mcatalog` SPL. List all
+metric names in an index, optionally filter by prefix, or drill into the
+dimensions available for a specific metric.
+
+List all metric names in a metrics index:
+
+```bash
+splunkctl search metrics --index my_metrics
+```
+
+Filter to metrics starting with `cpu`:
+
+```bash
+splunkctl search metrics --index my_metrics --filter cpu
+```
+
+Show dimensions for a specific metric:
+
+```bash
+splunkctl search metrics --index my_metrics --metric cpu.idle
+```
+
+The command runs `| mcatalog` under the hood via `oneshot` -- no special
+permissions beyond search access to the metrics index.
+
 ## SPL normalization
 
 Bare keywords get `search` prepended automatically. Pipe-leading queries

@@ -63,6 +63,28 @@ splunkctl search jobs [OPTIONS]
 | `--offset` | integer range | 0 | Skip the first N entries. |
 | `--filter` | text | - | Case-insensitive name substring; --limit/--offset then apply to the filtered set. |
 
+## search metrics
+
+List metric names or dimensions from a metrics index.
+
+```text
+splunkctl search metrics [OPTIONS]
+```
+
+```text
+Without ``--metric``, returns all metric names in the index.
+With ``--metric``, returns the dimensions for that metric.
+```
+
+**Flags**
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--index` | text | - | Metrics index to query. [required] |
+| `--metric` | text | - | Metric name — when set, returns dimensions instead of metric names. |
+| `--filter` | text | - | Filter metric names by prefix (only without --metric). |
+| `--app` | text | - | Splunk app context. |
+
 ## search oneshot
 
 Quick one-off search.

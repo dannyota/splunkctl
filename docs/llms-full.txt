@@ -1,6 +1,6 @@
 # splunkctl — full documentation
 
-> Open-source MCP server and CLI for Splunk Enterprise SIEM and Splunk SOAR. Give AI agents access to 238 Splunk commands via Model Context Protocol, or operate your instances as code from the terminal.
+> Open-source MCP server and CLI for Splunk Enterprise SIEM and Splunk SOAR. Give AI agents access to 259 Splunk commands via Model Context Protocol, or operate your instances as code from the terminal.
 
 ---
 
@@ -13,7 +13,7 @@ server to give AI agents — Claude Code, Claude Desktop, Cursor, Windsurf, or
 any MCP client — direct access to your Splunk Enterprise SIEM and Splunk SOAR
 instances.
 
-The server uses **dynamic tool loading**: instead of exposing all 238 tools
+The server uses **dynamic tool loading**: instead of exposing all 259 tools
 upfront, it starts with 5 meta-tools and loads group-specific typed tools on
 demand. This keeps the agent's context window small while covering every
 command.
@@ -140,13 +140,45 @@ The server exposes:
 All tool output is JSON. Mutations are dry-run by default — the agent must
 pass `yes=true` to apply, same as the CLI's `--yes`.
 
+## HTTP transport (shared/team mode)
+
+By default the MCP server uses stdio (one agent, one process). For shared or
+team use you can run it as a streamable-HTTP server:
+
+```bash
+splunkctl mcp serve --transport http
+```
+
+This starts an HTTP listener on `127.0.0.1:8765`. Override with `--host` and
+`--port`:
+
+```bash
+splunkctl mcp serve --transport http --host 0.0.0.0 --port 9000
+```
+
+To generate a client config pointing at the HTTP server:
+
+```bash
+splunkctl mcp install --transport http
+# or with custom host/port:
+splunkctl mcp install --transport http --host 10.0.0.5 --port 9000
+```
+
+This writes a URL-based entry (`"url": "http://host:port/mcp"`) instead of the
+stdio command entry.
+
+> **Trusted networks only.** HTTP mode has no authentication. Run it only on
+> localhost or a private network you control. An auth layer is planned for a
+> future release.
+
 ## Security
 
 - The MCP server inherits the permissions of your Splunk credentials. Use a
   least-privilege account scoped to what the agent needs.
 - All mutations require `yes=true` — the agent cannot accidentally modify your
   environment without explicit confirmation.
-- The server runs locally on stdio. No network listener is opened.
+- **stdio mode** runs locally with no network listener.
+- **HTTP mode** opens a network port — use only on trusted networks (no auth).
 - Credentials live in `~/.splunkctl/config.yaml` (0600) or environment
   variables, never in the MCP config itself.
 
@@ -308,6 +340,21 @@ override the flat config today.
 1. CLI flags (`--host`, `--port`, `--token`)
 2. Environment variables
 3. Profile (config file)
+
+## Watch mode
+
+Re-run any read-only command at a fixed interval, clearing the screen
+between runs (like `watch(1)` on Linux). Errors are printed in place and
+the loop continues. Press Ctrl-C to stop.
+
+```bash
+splunkctl --watch 5 indexes list        # refresh every 5 seconds
+splunkctl --watch 10 server health      # poll server health
+splunkctl --watch 3 rules list --filter brute   # filtered view
+```
+
+Requires an interactive terminal (TTY). Mutation commands (those guarded
+by `--yes`) are rejected.
 
 ## Verify
 
@@ -502,6 +549,33 @@ splunkctl search upload --path captured.json --index main --host web-prod-03 --y
 Options: `--index` (default `main`), `--sourcetype` (auto if omitted),
 `--source` (defaults to filename), `--host` (host metadata override).
 Dry-run by default; add `--yes` to execute.
+
+## Metrics catalog
+
+Explore metrics indexes without writing raw `| mcatalog` SPL. List all
+metric names in an index, optionally filter by prefix, or drill into the
+dimensions available for a specific metric.
+
+List all metric names in a metrics index:
+
+```bash
+splunkctl search metrics --index my_metrics
+```
+
+Filter to metrics starting with `cpu`:
+
+```bash
+splunkctl search metrics --index my_metrics --filter cpu
+```
+
+Show dimensions for a specific metric:
+
+```bash
+splunkctl search metrics --index my_metrics --metric cpu.idle
+```
+
+The command runs `| mcatalog` under the hood via `oneshot` -- no special
+permissions beyond search access to the metrics index.
 
 ## SPL normalization
 
@@ -1964,6 +2038,47 @@ splunkctl es correlations enable "Rule A" "Rule B" --yes
 splunkctl es correlations disable "Rule A" --yes
 ```
 
+## Threat intelligence
+
+The `es threat-intel` subgroup manages threat-intelligence items via
+the ES REST endpoints `/services/data/threat_intel/item` and
+`/services/data/threat_intel/upload`. These endpoints are not part of
+the Python SDK — all calls go through `service.get/post/delete` with
+`output_mode=json`.
+
+```bash
+splunkctl es threat-intel list                                # all types, up to 100
+splunkctl es threat-intel list --type ip_intel                 # filter by collection
+splunkctl es threat-intel list --type domain_intel --limit 25  # with limit
+splunkctl es threat-intel upload --type ip_intel \
+    --file iocs.csv --yes                                      # upload indicators
+splunkctl es threat-intel delete <key> --yes                   # remove one item
+```
+
+### Supported collection types
+
+`ip_intel`, `domain_intel`, `file_intel`, `email_intel`, `http_intel`,
+`certificate_intel`, `registry_intel`, `service_intel`, `user_intel`,
+`process_intel`.
+
+### Upload format
+
+The `--file` flag accepts a path to a local CSV or JSON file. The file
+is sent as the request body to the upload endpoint with the collection
+type and filename as query parameters. CSV files should have a header
+row matching the fields for the target collection type (e.g. `ip`,
+`description`, `weight` for `ip_intel`).
+
+### Delete
+
+`delete` takes the item's key (the `name` field from `list` output)
+and issues a DELETE to `/services/data/threat_intel/item/<key>`.
+
+### Dry-run
+
+Both `upload` and `delete` are guarded mutations — they preview in
+dry-run mode and require `--yes` to apply.
+
 ## Implementation notes
 
 `list`/`get` (notables) run over the existing oneshot-search
@@ -1978,6 +2093,11 @@ Correlation searches use `service.saved_searches` with
 owners. The `security_domain` is read from the
 `action.correlationsearch.label` content key (the standard ES field for
 this), falling back to `security_domain` if absent.
+
+Threat-intel commands use `service.get/post/delete` directly against
+the ES threat_intel REST endpoints. The upload command sends the file
+as the raw request body with collection type and filename as keyword
+arguments (query parameters in the SDK's HTTP layer).
 
 ---
 
@@ -2456,6 +2576,119 @@ Tokens that never expire show `never`; unused tokens show `last_used: never`.
 token cannot be retrieved after creation. Requires `--yes` (guarded).
 
 `revoke` permanently deletes a token by its ID. Requires `--yes` (guarded).
+
+## Serverclasses
+
+Manage deployment-server serverclasses -- the mapping of apps to
+forwarder groups. Requires the deployment server to be enabled; reports
+a clean disabled status (exit 0) when it is not.
+
+```bash
+splunkctl server serverclasses list                     # list all serverclasses
+splunkctl server serverclasses get linux_forwarders      # detail + apps
+splunkctl server serverclasses reload linux_forwarders --yes  # push updated apps
+```
+
+`list` shows: `name`, `restartSplunkd`, `stateOnClient`, `whitelist`,
+`blacklist`.
+
+`get <name>` adds `repositoryLocation`, `targetRepositoryLocation`,
+`endpoint`, `filterType`, and an `apps` list (each with `app`,
+`restartSplunkd`, `stateOnClient`).
+
+`reload <name>` triggers a serverclass reload to push updated app
+configurations to matching clients. Guarded: requires `--yes`.
+
+## Workload Management
+
+Read-only view of Splunk's workload management configuration and
+current load. Requires Splunk 8.1+ with workload management enabled;
+reports a clean not-available status (exit 0) on older or unconfigured
+instances.
+
+### Pools
+
+```bash
+splunkctl server workloads pools          # list workload pools
+splunkctl server workloads pools --json   # machine-readable
+```
+
+Output: one row per pool (`name`, `cpu_weight`, `mem_weight`,
+`default_category`, `category`).
+
+### Admission Rules
+
+```bash
+splunkctl server workloads rules          # list admission rules
+splunkctl server workloads rules --json
+```
+
+Output: one row per rule (`name`, `predicate`, `workload_pool`,
+`action`, `order`, `schedule`).
+
+### Status
+
+```bash
+splunkctl server workloads status         # current workload status/load
+splunkctl server workloads status --json
+```
+
+Reports `status` (enabled/disabled) and `admission_rules_enabled`. When
+pool-level utilisation data is available, includes a nested `pools` list
+with `cpu_usage`, `mem_usage`, and `search_count` per pool.
+
+## Authentication
+
+Inspect the active authentication provider and its configuration
+(read-only -- no writes).
+
+### Show Provider
+
+```bash
+splunkctl server auth show             # current auth method (Splunk/LDAP/SAML)
+splunkctl server auth show --json
+```
+
+Output: one row per provider-services entry with `name`, `auth_type`
+(detected: `Splunk`, `LDAP`, or `SAML`), and `active_authmodule`.
+
+### LDAP
+
+```bash
+splunkctl server auth ldap             # LDAP servers, base DNs
+splunkctl server auth ldap --json
+```
+
+Feature-detects the active auth type first. When LDAP is not configured,
+returns `{"status": "not_configured", "active_auth": "..."}` and exits 0.
+
+When configured, shows: `name`, `host`, `port`, `SSLEnabled`,
+`userBaseDN`, `groupBaseDN`, `bindDN`, `userNameAttribute`,
+`groupMemberAttribute`.
+
+### SAML
+
+```bash
+splunkctl server auth saml             # SAML IdP group mappings
+splunkctl server auth saml --json
+```
+
+Feature-detects the active auth type first. When SAML is not configured,
+returns `{"status": "not_configured", "active_auth": "..."}` and exits 0.
+
+When configured, shows: `name` (group name) and `roles` (mapped Splunk
+roles, comma-separated).
+
+### Role Mapping
+
+```bash
+splunkctl server auth role-mapping     # roles with auth mapping info
+splunkctl server auth role-mapping --json
+```
+
+Shows all roles with: `name`, `imported_roles`, `srchFilter`,
+`srchIndexesAllowed`, `defaultApp`. Useful for auditing which external
+groups map to which Splunk roles.
 
 ## Health Report
 
@@ -3738,9 +3971,59 @@ a GET on the task.
 ## Workbook templates
 
 SOAR ships with 10 preloaded workbook templates. The default is
-NIST 800-61 (5 phases, 19 tasks). Templates are listed at
-`/rest/workbook_template`. The `promote` command resolves template
-names via this endpoint.
+NIST 800-61 (5 phases, 19 tasks). Templates are managed via the
+`soar workbook-templates` subgroup.
+
+### List templates
+
+```bash
+splunkctl soar workbook-templates list
+splunkctl --json soar workbook-templates list --limit 5
+```
+
+### Get a template by name or id
+
+```bash
+splunkctl soar workbook-templates get "NIST 800-61"
+splunkctl --json soar workbook-templates get 1
+```
+
+Name resolution is case-sensitive. Numeric arguments are treated
+as ids directly; non-numeric arguments trigger a name lookup.
+
+### Create a template
+
+```bash
+splunkctl --yes soar workbook-templates create \
+    --name "IR Workflow" --phases "Detect,Contain,Eradicate,Recover"
+```
+
+Phases are created in the order given, numbered starting at 1.
+At least one phase is required.
+
+### Update a template (add phases)
+
+```bash
+splunkctl --yes soar workbook-templates update "NIST 800-61" \
+    --add-phase "Lessons Learned"
+
+# Multiple phases
+splunkctl --yes soar workbook-templates update 2 \
+    --add-phase Eradicate --add-phase Recover
+```
+
+New phases are appended after the highest existing order value.
+
+### Delete a template
+
+```bash
+splunkctl --yes soar workbook-templates delete "Custom Investigation"
+splunkctl --yes soar workbook-templates delete 3
+```
+
+DELETE on `workbook_template` requires Basic auth (username/password
+credentials) -- SOAR refuses token auth on most DELETE endpoints.
+Ensure your profile has `username` and `password` configured.
 
 ## API endpoints used
 
@@ -3753,6 +4036,10 @@ names via this endpoint.
 | Task update | POST | `/rest/workbook_task/<id>` |
 | Closing note | POST | `/rest/note` |
 | Template list | GET | `/rest/workbook_template` |
+| Template get | GET | `/rest/workbook_template/<id>` |
+| Template create | POST | `/rest/workbook_template` |
+| Template update | POST | `/rest/workbook_template/<id>` |
+| Template delete | DELETE | `/rest/workbook_template/<id>` |
 
 ---
 
@@ -4401,7 +4688,7 @@ the standard dry-run/`--yes` gate; everything else is a read.
 | [config](config.md) | 4 | Manage splunkctl configuration. |
 | [dashboards](dashboards.md) | 7 | Dashboard management. |
 | [datamodels](datamodels.md) | 4 | CIM/tstats data models — definitions and acceleration health. |
-| [es](es.md) | 7 | Enterprise Security — notable-event triage (requires ES installed). |
+| [es](es.md) | 10 | Enterprise Security — notable-event triage (requires ES installed). |
 | [eventtypes](eventtypes.md) | 2 | Event classification rules (eventtypes.conf) — read-only. |
 | [hec](hec.md) | 8 | Manage HTTP Event Collector tokens. |
 | [indexes](indexes.md) | 7 | Manage Splunk indexes. |
@@ -4412,9 +4699,9 @@ the standard dry-run/`--yes` gate; everything else is a read.
 | [mcp](mcp.md) | 2 | Built-in MCP server for agent integration. |
 | [parsers](parsers.md) | 11 | Manage source types and field extractions. |
 | [rules](rules.md) | 13 | Manage detection rules (saved searches). |
-| [search](search.md) | 7 | Search and job management. |
-| [server](server.md) | 11 | Server operations — messages, license, KV store, topology health. |
-| [soar](soar.md) | 98 | Splunk SOAR operations — platform reads, containers, playbooks. |
+| [search](search.md) | 8 | Search and job management. |
+| [server](server.md) | 21 | Server operations — messages, license, KV store, topology health. |
+| [soar](soar.md) | 105 | Splunk SOAR operations — platform reads, containers, playbooks. |
 | [state](state.md) | 3 | Unified config-as-code across rules, parsers, macros, lookups, dashboards. |
 | [tags](tags.md) | 2 | CIM/eventtype tag assignments (tags.conf) — read-only. |
 | [users](users.md) | 10 | Manage users and roles. |
@@ -4614,7 +4901,7 @@ that are not SDK list surfaces (e.g. `audit rbac`) are exempt by design.
 
 | Feature | Status | Notes |
 |---|---|---|
-| MCP server | ✅ built | 5 meta-tools (help/usage/focus/unfocus/run), 238 auto-generated typed tools (array schemas for variadic/repeated params, explicit `yes` on guarded schemas, additionalProperties:false), subgroup-granular focus for the nested soar tree, 33 guide resources, protocol-level test suite |
+| MCP server | ✅ built | 5 meta-tools (help/usage/focus/unfocus/run), 259 auto-generated typed tools (array schemas for variadic/repeated params, explicit `yes` on guarded schemas, additionalProperties:false), subgroup-granular focus for the nested soar tree, 33 guide resources, protocol-level test suite |
 | `mcp install` | ✅ built | Write `.mcp.json` for Claude Code registration |
 | `commands --json` | ✅ built | Guard markers, global options, note field |
 | `doctor --strict` | ✅ built | CI-friendly health gate |

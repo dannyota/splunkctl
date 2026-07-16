@@ -98,3 +98,50 @@ Accepts multiple EVENT_IDS for bulk triage. Requires at least one of
 | `--urgency` | choice: informational, low, medium, high, critical | - | New urgency. |
 | `--disposition` | text | - | ES disposition id (e.g. 'disposition:1'), passed through as-is — see your ES instance's configured dispositions. |
 | `--comment` | text | - | Analyst comment. |
+
+## es threat-intel delete
+
+Delete a threat-intelligence item by its key.
+
+> Guarded mutation — dry-run by default; apply with `--yes`.
+
+```text
+splunkctl es threat-intel delete [OPTIONS] KEY
+```
+
+## es threat-intel list
+
+List threat-intelligence items, optionally filtered by type.
+
+```text
+splunkctl es threat-intel list [OPTIONS]
+```
+
+**Flags**
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--type` | choice: ip_intel, domain_intel, file_intel, email_intel, http_intel, certificate_intel, registry_intel, service_intel, user_intel, process_intel | - | Filter by threat-intel collection type. |
+| `--limit` | integer range | 100 | Max results (default 100). |
+
+## es threat-intel upload
+
+Upload threat-intelligence items from a local CSV or JSON file.
+
+> Guarded mutation — dry-run by default; apply with `--yes`.
+
+```text
+splunkctl es threat-intel upload [OPTIONS]
+```
+
+```text
+The file is sent as multipart form data to
+``/services/data/threat_intel/upload``.
+```
+
+**Flags**
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--type` | choice: ip_intel, domain_intel, file_intel, email_intel, http_intel, certificate_intel, registry_intel, service_intel, user_intel, process_intel | - | Threat-intel collection type to upload into. [required] |
+| `--file` | file | - | Path to a CSV or JSON file containing threat-intel items. [required] |

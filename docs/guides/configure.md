@@ -97,6 +97,21 @@ override the flat config today.
 2. Environment variables
 3. Profile (config file)
 
+## Watch mode
+
+Re-run any read-only command at a fixed interval, clearing the screen
+between runs (like `watch(1)` on Linux). Errors are printed in place and
+the loop continues. Press Ctrl-C to stop.
+
+```bash
+splunkctl --watch 5 indexes list        # refresh every 5 seconds
+splunkctl --watch 10 server health      # poll server health
+splunkctl --watch 3 rules list --filter brute   # filtered view
+```
+
+Requires an interactive terminal (TTY). Mutation commands (those guarded
+by `--yes`) are rejected.
+
 ## Verify
 
 ```bash

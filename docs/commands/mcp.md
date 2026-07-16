@@ -12,10 +12,31 @@ Write .mcp.json for Claude Code registration.
 splunkctl mcp install [OPTIONS]
 ```
 
+**Flags**
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--transport` | choice: stdio, http | stdio | Transport for the generated config. 'http' writes a URL-based entry. |
+| `--host` | text | 127.0.0.1 | Host for HTTP config (ignored for stdio). |
+| `--port` | integer | 8765 | Port for HTTP config (ignored for stdio). |
+
 ## mcp serve
 
-Start the MCP server on stdio.
+Start the MCP server.
 
 ```text
 splunkctl mcp serve [OPTIONS]
 ```
+
+```text
+Default is stdio (standard MCP transport). Use --transport http to run
+a streamable-HTTP server for shared/team use on trusted networks.
+```
+
+**Flags**
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--transport` | choice: stdio, http | stdio | Transport type. 'http' runs streamable-HTTP. |
+| `--host` | text | 127.0.0.1 | Bind address for HTTP transport (ignored for stdio). |
+| `--port` | integer | 8765 | Port for HTTP transport (ignored for stdio). |

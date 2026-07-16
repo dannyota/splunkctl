@@ -71,7 +71,7 @@ ingest. Built for humans and LLM agents alike: deterministic flags,
   creates SOAR containers + typed CEF artifacts using the official CIM-to-CEF
   field map, with SDI dedup, severity mapping, and last-artifact automation
   batching.
-- **Built for agents** — built-in MCP server with 238 auto-generated tools,
+- **Built for agents** — built-in MCP server with 259 auto-generated tools,
   progressive discovery (5 meta-tools + focus/unfocus), 33 guide resources,
   guard markers on every mutation, dual output (TTY = table, pipe = JSON).
 
@@ -229,7 +229,7 @@ splunkctl mcp install              # register in .mcp.json
 splunkctl mcp serve                # start stdio MCP server
 ```
 
-The MCP server auto-generates 238 typed tools from the Click command tree
+The MCP server auto-generates 259 typed tools from the Click command tree
 (SIEM + SOAR) with progressive discovery -- agents start with 5 meta-tools
 (`help`, `usage`, `focus`, `unfocus`, `run`) and dynamically load typed
 schemas per command group. Subgroup-granular focus works for nested groups

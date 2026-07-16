@@ -1,5 +1,8 @@
 """Shared helpers for command groups."""
 
+import subprocess
+import sys
+import time
 from collections.abc import Callable, Iterable
 from typing import Any
 
@@ -375,6 +378,54 @@ _REQUIRED_ACTION_FIELDS: dict[str, str] = {
     "email": "action.email.to",
     "webhook": "action.webhook.param.url",
 }
+
+
+def resolve_leaf_command(
+    group: click.Group,
+    args: list[str],
+) -> click.Command | None:
+    """Walk the Click tree to find the leaf command for the given args."""
+    cmd: click.Command = group
+    for tok in args:
+        if tok.startswith("-"):
+            continue
+        if isinstance(cmd, click.Group) and tok in cmd.commands:
+            cmd = cmd.commands[tok]
+        else:
+            break
+    return cmd if cmd is not group else None
+
+
+def watch_loop(
+    ctx: click.Context,
+    interval: int,
+    invoke_fn: Callable[[click.Context], Any],
+) -> None:
+    """Re-invoke a read-only command every *interval* seconds.
+
+    Clears the terminal between runs (like ``watch(1)``). Errors are
+    printed in-place and the loop continues. Ctrl-C (KeyboardInterrupt)
+    exits cleanly with code 0.
+
+    Args:
+        ctx: The top-level Click context.
+        interval: Seconds between runs.
+        invoke_fn: Callable that re-invokes the resolved command tree.
+    """
+    while True:
+        if sys.stdout.isatty():
+            # Hardcoded command, no user input — safe to invoke directly.
+            subprocess.run(  # noqa: S603, S607
+                ["cls" if sys.platform == "win32" else "clear"],
+                check=False,
+            )
+        try:
+            invoke_fn(ctx)
+        except SystemExit:
+            pass
+        except Exception as exc:  # noqa: BLE001
+            output.error(str(exc))
+        time.sleep(interval)
 
 
 def app_scope(app: str | None) -> dict[str, str]:

@@ -107,10 +107,10 @@ def test_exec_cli_spills_large_success_output(tmp_path: Path) -> None:
     )
 
     with (
-        patch("splunkctl.mcp.server.subprocess.run", return_value=fake_result),
+        patch("splunkctl.mcp.runner.subprocess.run", return_value=fake_result),
         patch("splunkctl.mcp.output_cap._spill_dir", return_value=tmp_path),
     ):
-        from splunkctl.mcp.server import _exec_cli
+        from splunkctl.mcp.runner import exec_cli as _exec_cli
 
         result = _exec_cli(["search", "run", "index=main"])
 
@@ -131,8 +131,8 @@ def test_exec_cli_truncates_large_error_output() -> None:
         args=[], returncode=1, stdout=b"", stderr=big_err.encode()
     )
 
-    with patch("splunkctl.mcp.server.subprocess.run", return_value=fake_result):
-        from splunkctl.mcp.server import _exec_cli
+    with patch("splunkctl.mcp.runner.subprocess.run", return_value=fake_result):
+        from splunkctl.mcp.runner import exec_cli as _exec_cli
 
         result = _exec_cli(["search", "run", "bad query"])
 
@@ -145,10 +145,10 @@ def test_exec_cli_timeout_returns_clean_message() -> None:
     import subprocess as sp
 
     with patch(
-        "splunkctl.mcp.server.subprocess.run",
+        "splunkctl.mcp.runner.subprocess.run",
         side_effect=sp.TimeoutExpired(cmd=["splunkctl"], timeout=SUBPROCESS_TIMEOUT),
     ):
-        from splunkctl.mcp.server import _exec_cli
+        from splunkctl.mcp.runner import exec_cli as _exec_cli
 
         result = _exec_cli(["search", "run", "index=main | head 99999"])
 
@@ -167,8 +167,8 @@ def test_exec_cli_normal_output_unchanged() -> None:
         args=[], returncode=0, stdout=small.encode(), stderr=b""
     )
 
-    with patch("splunkctl.mcp.server.subprocess.run", return_value=fake_result):
-        from splunkctl.mcp.server import _exec_cli
+    with patch("splunkctl.mcp.runner.subprocess.run", return_value=fake_result):
+        from splunkctl.mcp.runner import exec_cli as _exec_cli
 
         result = _exec_cli(["indexes", "list"])
 

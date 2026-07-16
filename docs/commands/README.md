@@ -15,7 +15,7 @@ the standard dry-run/`--yes` gate; everything else is a read.
 | [config](config.md) | 4 | Manage splunkctl configuration. |
 | [dashboards](dashboards.md) | 7 | Dashboard management. |
 | [datamodels](datamodels.md) | 4 | CIM/tstats data models — definitions and acceleration health. |
-| [es](es.md) | 7 | Enterprise Security — notable-event triage (requires ES installed). |
+| [es](es.md) | 10 | Enterprise Security — notable-event triage (requires ES installed). |
 | [eventtypes](eventtypes.md) | 2 | Event classification rules (eventtypes.conf) — read-only. |
 | [hec](hec.md) | 8 | Manage HTTP Event Collector tokens. |
 | [indexes](indexes.md) | 7 | Manage Splunk indexes. |
@@ -26,9 +26,9 @@ the standard dry-run/`--yes` gate; everything else is a read.
 | [mcp](mcp.md) | 2 | Built-in MCP server for agent integration. |
 | [parsers](parsers.md) | 11 | Manage source types and field extractions. |
 | [rules](rules.md) | 13 | Manage detection rules (saved searches). |
-| [search](search.md) | 7 | Search and job management. |
-| [server](server.md) | 11 | Server operations — messages, license, KV store, topology health. |
-| [soar](soar.md) | 98 | Splunk SOAR operations — platform reads, containers, playbooks. |
+| [search](search.md) | 8 | Search and job management. |
+| [server](server.md) | 21 | Server operations — messages, license, KV store, topology health. |
+| [soar](soar.md) | 105 | Splunk SOAR operations — platform reads, containers, playbooks. |
 | [state](state.md) | 3 | Unified config-as-code across rules, parsers, macros, lookups, dashboards. |
 | [tags](tags.md) | 2 | CIM/eventtype tag assignments (tags.conf) — read-only. |
 | [users](users.md) | 10 | Manage users and roles. |

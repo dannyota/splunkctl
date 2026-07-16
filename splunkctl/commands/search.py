@@ -8,7 +8,7 @@ import click
 
 from splunkctl import guard, output
 from splunkctl.client import get_client
-from splunkctl.commands.common import fetch_page, list_options, read_results
+from splunkctl.commands.common import fetch_page, list_options, read_results, spl_quote
 
 _GENERATING = (
     "abstract",
@@ -395,3 +395,66 @@ def upload_data(
         ctx.exit(1)
         return
     output.info(f"Uploaded '{p.name}' ({size}) to index={index}.")
+
+
+@search_group.command("metrics")
+@click.option("--index", required=True, help="Metrics index to query.")
+@click.option(
+    "--metric",
+    default=None,
+    help="Metric name — when set, returns dimensions instead of metric names.",
+)
+@click.option(
+    "--filter",
+    "prefix",
+    default=None,
+    help="Filter metric names by prefix (only without --metric).",
+)
+@click.option("--app", default=None, help="Splunk app context.")
+@click.pass_context
+def metrics_catalog(
+    ctx: click.Context,
+    index: str,
+    metric: str | None,
+    prefix: str | None,
+    app: str | None,
+) -> None:
+    """List metric names or dimensions from a metrics index.
+
+    Without ``--metric``, returns all metric names in the index.
+    With ``--metric``, returns the dimensions for that metric.
+    """
+    client = get_client(ctx)
+    svc = client.service
+    if app:
+        svc.namespace["app"] = app
+
+    quoted_index = spl_quote(index)
+
+    if metric is not None:
+        quoted_metric = spl_quote(metric)
+        spl = (
+            f"| mcatalog values(_dims) WHERE "
+            f"metric_name={quoted_metric} AND index={quoted_index}"
+        )
+        output.info(f"Fetching dimensions for metric {metric!r} in index {index!r}")
+    else:
+        spl = f"| mcatalog values(metric_name) WHERE index={quoted_index}"
+        output.info(f"Fetching metric names from index {index!r}")
+
+    stream: Any = svc.jobs.oneshot(spl, output_mode="json")
+    rows = read_results(stream)
+
+    # mcatalog returns MV fields as a single row with a list value;
+    # flatten into one-row-per-value for clean table/JSON output.
+    field = "values(_dims)" if metric else "values(metric_name)"
+    flat: list[dict[str, str]] = []
+    for row in rows:
+        val = row.get(field, [])
+        items: list[str] = val if isinstance(val, list) else [str(val)]
+        for item in items:
+            if prefix and not item.startswith(prefix):
+                continue
+            flat.append({"dimension": item} if metric else {"metric_name": item})
+
+    output.render(ctx, flat, empty=f"No {'dimensions' if metric else 'metrics'} found.")

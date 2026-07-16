@@ -107,9 +107,59 @@ a GET on the task.
 ## Workbook templates
 
 SOAR ships with 10 preloaded workbook templates. The default is
-NIST 800-61 (5 phases, 19 tasks). Templates are listed at
-`/rest/workbook_template`. The `promote` command resolves template
-names via this endpoint.
+NIST 800-61 (5 phases, 19 tasks). Templates are managed via the
+`soar workbook-templates` subgroup.
+
+### List templates
+
+```bash
+splunkctl soar workbook-templates list
+splunkctl --json soar workbook-templates list --limit 5
+```
+
+### Get a template by name or id
+
+```bash
+splunkctl soar workbook-templates get "NIST 800-61"
+splunkctl --json soar workbook-templates get 1
+```
+
+Name resolution is case-sensitive. Numeric arguments are treated
+as ids directly; non-numeric arguments trigger a name lookup.
+
+### Create a template
+
+```bash
+splunkctl --yes soar workbook-templates create \
+    --name "IR Workflow" --phases "Detect,Contain,Eradicate,Recover"
+```
+
+Phases are created in the order given, numbered starting at 1.
+At least one phase is required.
+
+### Update a template (add phases)
+
+```bash
+splunkctl --yes soar workbook-templates update "NIST 800-61" \
+    --add-phase "Lessons Learned"
+
+# Multiple phases
+splunkctl --yes soar workbook-templates update 2 \
+    --add-phase Eradicate --add-phase Recover
+```
+
+New phases are appended after the highest existing order value.
+
+### Delete a template
+
+```bash
+splunkctl --yes soar workbook-templates delete "Custom Investigation"
+splunkctl --yes soar workbook-templates delete 3
+```
+
+DELETE on `workbook_template` requires Basic auth (username/password
+credentials) -- SOAR refuses token auth on most DELETE endpoints.
+Ensure your profile has `username` and `password` configured.
 
 ## API endpoints used
 
@@ -122,3 +172,7 @@ names via this endpoint.
 | Task update | POST | `/rest/workbook_task/<id>` |
 | Closing note | POST | `/rest/note` |
 | Template list | GET | `/rest/workbook_template` |
+| Template get | GET | `/rest/workbook_template/<id>` |
+| Template create | POST | `/rest/workbook_template` |
+| Template update | POST | `/rest/workbook_template/<id>` |
+| Template delete | DELETE | `/rest/workbook_template/<id>` |
