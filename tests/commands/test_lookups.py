@@ -4,8 +4,10 @@ import json
 from pathlib import Path
 from unittest.mock import ANY, MagicMock, patch
 
+import pytest
 from click.testing import CliRunner
 
+from splunkctl.commands.common import UnsafeLookupNameError, spl_quote_lookup_name
 from splunkctl.main import cli
 
 
@@ -214,3 +216,112 @@ def test_download_missing_lookup_fails(mock_gc: MagicMock, tmp_path) -> None:
     assert "not found" in result.stderr
     assert not out.exists()
     mock_svc.jobs.oneshot.assert_not_called()
+
+
+# --------------------------------------------------------------------------
+# S3 — SPL injection regression
+# --------------------------------------------------------------------------
+
+
+@patch("splunkctl.commands.lookups.get_client")
+def test_download_quotes_name_in_spl(mock_gc: MagicMock) -> None:
+    """A hostile lookup name must be quoted, not interpolated raw."""
+    mock_svc = MagicMock()
+    mock_svc.lookup_table_files.list.return_value = [
+        _mock_lookup(name="foo | delete index=main")
+    ]
+    mock_svc.jobs.oneshot.return_value.read.return_value = b"a,b\n1,2\n"
+    mock_gc.return_value.service = mock_svc
+
+    result = CliRunner().invoke(cli, ["lookups", "download", "foo | delete index=main"])
+    assert result.exit_code == 0
+    spl_arg = mock_svc.jobs.oneshot.call_args.args[0]
+    # The name must be wrapped in double quotes — never bare.
+    assert '| inputlookup "foo | delete index=main"' == spl_arg
+
+
+@patch("splunkctl.commands.lookups.get_client")
+def test_download_quotes_embedded_quotes(mock_gc: MagicMock) -> None:
+    """Embedded double quotes in a lookup name must be escaped."""
+    mock_svc = MagicMock()
+    name = 'a"b'
+    mock_svc.lookup_table_files.list.return_value = [_mock_lookup(name=name)]
+    mock_svc.jobs.oneshot.return_value.read.return_value = b"x\n"
+    mock_gc.return_value.service = mock_svc
+
+    result = CliRunner().invoke(cli, ["lookups", "download", name])
+    assert result.exit_code == 0
+    spl_arg = mock_svc.jobs.oneshot.call_args.args[0]
+    assert spl_arg == '| inputlookup "a\\"b"'
+
+
+@patch("splunkctl.commands.lookups.get_client")
+def test_download_rejects_newline_name(mock_gc: MagicMock) -> None:
+    """Lookup names with newlines cannot be safely quoted — reject them."""
+    mock_svc = MagicMock()
+    name = "bad\nname"
+    mock_svc.lookup_table_files.list.return_value = [_mock_lookup(name=name)]
+    mock_gc.return_value.service = mock_svc
+
+    result = CliRunner().invoke(cli, ["lookups", "download", name])
+    assert result.exit_code != 0
+    assert (
+        "newline" in result.output.lower() or "newline" in (result.stderr or "").lower()
+    )
+
+
+# --- spl_quote_lookup_name unit tests ---
+
+
+def test_spl_quote_lookup_name_plain() -> None:
+    assert spl_quote_lookup_name("hosts.csv") == '"hosts.csv"'
+
+
+def test_spl_quote_lookup_name_pipe_injection() -> None:
+    assert spl_quote_lookup_name("foo | delete") == '"foo | delete"'
+
+
+def test_spl_quote_lookup_name_embedded_quotes() -> None:
+    assert spl_quote_lookup_name('a"b') == '"a\\"b"'
+
+
+def test_spl_quote_lookup_name_backslash() -> None:
+    assert spl_quote_lookup_name("a\\b") == '"a\\\\b"'
+
+
+def test_spl_quote_lookup_name_rejects_newline() -> None:
+    with pytest.raises(UnsafeLookupNameError, match="newline"):
+        spl_quote_lookup_name("bad\nname")
+
+
+def test_spl_quote_lookup_name_rejects_carriage_return() -> None:
+    with pytest.raises(UnsafeLookupNameError, match="newline"):
+        spl_quote_lookup_name("bad\rname")
+
+
+def test_spl_quote_lookup_name_rejects_nul() -> None:
+    with pytest.raises(UnsafeLookupNameError, match="NUL"):
+        spl_quote_lookup_name("bad\x00name")
+
+
+# --------------------------------------------------------------------------
+# C6 — Error classification: auth/network must not be swallowed as not_found
+# --------------------------------------------------------------------------
+
+
+@patch("splunkctl.commands.lookups.get_client")
+def test_get_lookup_auth_error_propagates(mock_gc: MagicMock) -> None:
+    """An HTTPError (e.g. 401) must not be caught as not_found."""
+    from splunklib.binding import HTTPError
+
+    mock_svc = MagicMock()
+    resp = MagicMock(status=401, reason="Unauthorized")
+    resp.body.read.return_value = (
+        b"<response><messages><msg>Unauthorized</msg></messages></response>"
+    )
+    mock_svc.lookup_table_files.list.side_effect = HTTPError(resp)
+    mock_gc.return_value.service = mock_svc
+
+    result = CliRunner().invoke(cli, ["--json", "lookups", "get", "test.csv"])
+    # Should NOT say "not found"
+    assert "not_found" not in result.stderr

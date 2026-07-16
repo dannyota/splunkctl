@@ -7,7 +7,7 @@ from splunkctl.commands.search import _normalize_spl
 from splunkctl.main import cli
 
 _PATCH = "splunkctl.commands.search.get_client"
-_READER = "splunkctl.commands.search.JSONResultsReader"
+_READER = "splunklib.results.JSONResultsReader"
 
 
 def test_normalize_spl_prepends_search() -> None:
@@ -26,7 +26,7 @@ def test_normalize_spl_strips_whitespace() -> None:
     assert _normalize_spl("  index=main  ") == "search index=main"
 
 
-@patch("splunkctl.commands.search.JSONResultsReader")
+@patch("splunklib.results.JSONResultsReader")
 @patch("splunkctl.commands.search.get_client")
 def test_run_search(mock_gc: MagicMock, mock_reader: MagicMock) -> None:
     mock_job = MagicMock()
@@ -47,7 +47,7 @@ def test_run_search(mock_gc: MagicMock, mock_reader: MagicMock) -> None:
     assert mock_svc.jobs.create.call_args.args[0] == "search index=main"
 
 
-@patch("splunkctl.commands.search.JSONResultsReader")
+@patch("splunklib.results.JSONResultsReader")
 @patch("splunkctl.commands.search.get_client")
 def test_run_search_with_time_range(mock_gc: MagicMock, mock_reader: MagicMock) -> None:
     mock_job = MagicMock()
@@ -80,7 +80,7 @@ def test_run_search_with_time_range(mock_gc: MagicMock, mock_reader: MagicMock) 
     assert kw["latest_time"] == "now"
 
 
-@patch("splunkctl.commands.search.JSONResultsReader")
+@patch("splunklib.results.JSONResultsReader")
 @patch("splunkctl.commands.search.get_client")
 def test_run_search_pipe_query(mock_gc: MagicMock, mock_reader: MagicMock) -> None:
     mock_job = MagicMock()
@@ -99,7 +99,7 @@ def test_run_search_pipe_query(mock_gc: MagicMock, mock_reader: MagicMock) -> No
     assert mock_svc.jobs.create.call_args.args[0] == "| stats count"
 
 
-@patch("splunkctl.commands.search.JSONResultsReader")
+@patch("splunklib.results.JSONResultsReader")
 @patch("splunkctl.commands.search.get_client")
 def test_export_search(mock_gc: MagicMock, mock_reader: MagicMock) -> None:
     mock_svc = MagicMock()
@@ -115,7 +115,7 @@ def test_export_search(mock_gc: MagicMock, mock_reader: MagicMock) -> None:
     mock_svc.jobs.export.assert_called_once()
 
 
-@patch("splunkctl.commands.search.JSONResultsReader")
+@patch("splunklib.results.JSONResultsReader")
 @patch("splunkctl.commands.search.get_client")
 def test_oneshot_search(mock_gc: MagicMock, mock_reader: MagicMock) -> None:
     mock_svc = MagicMock()
@@ -158,7 +158,7 @@ def test_list_jobs(mock_gc: MagicMock) -> None:
     mock_svc.jobs.list.assert_called_once_with()
 
 
-@patch("splunkctl.commands.search.JSONResultsReader")
+@patch("splunklib.results.JSONResultsReader")
 @patch("splunkctl.commands.search.get_client")
 def test_get_job_done(mock_gc: MagicMock, mock_reader: MagicMock) -> None:
     mock_job = MagicMock()

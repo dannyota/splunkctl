@@ -93,7 +93,8 @@ def init(
         else click.prompt("Password", default="", hide_input=True)
     )
     scheme = scheme or "https"
-    verify = verify if verify is not None else False
+    if verify is None:
+        verify = click.confirm("Verify TLS certificates", default=True)
 
     cfg: dict[str, Any] = {
         "host": host,

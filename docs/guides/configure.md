@@ -20,10 +20,15 @@ scheme: "https"
 username: "admin"
 password: ""            # optional, can use token instead
 token: ""               # bearer token (preferred)
-verify_ssl: false       # self-signed certs common in Splunk
+verify: true            # TLS cert verification (default: on)
 app: "search"           # default app context
 owner: "nobody"         # default owner context
 ```
+
+**TLS verification is on by default.** Production instances with valid
+certificates work out of the box. For lab/dev instances with self-signed
+certs, set `verify: false` explicitly in the profile — `config init` asks
+during setup (default: yes).
 
 ## Profiles (dev/UAT/prod)
 

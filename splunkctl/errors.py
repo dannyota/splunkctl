@@ -11,6 +11,20 @@ from typing import NamedTuple
 
 import requests
 
+
+class WebSessionError(RuntimeError):
+    """Failure in a Splunk Web UI session (login, CSRF, upload).
+
+    Carries a ``kind`` so ``classify`` can map it to a clean error
+    envelope without falling through to the unclassified re-raise path.
+    """
+
+    def __init__(self, message: str, *, kind: str = "auth") -> None:  # noqa: D107
+        super().__init__(message)
+        self.message = message
+        self.kind = kind
+
+
 _HTTP_KIND: dict[int, str] = {
     401: "auth",
     403: "permission",
@@ -44,6 +58,10 @@ def classify(exc: Exception) -> Classified | None:
     callers should fall back to their own default handling (e.g. an
     unclassified ``error`` kind, or re-raising).
     """
+    # WebSessionError carries kind natively (auth/web).
+    if isinstance(exc, WebSessionError):
+        return Classified(exc.message, exc.kind, None)
+
     # SOARError carries kind/http_status natively — pass through.
     from splunkctl.soar.client import SOARError
 

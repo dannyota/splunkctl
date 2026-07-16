@@ -17,11 +17,34 @@ splunkctl users list                          # list all users
 splunkctl users get admin                     # user details
 splunkctl users roles                         # list all roles
 splunkctl users create --name newuser \
-    --password 'pass' --roles user \
-    --email user@example.com --yes            # create user
+    --roles user --email user@example.com \
+    --yes                                     # create (prompts for password)
 splunkctl users update newuser \
     --roles 'user,power' --yes                # change roles
 splunkctl users delete newuser --yes          # delete user
+```
+
+### Password input
+
+Three ways to supply a password (for `users create` or `users update
+--password-stdin`):
+
+| Method | Command | When to use |
+|--------|---------|-------------|
+| Interactive prompt | _(omit `--password`)_ | TTY sessions (default) |
+| Stdin pipe | `--password-stdin` | Scripts, CI/CD |
+| CLI flag | `--password` | Quick one-offs (visible in `ps`) |
+
+```bash
+# Interactive (hidden prompt with confirmation):
+splunkctl users create --name jdoe --roles user --yes
+
+# Pipe from a secret manager:
+vault kv get -field=pw secret/splunk \
+  | splunkctl users create --name jdoe --roles user --password-stdin --yes
+
+# CLI flag (password visible in process list -- avoid in production):
+splunkctl users create --name jdoe --password 's3cret' --roles user --yes
 ```
 
 ## Recipes
@@ -40,9 +63,10 @@ splunkctl users roles --json \
 Create a user with the `user` role, then verify:
 
 ```bash
-splunkctl users create --name jdoe \
-    --password "$(openssl rand -base64 16)" \
-    --roles user --email jdoe@example.com --yes
+openssl rand -base64 16 \
+  | splunkctl users create --name jdoe \
+      --password-stdin --roles user \
+      --email jdoe@example.com --yes
 splunkctl users get jdoe
 ```
 

@@ -138,22 +138,12 @@ def test_roles_truncated_capabilities(mock_gc: MagicMock) -> None:
     assert "+5 more" in result.output
 
 
+_CREATE = ["users", "create", "--name", "newuser", "--password", "s3cret"]
+
+
 @patch(_PATCH)
 def test_create_user_dry_run(mock_gc: MagicMock) -> None:
-    runner = CliRunner()
-    result = runner.invoke(
-        cli,
-        [
-            "users",
-            "create",
-            "--name",
-            "newuser",
-            "--password",
-            "s3cret",
-            "--roles",
-            "user,power",
-        ],
-    )
+    result = CliRunner().invoke(cli, [*_CREATE, "--roles", "user,power"])
     assert result.exit_code == 0
     assert "DRY RUN" in result.output
     mock_gc.return_value.service.users.create.assert_not_called()
@@ -161,17 +151,11 @@ def test_create_user_dry_run(mock_gc: MagicMock) -> None:
 
 @patch(_PATCH)
 def test_create_user_confirmed(mock_gc: MagicMock) -> None:
-    runner = CliRunner()
-    result = runner.invoke(
+    result = CliRunner().invoke(
         cli,
         [
             "--yes",
-            "users",
-            "create",
-            "--name",
-            "newuser",
-            "--password",
-            "s3cret",
+            *_CREATE,
             "--roles",
             "user",
             "--email",
@@ -194,8 +178,7 @@ def test_create_user_confirmed(mock_gc: MagicMock) -> None:
 @patch(_PATCH)
 def test_create_user_failure(mock_gc: MagicMock) -> None:
     mock_gc.return_value.service.users.create.side_effect = Exception("conflict")
-    runner = CliRunner()
-    result = runner.invoke(
+    result = CliRunner().invoke(
         cli,
         [
             "--yes",
@@ -227,8 +210,7 @@ def test_update_user_dry_run(mock_gc: MagicMock) -> None:
 def test_update_user_confirmed(mock_gc: MagicMock) -> None:
     mock_user = _mock_user("admin")
     mock_gc.return_value.service.users.__getitem__.return_value = mock_user
-    runner = CliRunner()
-    result = runner.invoke(
+    result = CliRunner().invoke(
         cli,
         [
             "--yes",
@@ -388,3 +370,114 @@ def test_update_user_password_applied(mock_gc: MagicMock) -> None:
     assert result.exit_code == 0
     call_kwargs = mock_user.update.call_args.kwargs
     assert call_kwargs["password"] == "new_pass"
+
+
+# --- password-stdin and prompt tests ---
+
+
+@patch(_PATCH)
+def test_create_user_password_stdin(mock_gc: MagicMock) -> None:
+    result = CliRunner().invoke(
+        cli,
+        [
+            "--yes",
+            "users",
+            "create",
+            "--name",
+            "stdin_user",
+            "--password-stdin",
+            "--roles",
+            "user",
+        ],
+        input="secret_from_pipe\n",
+    )
+    assert result.exit_code == 0
+    assert "Created user" in result.output
+    assert (
+        mock_gc.return_value.service.users.create.call_args.kwargs["password"]
+        == "secret_from_pipe"
+    )
+
+
+@patch(_PATCH)
+def test_update_user_password_stdin(mock_gc: MagicMock) -> None:
+    mock_user = _mock_user("admin")
+    mock_gc.return_value.service.users.__getitem__.return_value = mock_user
+    result = CliRunner().invoke(
+        cli,
+        ["--yes", "users", "update", "admin", "--password-stdin"],
+        input="new_stdin_pw\n",
+    )
+    assert result.exit_code == 0
+    assert mock_user.update.call_args.kwargs["password"] == "new_stdin_pw"
+
+
+def test_create_user_password_and_stdin_exclusive() -> None:
+    result = CliRunner().invoke(
+        cli,
+        [
+            "--yes",
+            "users",
+            "create",
+            "--name",
+            "x",
+            "--password",
+            "p",
+            "--password-stdin",
+            "--roles",
+            "user",
+        ],
+        input="stdin_pw\n",
+    )
+    assert result.exit_code != 0
+    assert "mutually exclusive" in result.output
+
+
+@patch(_PATCH)
+def test_password_never_in_dry_run_or_error(mock_gc: MagicMock) -> None:
+    """Password must not appear in dry-run preview or error output."""
+    pw = "TopSecret99"
+    # Dry-run preview
+    r = CliRunner().invoke(cli, [*_CREATE, "--roles", "user"])
+    assert r.exit_code == 0
+    assert pw not in r.output + r.stderr
+    assert "DRY RUN" in r.output + r.stderr
+    # Create error
+    mock_gc.return_value.service.users.create.side_effect = Exception(f"pw={pw}")
+    r = CliRunner().invoke(cli, ["--yes", *_CREATE, "--roles", "user"])
+    assert r.exit_code != 0
+    assert pw not in r.output + r.stderr
+    assert "Create user failed" in r.output + r.stderr
+    # Update error
+    mock_gc.return_value.service.users.create.side_effect = None
+    mu = _mock_user("admin")
+    mock_gc.return_value.service.users.__getitem__.return_value = mu
+    mu.update.side_effect = Exception(f"pw={pw}")
+    r = CliRunner().invoke(
+        cli,
+        ["--yes", "users", "update", "admin", "--password", pw],
+    )
+    assert r.exit_code != 0
+    assert pw not in r.output + r.stderr
+    assert "Update user failed" in r.output + r.stderr
+
+
+@patch(_PATCH)
+@patch("splunkctl.commands.users.sys")
+def test_create_user_interactive_prompt(
+    mock_sys: MagicMock,
+    mock_gc: MagicMock,
+) -> None:
+    """Interactive prompt asks for password when no flag is given."""
+    mock_sys.stdin.isatty.return_value = True
+    mock_sys.stdin.readline.return_value = ""
+    result = CliRunner().invoke(
+        cli,
+        ["--yes", "users", "create", "--name", "prompted", "--roles", "user"],
+        input="interactive_pw\ninteractive_pw\n",
+    )
+    assert result.exit_code == 0
+    assert (
+        mock_gc.return_value.service.users.create.call_args.kwargs["password"]
+        == "interactive_pw"
+    )

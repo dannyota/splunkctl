@@ -37,25 +37,31 @@ def cases_group() -> None:
 def _resolve_template(
     client: Any,
     template_arg: str | None,
-) -> int:
+) -> int | None:
     """Resolve a workbook template name or id to an integer id.
 
     When *template_arg* is ``None``, returns the ``is_default`` template.
-    Raises ``click.ClickException`` on failure.
+    Returns ``None`` on failure (error emitted via ``output.error``).
     """
     try:
         result = client.get("workbook_template", params={})
     except SOARError as exc:
-        raise click.ClickException(
-            f"Could not fetch workbook templates: {exc.message}"
-        ) from exc
+        output.error(
+            f"Could not fetch workbook templates: {exc.message}",
+            kind=exc.kind,
+            http_status=exc.http_status,
+        )
+        return None
 
     data: list[dict[str, Any]] = []
     if isinstance(result, dict):
         data = result.get("data", [])
 
     if not data:
-        raise click.ClickException("No workbook templates available on this instance.")
+        output.error(
+            "No workbook templates available on this instance.", kind="not_found"
+        )
+        return None
 
     # Numeric id?
     if template_arg is not None and template_arg.isascii() and template_arg.isdigit():
@@ -63,7 +69,10 @@ def _resolve_template(
         if any(t.get("id") == tid for t in data):
             return tid
         names = ", ".join(t.get("name", "?") for t in data)
-        raise click.ClickException(f"Template id {tid} not found. Available: {names}")
+        output.error(
+            f"Template id {tid} not found. Available: {names}", kind="not_found"
+        )
+        return None
 
     # Name match (case-sensitive)?
     if template_arg is not None:
@@ -71,9 +80,11 @@ def _resolve_template(
             if t.get("name") == template_arg:
                 return int(t["id"])
         names = ", ".join(t.get("name", "?") for t in data)
-        raise click.ClickException(
-            f"Template '{template_arg}' not found. Available: {names}"
+        output.error(
+            f"Template '{template_arg}' not found. Available: {names}",
+            kind="not_found",
         )
+        return None
 
     # Default template.
     for t in data:
@@ -81,9 +92,11 @@ def _resolve_template(
             return int(t["id"])
 
     names = ", ".join(t.get("name", "?") for t in data)
-    raise click.ClickException(
-        f"No default workbook template found. Specify --template. Available: {names}"
+    output.error(
+        f"No default workbook template found. Specify --template. Available: {names}",
+        kind="not_found",
     )
+    return None
 
 
 @cases_group.command("promote")
@@ -103,20 +116,24 @@ def promote_cmd(
     template_arg: str | None,
 ) -> None:
     """Promote a container to a case with a workbook template."""
-    client = get_soar_client(ctx)
-    template_id = _resolve_template(client, template_arg)
-
-    body: dict[str, Any] = {
-        "container_type": "case",
-        "template": template_id,
-    }
-    details = json.dumps(body, indent=2)
+    details = f"template={template_arg or 'default'}"
     if not guard.soar_check(
         ctx,
         f"Promote container {container_id} to case",
         details=details,
     ):
         return
+
+    client = get_soar_client(ctx)
+    template_id = _resolve_template(client, template_arg)
+    if template_id is None:
+        ctx.exit(1)
+        return
+
+    body: dict[str, Any] = {
+        "container_type": "case",
+        "template": template_id,
+    }
 
     try:
         result = client.post(f"container/{container_id}", body=body)

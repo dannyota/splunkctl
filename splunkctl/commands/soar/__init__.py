@@ -12,7 +12,8 @@ from splunkctl.commands.soar import (
     playbooks_delete as _pd,  # noqa: F401  # register delete
 )
 from splunkctl.commands.soar.actions import actions_group
-from splunkctl.commands.soar.admin import audit_cmd, roles_group, users_group
+from splunkctl.commands.soar.admin import users_group
+from splunkctl.commands.soar.admin_roles_audit import audit_cmd, roles_group
 from splunkctl.commands.soar.admin_views import meta, settings, stats
 from splunkctl.commands.soar.approvals import approvals_group
 from splunkctl.commands.soar.apps import apps_group

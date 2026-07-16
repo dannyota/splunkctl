@@ -3,11 +3,13 @@
 import json
 from unittest.mock import MagicMock, patch
 
+import requests
 from click.testing import CliRunner
 
 from splunkctl.main import cli
 
 _PATCH = "splunkctl.commands.hec.get_client"
+_CFG_PATCH = "splunkctl.commands.hec.cfg_mod.load"
 
 
 def _mock_token(
@@ -230,18 +232,30 @@ def test_settings_enable(mock_gc: MagicMock) -> None:
     assert call_kwargs.kwargs["disabled"] == "0"
 
 
-@patch("splunkctl.commands.hec.req.post")
-@patch(_PATCH)
-def test_send_posts_event(mock_gc: MagicMock, mock_post: MagicMock) -> None:
+def _setup_send_mocks(
+    mock_gc: MagicMock,
+    *,
+    ssl: str = "0",
+) -> MagicMock:
+    """Wire up the service mock for hec send tests. Returns the svc mock."""
     svc = mock_gc.return_value.service
-    token = _mock_token()
-    svc.hec_tokens.__getitem__.return_value = token
+    svc.hec_tokens.__getitem__.return_value = _mock_token()
     svc.host = "localhost"
     resp = MagicMock()
     resp.body.read.return_value = json.dumps(
-        {"entry": [{"content": {"port": "8088", "enableSSL": "0"}}]}
+        {"entry": [{"content": {"port": "8088", "enableSSL": ssl}}]}
     ).encode()
     svc.get.return_value = resp
+    return svc
+
+
+@patch(_CFG_PATCH, return_value={"verify": True})
+@patch("splunkctl.commands.hec.req.post")
+@patch(_PATCH)
+def test_send_posts_event(
+    mock_gc: MagicMock, mock_post: MagicMock, _mock_cfg: MagicMock
+) -> None:
+    _setup_send_mocks(mock_gc)
     mock_post.return_value.raise_for_status = MagicMock()
 
     result = CliRunner().invoke(
@@ -252,3 +266,63 @@ def test_send_posts_event(mock_gc: MagicMock, mock_post: MagicMock) -> None:
     call_args = mock_post.call_args
     assert "http://localhost:8088" in call_args.args[0]
     assert call_args.kwargs["headers"]["Authorization"] == "Splunk abc-123"
+
+
+@patch(_CFG_PATCH, return_value={"verify": True})
+@patch("splunkctl.commands.hec.req.post")
+@patch(_PATCH)
+def test_send_connection_error(
+    mock_gc: MagicMock, mock_post: MagicMock, _mock_cfg: MagicMock
+) -> None:
+    """Transport exception (unreachable host) must not raise NameError."""
+    _setup_send_mocks(mock_gc)
+    mock_post.side_effect = requests.ConnectionError("Connection refused")
+
+    result = CliRunner().invoke(
+        cli,
+        ["--yes", "hec", "send", "my_token", "test event"],
+    )
+    assert result.exit_code != 0
+    assert "HEC send failed" in result.stderr
+    # Must NOT contain a NameError traceback
+    assert "NameError" not in (result.output + result.stderr)
+
+
+@patch(_CFG_PATCH, return_value={"verify": False})
+@patch("splunkctl.commands.hec.req.post")
+@patch(_PATCH)
+def test_send_verify_false_honoured(
+    mock_gc: MagicMock, mock_post: MagicMock, _mock_cfg: MagicMock
+) -> None:
+    """verify:false from config must propagate to requests.post."""
+    _setup_send_mocks(mock_gc)
+    mock_post.return_value.raise_for_status = MagicMock()
+
+    result = CliRunner().invoke(
+        cli,
+        ["--yes", "hec", "send", "my_token", "test event"],
+    )
+    assert result.exit_code == 0
+    call_kwargs = mock_post.call_args.kwargs
+    assert call_kwargs["verify"] is False
+
+
+@patch(_CFG_PATCH, return_value={"verify": True})
+@patch("splunkctl.commands.hec.req.post")
+@patch(_PATCH)
+def test_send_includes_timeout(
+    mock_gc: MagicMock, mock_post: MagicMock, _mock_cfg: MagicMock
+) -> None:
+    """requests.post must receive an explicit timeout."""
+    _setup_send_mocks(mock_gc)
+    mock_post.return_value.raise_for_status = MagicMock()
+
+    result = CliRunner().invoke(
+        cli,
+        ["--yes", "hec", "send", "my_token", "test event"],
+    )
+    assert result.exit_code == 0
+    call_kwargs = mock_post.call_args.kwargs
+    assert "timeout" in call_kwargs
+    assert isinstance(call_kwargs["timeout"], int)
+    assert call_kwargs["timeout"] > 0

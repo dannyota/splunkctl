@@ -1,8 +1,11 @@
 """Tests for the commands (meta) command."""
 
+from __future__ import annotations
+
 import ast
 import json
 from pathlib import Path
+from typing import Any
 
 from click.testing import CliRunner
 
@@ -229,3 +232,69 @@ def test_guard_check_has_decorator_tripwire() -> None:
     assert not missing, (
         f"Functions call guard.check() but lack @guard.guarded: {missing}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Per-command @guarded visibility in commands --json
+# ---------------------------------------------------------------------------
+
+
+def _collect_guarded(nodes: list[dict[str, Any]]) -> dict[str, bool]:
+    out: dict[str, bool] = {}
+    for n in nodes:
+        if "subcommands" in n:
+            out.update(_collect_guarded(n["subcommands"]))
+        elif n.get("guarded"):
+            out[str(n["name"])] = True
+    return out
+
+
+def _collect_guarded_full_path(
+    nodes: list[dict[str, Any]],
+    prefix: str = "",
+) -> dict[str, bool]:
+    out: dict[str, bool] = {}
+    for n in nodes:
+        path = f"{prefix}.{n['name']}" if prefix else str(n["name"])
+        if "subcommands" in n:
+            out.update(_collect_guarded_full_path(n["subcommands"], path))
+        elif n.get("guarded"):
+            out[path] = True
+    return out
+
+
+class TestGuardedMarkers:
+    def test_vault_upload_guarded(self) -> None:
+        """vault upload reports guarded=true in commands --json."""
+        result = CliRunner().invoke(cli, ["commands"])
+        data = json.loads(result.output)
+        guarded = _collect_guarded(data["commands"])
+        assert "upload" in guarded, "vault upload should be guarded"
+
+    def test_vault_delete_guarded(self) -> None:
+        """vault delete reports guarded=true in commands --json."""
+        result = CliRunner().invoke(cli, ["commands"])
+        data = json.loads(result.output)
+        guarded = _collect_guarded(data["commands"])
+        assert "delete" in guarded, "vault delete should be guarded"
+
+    def test_notes_add_guarded(self) -> None:
+        """notes add reports guarded=true in commands --json."""
+        result = CliRunner().invoke(cli, ["commands"])
+        data = json.loads(result.output)
+        soar_cmds = _collect_guarded_full_path(data["commands"])
+        assert "soar.notes.add" in soar_cmds, "notes add should be guarded"
+
+    def test_notes_delete_guarded(self) -> None:
+        """notes delete reports guarded=true in commands --json."""
+        result = CliRunner().invoke(cli, ["commands"])
+        data = json.loads(result.output)
+        soar_cmds = _collect_guarded_full_path(data["commands"])
+        assert "soar.notes.delete" in soar_cmds, "notes delete should be guarded"
+
+    def test_notes_comment_guarded(self) -> None:
+        """notes comment reports guarded=true in commands --json."""
+        result = CliRunner().invoke(cli, ["commands"])
+        data = json.loads(result.output)
+        soar_cmds = _collect_guarded_full_path(data["commands"])
+        assert "soar.notes.comment" in soar_cmds, "notes comment should be guarded"

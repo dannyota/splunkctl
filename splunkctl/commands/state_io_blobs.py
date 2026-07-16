@@ -16,6 +16,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from splunkctl.commands.common import spl_quote_lookup_name
 from splunkctl.commands.state_types import (
     ChangeRecord,
     DriftEntry,
@@ -29,7 +30,8 @@ from splunkctl.commands.state_types import (
 
 
 def _download_csv(svc: Any, name: str, app: str) -> bytes:
-    stream = svc.jobs.oneshot(f"| inputlookup {name}", output_mode="csv", app=app)
+    quoted = spl_quote_lookup_name(name)
+    stream = svc.jobs.oneshot(f"| inputlookup {quoted}", output_mode="csv", app=app)
     result: bytes = stream.read()
     return result
 

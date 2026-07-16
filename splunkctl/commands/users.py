@@ -1,5 +1,6 @@
 """User and role management commands."""
 
+import sys
 from typing import Any
 
 import click
@@ -323,38 +324,63 @@ def delete_role(ctx: click.Context, name: str) -> None:
     output.info(f"Role '{name}' deleted.")
 
 
+# --- password input helpers ---
+
+_PW_WARN = (
+    "(visible in /proc cmdline; prefer --password-stdin or the interactive prompt)"
+)
+_PW_STDIN_HELP = "Read password from stdin (one line)."
+
+
+def _resolve_password(password: str | None, password_stdin: bool) -> str:
+    """Return the password from the flag, stdin, or an interactive prompt."""
+    if password_stdin:
+        if password is not None:
+            raise click.UsageError(
+                "--password and --password-stdin are mutually exclusive"
+            )
+        line = sys.stdin.readline()
+        if not line:
+            raise click.UsageError("--password-stdin: no data on stdin")
+        return line.rstrip("\n\r")
+    if password is not None:
+        return password
+    if not sys.stdin.isatty():
+        raise click.UsageError("password required: use --password or --password-stdin")
+    return str(click.prompt("Password", hide_input=True, confirmation_prompt=True))
+
+
 # --- user CRUD ---
 
 
 @users_group.command("create")
 @guard.guarded
 @click.option("--name", "username", required=True, help="Username.")
-@click.option("--password", required=True, help="Password.")
-@click.option(
-    "--roles",
-    required=True,
-    help="Comma-separated role names.",
-)
+@click.option("--password", default=None, help=f"Password {_PW_WARN}.")
+@click.option("--password-stdin", is_flag=True, default=False, help=_PW_STDIN_HELP)
+@click.option("--roles", required=True, help="Comma-separated role names.")
 @click.option("--email", default=None, help="Email address.")
 @click.option("--realname", default=None, help="Display name.")
 @click.pass_context
 def create_user(
     ctx: click.Context,
     username: str,
-    password: str,
+    password: str | None,
+    password_stdin: bool,
     roles: str,
     *,
     email: str | None,
     realname: str | None,
 ) -> None:
     """Create a new user."""
+    resolved_pw = _resolve_password(password, password_stdin)
     roles_list = [r.strip() for r in roles.split(",")]
     details = f"Create user '{username}' with roles: {', '.join(roles_list)}"
     if not guard.check(ctx, details):
         return
 
     client = get_client(ctx)
-    kwargs: dict[str, Any] = {"password": password, "roles": roles_list}
+    kwargs: dict[str, Any] = {"password": resolved_pw, "roles": roles_list}
     if email:
         kwargs["email"] = email
     if realname:
@@ -362,8 +388,8 @@ def create_user(
 
     try:
         client.service.users.create(username, **kwargs)
-    except Exception as exc:
-        output.error(f"Create failed: {exc}")
+    except Exception:
+        output.error("Create user failed.")
         ctx.exit(1)
         return
     output.info(f"Created user '{username}'.")
@@ -376,13 +402,15 @@ def create_user(
 @click.option("--email", default=None, help="Email address.")
 @click.option("--realname", default=None, help="Display name.")
 @click.option("--default-app", default=None, help="Default app.")
-@click.option("--password", default=None, help="New password.")
+@click.option("--password", default=None, help=f"New password {_PW_WARN}.")
+@click.option("--password-stdin", is_flag=True, default=False, help=_PW_STDIN_HELP)
 @click.option("--set", "set_pairs", multiple=True, help="KEY=VALUE extra fields.")
 @click.pass_context
 def update_user(
     ctx: click.Context,
     name: str,
     set_pairs: tuple[str, ...],
+    password_stdin: bool,
     *,
     roles: str | None,
     email: str | None,
@@ -402,8 +430,8 @@ def update_user(
         kwargs["realname"] = realname
     if default_app is not None:
         kwargs["defaultApp"] = default_app
-    if password is not None:
-        kwargs["password"] = password
+    if password is not None or password_stdin:
+        kwargs["password"] = _resolve_password(password, password_stdin)
 
     if not kwargs:
         output.error("No update fields specified.")
@@ -426,8 +454,8 @@ def update_user(
     try:
         user.update(**kwargs)
         user.refresh()
-    except Exception as exc:
-        output.error(f"Update failed: {exc}")
+    except Exception:
+        output.error("Update user failed.")
         ctx.exit(1)
         return
     output.info(f"Updated user '{name}'.")

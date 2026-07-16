@@ -1,11 +1,13 @@
 """HEC (HTTP Event Collector) token management via SDK."""
 
 import json as json_mod
+from pathlib import Path
 from typing import Any
 
 import click
 import requests as req
 
+from splunkctl import config as cfg_mod
 from splunkctl import guard, output
 from splunkctl.client import get_client
 from splunkctl.commands.common import fetch_page, list_options, parse_set
@@ -244,7 +246,12 @@ def hec_send(
     if sourcetype:
         payload["sourcetype"] = sourcetype
     timeout: int = ctx.obj.get("timeout", 30)
-    verify: bool = getattr(svc, "verify", True)
+    obj: dict[str, Any] = ctx.obj
+    cfg = cfg_mod.load(
+        Path(obj["config"]) if obj.get("config") else None,
+        profile=obj.get("profile"),
+    )
+    verify: bool = bool(cfg.get("verify", True))
     try:
         r = req.post(
             url,
@@ -257,8 +264,10 @@ def hec_send(
     except req.RequestException as exc:
         msg = str(exc)
         try:
-            msg = r.json().get("text", msg)  # noqa: F841
-        except (ValueError, AttributeError):
+            detail = r.json().get("text")
+            if detail:
+                msg = detail
+        except (ValueError, AttributeError, UnboundLocalError):
             pass
         output.error(f"HEC send failed: {msg}")
         ctx.exit(1)

@@ -19,7 +19,8 @@ splunkctl users create [OPTIONS]
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--name` | text | - | Username. [required] |
-| `--password` | text | - | Password. [required] |
+| `--password` | text | - | Password (visible in /proc cmdline; prefer --password-stdin or the interactive prompt). |
+| `--password-stdin` | flag | false | Read password from stdin (one line). |
 | `--roles` | text | - | Comma-separated role names. [required] |
 | `--email` | text | - | Email address. |
 | `--realname` | text | - | Display name. |
@@ -152,5 +153,6 @@ splunkctl users update [OPTIONS] NAME
 | `--email` | text | - | Email address. |
 | `--realname` | text | - | Display name. |
 | `--default-app` | text | - | Default app. |
-| `--password` | text | - | New password. |
+| `--password` | text | - | New password (visible in /proc cmdline; prefer --password-stdin or the interactive prompt). |
+| `--password-stdin` | flag | false | Read password from stdin (one line). |
 | `--set` | text | - | KEY=VALUE extra fields. |

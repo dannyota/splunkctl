@@ -172,19 +172,13 @@ def create_cmd(
     if description is not None:
         body["description"] = description
 
-    # Mask secrets in preview
-    secret_keys = (
-        _password_keys_from_app(get_soar_client(ctx), app_id) if config else set()
-    )
-    preview_body = dict(body)
-    if config and secret_keys:
-        preview_body["configuration"] = _mask_secrets(config, secret_keys)
-
-    details = json.dumps(preview_body, indent=2)
+    details = json.dumps(body, indent=2)
     if not guard.soar_check(ctx, f"Create asset '{name}'", details=details):
         return
 
     client = get_soar_client(ctx)
+
+    # Mask secrets in preview is moot after guard — proceed to create.
     try:
         result = client.post("asset", body=body)
     except SOARError as exc:

@@ -17,7 +17,7 @@ def test_config_init(tmp_path: Path) -> None:
     result = runner.invoke(
         cli,
         ["config", "init", "--path", str(cfg)],
-        input="myhost\n8089\nadmin\nsecret\n",
+        input="myhost\n8089\nadmin\nsecret\ny\n",
     )
     assert result.exit_code == 0
     assert cfg.exists()
@@ -183,7 +183,7 @@ def test_config_init_profile_creates_v2(tmp_path: Path) -> None:
     result = runner.invoke(
         cli,
         ["config", "init", "--path", str(cfg), "--profile", "uat"],
-        input="uathost\n9089\nuatuser\nuatpass\n",
+        input="uathost\n9089\nuatuser\nuatpass\ny\n",
     )
     assert result.exit_code == 0
     raw = yaml.safe_load(cfg.read_text())
@@ -201,7 +201,7 @@ def test_config_init_profile_upgrades_legacy_preserving_default_and_perms(
     result = runner.invoke(
         cli,
         ["config", "init", "--path", str(cfg), "--profile", "uat"],
-        input="uathost\n9089\nuatuser\nuatpass\n",
+        input="uathost\n9089\nuatuser\nuatpass\ny\n",
     )
     assert result.exit_code == 0
     raw = yaml.safe_load(cfg.read_text())
@@ -218,7 +218,7 @@ def test_config_init_bare_still_writes_flat_file(tmp_path: Path) -> None:
     result = runner.invoke(
         cli,
         ["config", "init", "--path", str(cfg)],
-        input="myhost\n8089\nadmin\nsecret\n",
+        input="myhost\n8089\nadmin\nsecret\ny\n",
     )
     assert result.exit_code == 0
     raw = yaml.safe_load(cfg.read_text())
@@ -255,6 +255,7 @@ def test_config_init_bare_never_clobbers_existing_profiles(tmp_path: Path) -> No
             "admin",
             "--password",
             "secret",
+            "--verify",
         ],
     )
     assert result.exit_code == 0, result.output
@@ -407,3 +408,63 @@ def test_config_init_soar_preserves_siem_fields(tmp_path: Path) -> None:
     assert raw["profiles"]["lab"]["port"] == 8089
     # SOAR added.
     assert raw["profiles"]["lab"]["soar"]["host"] == "soar-host"
+
+
+# --- TLS verify defaults (S2) ---
+
+
+def test_config_init_verify_defaults_true(tmp_path: Path) -> None:
+    """config init with default TLS prompt (Enter=yes) writes verify: true."""
+    cfg = tmp_path / "config.yaml"
+    runner = CliRunner()
+    # Accept all defaults including TLS verification (Enter = yes)
+    result = runner.invoke(
+        cli,
+        ["config", "init", "--path", str(cfg)],
+        input="myhost\n8089\nadmin\nsecret\n\n",
+    )
+    assert result.exit_code == 0, result.output
+    raw = yaml.safe_load(cfg.read_text())
+    assert raw["verify"] is True
+
+
+def test_config_init_verify_no_writes_false(tmp_path: Path) -> None:
+    """config init answering 'n' to TLS prompt writes verify: false."""
+    cfg = tmp_path / "config.yaml"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["config", "init", "--path", str(cfg)],
+        input="myhost\n8089\nadmin\nsecret\nn\n",
+    )
+    assert result.exit_code == 0, result.output
+    raw = yaml.safe_load(cfg.read_text())
+    assert raw["verify"] is False
+
+
+def test_config_init_verify_flag_skips_prompt(tmp_path: Path) -> None:
+    """--verify / --no-verify flags skip the interactive TLS prompt."""
+    cfg = tmp_path / "config.yaml"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["config", "init", "--path", str(cfg), "--no-verify"],
+        input="myhost\n8089\nadmin\nsecret\n",
+    )
+    assert result.exit_code == 0, result.output
+    raw = yaml.safe_load(cfg.read_text())
+    assert raw["verify"] is False
+
+
+def test_config_init_always_writes_explicit_verify(tmp_path: Path) -> None:
+    """Every config init run writes an explicit verify key."""
+    cfg = tmp_path / "config.yaml"
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["config", "init", "--path", str(cfg)],
+        input="myhost\n8089\nadmin\nsecret\ny\n",
+    )
+    assert result.exit_code == 0, result.output
+    raw = yaml.safe_load(cfg.read_text())
+    assert "verify" in raw

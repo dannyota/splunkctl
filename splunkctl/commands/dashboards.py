@@ -176,7 +176,7 @@ def get_dashboard(
     client = get_client(ctx)
     try:
         d = _resolve(client.service, name, app)
-    except (KeyError, Exception):
+    except KeyError:
         output.error(f"Dashboard '{name}' not found.", kind="not_found")
         ctx.exit(1)
         return
@@ -303,7 +303,7 @@ def update_dashboard(
     client = get_client(ctx)
     try:
         d = _resolve(client.service, name, app)
-    except (KeyError, Exception):
+    except KeyError:
         output.error(f"Dashboard '{name}' not found.", kind="not_found")
         ctx.exit(1)
         return
@@ -332,8 +332,8 @@ def delete_dashboard(ctx: click.Context, name: str, *, app: str) -> None:
     client = get_client(ctx)
     try:
         d = _resolve(client.service, name, app)
-    except (KeyError, Exception) as exc:
-        output.error(f"Delete failed: {exc}")
+    except KeyError:
+        output.error(f"Dashboard '{name}' not found.", kind="not_found")
         ctx.exit(1)
         return
     d.delete()
@@ -390,7 +390,7 @@ def export_dashboard(
     client = get_client(ctx)
     try:
         d = _resolve(client.service, name, app)
-    except (KeyError, Exception):
+    except KeyError:
         output.error(f"Dashboard '{name}' not found.", kind="not_found")
         ctx.exit(1)
         return
@@ -470,7 +470,7 @@ def share_dashboard(
     client = get_client(ctx)
     try:
         d = _resolve(client.service, name, app)
-    except (KeyError, Exception):
+    except KeyError:
         output.error(f"Dashboard '{name}' not found.", kind="not_found")
         ctx.exit(1)
         return

@@ -38,6 +38,8 @@ def mcp_install() -> None:
     dest = Path.cwd() / ".mcp.json"
     if dest.exists():
         existing = json.loads(dest.read_text(encoding="utf-8"))
+        if existing.get("mcpServers") is None:
+            existing["mcpServers"] = {}
         existing.setdefault("mcpServers", {})["splunkctl"] = config["mcpServers"][
             "splunkctl"
         ]

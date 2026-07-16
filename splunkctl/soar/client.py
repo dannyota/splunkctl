@@ -9,6 +9,8 @@ Web UI session (cookie-based) used for operations the REST API lacks
 from __future__ import annotations
 
 import json
+import os
+import sys
 from collections.abc import Iterator
 from typing import Any
 
@@ -16,6 +18,35 @@ import requests
 import urllib3
 
 from splunkctl.errors import kind_for_status
+
+# Default (connect, read) timeout in seconds.  Override via
+# SOAR_TIMEOUT env var (single int → both; "C,R" → connect, read).
+_DEFAULT_TIMEOUT: tuple[int, int] = (10, 60)
+
+_tls_warned: bool = False
+
+
+def _warn_tls_off() -> None:
+    """Emit a one-shot stderr warning when TLS verification is disabled."""
+    global _tls_warned  # noqa: PLW0603
+    if not _tls_warned:
+        sys.stderr.write(
+            "Warning: TLS certificate verification is disabled for SOAR"
+            " (verify: false). Connections are susceptible to interception.\n"
+        )
+        _tls_warned = True
+
+
+def _parse_timeout(raw: str) -> tuple[int, int] | int:
+    """Parse a timeout string from the environment.
+
+    Accepts ``"60"`` (both connect+read) or ``"10,60"`` (connect, read).
+    """
+    if "," in raw:
+        parts = raw.split(",", maxsplit=1)
+        return int(parts[0]), int(parts[1])
+    return int(raw)
+
 
 # Endpoints with non-standard envelopes.
 _BARE_ARRAY_ENDPOINTS: frozenset[str] = frozenset({"audit"})
@@ -104,6 +135,7 @@ class SOARClient:
         username: str | None = None,
         password: str | None = None,
         verify: bool = False,
+        timeout: tuple[int, int] | int | None = None,
     ) -> None:
         self._host = host
         self._port = port
@@ -113,10 +145,21 @@ class SOARClient:
         self._verify = verify
         self._session = requests.Session()
         self._session.verify = verify
+
+        # Resolve timeout: kwarg > env var > default.
+        env_timeout = os.environ.get("SOAR_TIMEOUT")
+        if timeout is not None:
+            self._timeout: tuple[int, int] | int = timeout
+        elif env_timeout:
+            self._timeout = _parse_timeout(env_timeout)
+        else:
+            self._timeout = _DEFAULT_TIMEOUT
+
         if not verify:
             # verify=false is an explicit config choice (lab/self-signed);
             # without this every request spams InsecureRequestWarning.
             urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+            _warn_tls_off()
 
         # Separate session for Django-view-only operations (e.g. delete).
         self._web_session: requests.Session | None = None
@@ -194,6 +237,7 @@ class SOARClient:
             "url": self._url(path),
             "headers": headers,
             "params": params,
+            "timeout": self._timeout,
         }
         if data is not None:
             kwargs["data"] = data
@@ -358,6 +402,7 @@ class SOARClient:
             "url": self._url(path),
             "headers": headers,
             "params": params,
+            "timeout": self._timeout,
         }
         if "auth" in auth_kw:
             kwargs["auth"] = auth_kw["auth"]

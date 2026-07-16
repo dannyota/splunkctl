@@ -18,6 +18,29 @@ def spl_quote(value: str) -> str:
     return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
+class UnsafeLookupNameError(click.ClickException):
+    """Lookup name contains characters unsafe for SPL interpolation."""
+
+
+def spl_quote_lookup_name(name: str) -> str:
+    """Quote a lookup name for safe interpolation into SPL commands.
+
+    Used in ``| inputlookup <name>`` to prevent SPL injection. Rejects
+    names containing newlines or NUL (which could break out of quoting
+    regardless of escaping), escapes backslashes and double quotes, and
+    wraps the result in double quotes.
+
+    Raises:
+        UnsafeLookupNameError: If the name contains newlines or NUL.
+    """
+    if "\n" in name or "\r" in name or "\x00" in name:
+        raise UnsafeLookupNameError(
+            f"Lookup name {name!r} contains newline or NUL characters "
+            "and cannot be safely used in SPL."
+        )
+    return '"' + name.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
 _ALERT_TYPES = (
     "custom",
     "number of events",

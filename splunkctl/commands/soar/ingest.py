@@ -348,11 +348,16 @@ def _create_artifacts(
     include_unmapped: bool,
     no_automation: bool,
 ) -> tuple[int, int]:
-    """Create artifacts for one container. Return (created, skipped)."""
-    total = len(rows)
-    created = 0
+    """Create artifacts for one container. Return (created, skipped).
+
+    ``run_automation=True`` is set on the **last artifact actually created**
+    (after dedup filtering), not on the last input row.  This ensures
+    playbook automation fires even when trailing rows are skipped by dedup.
+    """
+    # First pass: decide which rows survive dedup so we know the last one.
+    pending: list[dict[str, Any]] = []
     skipped = 0
-    for idx, row in enumerate(rows):
+    for row in rows:
         art_sdi = row_sdi(row, sdi_field)
         existing = dedup_check_artifact(soar, art_sdi, container_id)
         if existing is not None:
@@ -362,15 +367,20 @@ def _create_artifacts(
             )
             skipped += 1
             continue
+        pending.append(row)
 
+    # Second pass: create the surviving artifacts.
+    created = 0
+    last_idx = len(pending) - 1
+    for idx, row in enumerate(pending):
         cef = row_to_cef(row, cim_map=cim_map, include_unmapped=include_unmapped)
-        run_auto = not no_automation and idx == total - 1
+        run_auto = not no_automation and idx == last_idx
         payload: dict[str, Any] = {
             "container_id": container_id,
             "name": artifact_name_for_row(row),
             "cef": cef,
             "cef_types": auto_cef_types(cef, contains_map=contains_map),
-            "source_data_identifier": art_sdi,
+            "source_data_identifier": row_sdi(row, sdi_field),
             "severity": severity_override or map_severity(row),
             "run_automation": run_auto,
         }

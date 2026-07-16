@@ -245,6 +245,76 @@ class TestContainerAssign:
         client.post.assert_not_called()
 
 
+class TestTagFetchFailureAborts:
+    """C5 regression: tag RMW must abort when the container fetch fails."""
+
+    @patch(PATCH_SOAR_RESOLVE)
+    @patch(PATCH_CLIENT)
+    @patch(PATCH_RESOLVE)
+    def test_tag_update_aborts_on_fetch_error(
+        self,
+        mock_resolve: MagicMock,
+        mock_cls: MagicMock,
+        mock_guard_resolve: MagicMock,
+    ) -> None:
+        """Single update with --tag exits nonzero when GET fails."""
+        mock_resolve.return_value = _WRITE_CFG
+        mock_guard_resolve.return_value = _soar_guard_cfg()
+        client = MagicMock()
+        client.get.side_effect = SOARError(
+            "connection refused",
+            kind="error",
+            http_status=502,
+        )
+        mock_cls.return_value = client
+
+        result = CliRunner().invoke(
+            cli,
+            ["--yes", "--json", "soar", "containers", "update", "42", "--tag", "new"],
+        )
+        assert result.exit_code == 1
+        assert "connection refused" in result.stderr
+        client.post.assert_not_called()
+
+    @patch(PATCH_SOAR_RESOLVE)
+    @patch(PATCH_CLIENT)
+    @patch(PATCH_RESOLVE)
+    def test_tag_bulk_update_aborts_on_fetch_error(
+        self,
+        mock_resolve: MagicMock,
+        mock_cls: MagicMock,
+        mock_guard_resolve: MagicMock,
+    ) -> None:
+        """Bulk update with --tag exits nonzero when any GET fails."""
+        mock_resolve.return_value = _WRITE_CFG
+        mock_guard_resolve.return_value = _soar_guard_cfg()
+        client = MagicMock()
+        client.get.side_effect = SOARError(
+            "auth expired",
+            kind="auth",
+            http_status=401,
+        )
+        mock_cls.return_value = client
+
+        result = CliRunner().invoke(
+            cli,
+            [
+                "--yes",
+                "--json",
+                "soar",
+                "containers",
+                "update",
+                "1",
+                "2",
+                "--tag",
+                "new",
+            ],
+        )
+        assert result.exit_code == 1
+        assert "auth expired" in result.stderr
+        client.post.assert_not_called()
+
+
 class TestContainerDelete:
     @patch(PATCH_SOAR_RESOLVE)
     @patch(PATCH_CLIENT)

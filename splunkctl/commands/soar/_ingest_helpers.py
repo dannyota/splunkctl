@@ -9,10 +9,10 @@ from typing import Any
 
 import click
 import yaml
-from splunklib.results import JSONResultsReader
 
 from splunkctl import output
 from splunkctl.client import get_client
+from splunkctl.commands.common import read_results
 from splunkctl.soar.cimcef import row_to_cef
 from splunkctl.soar.client import SOARError
 
@@ -47,16 +47,6 @@ def normalize_spl(spl: str) -> str:
     if first_word == "search" or first_word in _GENERATING:
         return stripped
     return f"search {stripped}"
-
-
-def read_results(stream: Any) -> list[dict[str, Any]]:
-    """Parse a Splunk results stream into a list of dicts."""
-    reader: Any = JSONResultsReader(stream)
-    rows: list[dict[str, Any]] = []
-    for item in reader:
-        if isinstance(item, dict):
-            rows.append(item)
-    return rows
 
 
 def fetch_spl_results(

@@ -212,3 +212,41 @@ class TestContainerCreate:
         body = client.post.call_args[1]["body"]
         assert body["tags"] == ["malware", "phishing"]
         assert body["custom_fields"] == {"priority": "P1"}
+
+    @patch(PATCH_SOAR_RESOLVE)
+    @patch(PATCH_CLIENT)
+    @patch(PATCH_RESOLVE)
+    def test_create_sdi_precheck_failure_warns(
+        self,
+        mock_resolve: MagicMock,
+        mock_cls: MagicMock,
+        mock_soar_resolve: MagicMock,
+    ) -> None:
+        """Container create: SDI precheck SOARError emits warning, create proceeds."""
+        mock_resolve.return_value = _WRITE_CFG
+        mock_soar_resolve.return_value = _soar_guard_cfg()
+        client = MagicMock()
+        client.get.side_effect = SOARError("timeout", kind="timeout", http_status=504)
+        client.post.return_value = {"success": True, "id": 99}
+        mock_cls.return_value = client
+
+        result = CliRunner().invoke(
+            cli,
+            [
+                "--yes",
+                "--json",
+                "soar",
+                "containers",
+                "create",
+                "--name",
+                "test",
+                "--label",
+                "events",
+                "--sdi",
+                "SDI-fail",
+            ],
+        )
+        assert result.exit_code == 0
+        assert "could not verify SDI uniqueness" in result.stderr
+        assert "timeout" in result.stderr
+        client.post.assert_called_once()

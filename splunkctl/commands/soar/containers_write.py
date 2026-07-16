@@ -41,12 +41,9 @@ def _read_modify_write_tags(
 ) -> list[str]:
     """Fetch existing tags, merge *add_tags*, return the merged list."""
     existing: list[str] = []
-    try:
-        result = client.get(f"container/{container_id}", params={})
-        if isinstance(result, dict):
-            existing = list(result.get("tags", []))
-    except SOARError:
-        pass
+    result = client.get(f"container/{container_id}", params={})
+    if isinstance(result, dict):
+        existing = list(result.get("tags", []))
     merged = list(dict.fromkeys(existing + list(add_tags)))
     return merged
 
@@ -292,9 +289,9 @@ def update_cmd(
     body.update(resolved)
 
     if len(ids) == 1:
-        if tags:
-            body["tags"] = _read_modify_write_tags(client, ids[0], tags)
         try:
+            if tags:
+                body["tags"] = _read_modify_write_tags(client, ids[0], tags)
             result = client.post(f"container/{ids[0]}", body=body)
         except SOARError as exc:
             output.error(exc.message, kind=exc.kind, http_status=exc.http_status)
@@ -307,12 +304,12 @@ def update_cmd(
         # Bulk: one array POST to /rest/container. Each container gets
         # its OWN tag merge so no container inherits another's tags.
         bulk: list[dict[str, Any]] = []
-        for cid in ids:
-            item: dict[str, Any] = {"id": cid, **body}
-            if tags:
-                item["tags"] = _read_modify_write_tags(client, cid, tags)
-            bulk.append(item)
         try:
+            for cid in ids:
+                item: dict[str, Any] = {"id": cid, **body}
+                if tags:
+                    item["tags"] = _read_modify_write_tags(client, cid, tags)
+                bulk.append(item)
             result = client.post("container", body=bulk)
         except SOARError as exc:
             output.error(exc.message, kind=exc.kind, http_status=exc.http_status)

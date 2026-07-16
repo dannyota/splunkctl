@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 from click.testing import CliRunner
 
 from splunkctl.main import cli
+from splunkctl.soar.client import SOARError
 from tests.soar.conftest import PATCH_CLIENT, PATCH_RESOLVE, soar_cfg
 
 PATCH_SOAR_RESOLVE = "splunkctl.guard.cfg_mod.resolve_soar"
@@ -357,6 +358,44 @@ class TestArtifactsCreate:
     @patch(PATCH_SOAR_RESOLVE)
     @patch(PATCH_CLIENT)
     @patch(PATCH_RESOLVE)
+    def test_create_sdi_precheck_failure_warns(
+        self,
+        mock_resolve: MagicMock,
+        mock_cls: MagicMock,
+        mock_soar_resolve: MagicMock,
+    ) -> None:
+        """Artifact create: SDI precheck SOARError emits warning, create proceeds."""
+        mock_resolve.return_value = soar_cfg()
+        mock_soar_resolve.return_value = soar_cfg()
+        client = MagicMock()
+        client.get.side_effect = SOARError("server error", kind="http", http_status=500)
+        client.post.return_value = {"success": True, "id": 88}
+        mock_cls.return_value = client
+
+        result = CliRunner().invoke(
+            cli,
+            [
+                "--yes",
+                "--json",
+                "soar",
+                "artifacts",
+                "create",
+                "--container",
+                "1",
+                "--name",
+                "Test",
+                "--sdi",
+                "SDI-fail",
+            ],
+        )
+        assert result.exit_code == 0
+        assert "could not verify SDI uniqueness" in result.stderr
+        assert "server error" in result.stderr
+        client.post.assert_called_once()
+
+    @patch(PATCH_SOAR_RESOLVE)
+    @patch(PATCH_CLIENT)
+    @patch(PATCH_RESOLVE)
     def test_create_banner_shows_soar_host(
         self,
         mock_resolve: MagicMock,
@@ -390,7 +429,6 @@ class TestValidateSeverity:
         import pytest
 
         from splunkctl.commands.soar.artifacts import _validate_severity
-        from splunkctl.soar.client import SOARError
 
         client = MagicMock()
         client.get.return_value = {"data": [{"name": "low"}, {"name": "high"}]}

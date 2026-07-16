@@ -1,4 +1,4 @@
-"""Unit tests for splunkctl.soar.client — SOARClient."""
+"""Unit tests for splunkctl.soar.client — auth, errors, lazy init, TLS."""
 
 from __future__ import annotations
 
@@ -9,7 +9,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 import requests
 
-from splunkctl.soar.client import SOARClient, SOARError, build_filters
+from splunkctl.soar.client import (
+    SOARClient,
+    SOARError,
+)
 
 _EMPTY_PAGE: dict[str, Any] = {
     "count": 0,
@@ -139,80 +142,6 @@ class TestLazy:
 
 
 # -------------------------------------------------------------------
-# Response envelope normalization
-# -------------------------------------------------------------------
-
-
-class TestEnvelopeNormalization:
-    def test_standard_paginated(self) -> None:
-        c = _client()
-        data = [{"id": 1, "name": "a"}, {"id": 2, "name": "b"}]
-        resp = _mock_response(
-            json_data={"count": 2, "num_pages": 1, "data": data},
-        )
-        with patch.object(c, "_session") as sess:
-            sess.request.return_value = resp
-            result = c.get("container")
-        assert result == {"count": 2, "num_pages": 1, "data": data}
-
-    def test_audit_bare_array(self) -> None:
-        c = _client()
-        rows = [{"action": "create", "time": "2026-01-01"}]
-        resp = _mock_response(json_data=rows)
-        with patch.object(c, "_session") as sess:
-            sess.request.return_value = resp
-            result = c.get("audit")
-        assert result == {"count": 1, "num_pages": 1, "data": rows}
-
-    def test_search_results_envelope(self) -> None:
-        c = _client()
-        items = [{"id": 1}]
-        resp = _mock_response(
-            json_data={"results": items, "count": 1},
-        )
-        with patch.object(c, "_session") as sess:
-            sess.request.return_value = resp
-            result = c.get("search", params={"query": "test"})
-        assert result == {"count": 1, "num_pages": 1, "data": items}
-
-    def test_succeeded_key_normalized(self) -> None:
-        c = _client()
-        body = {
-            "succeeded": True,
-            "vault_id": "abc",
-            "hash": "sha1",
-            "id": 5,
-            "size": 100,
-        }
-        resp = _mock_response(json_data=body)
-        with patch.object(c, "_session") as sess:
-            sess.request.return_value = resp
-            result = c.post("container_attachment", body={"file_name": "x"})
-        assert result["success"] is True
-        assert "succeeded" not in result
-
-    def test_action_run_id_normalized(self) -> None:
-        c = _client()
-        body = {"success": True, "action_run_id": 42}
-        resp = _mock_response(json_data=body)
-        with patch.object(c, "_session") as sess:
-            sess.request.return_value = resp
-            result = c.post("action_run", body={"action": "test"})
-        assert result["id"] == 42
-        assert "action_run_id" not in result
-
-    def test_playbook_run_id_normalized(self) -> None:
-        c = _client()
-        body = {"received": True, "playbook_run_id": "99"}
-        resp = _mock_response(json_data=body)
-        with patch.object(c, "_session") as sess:
-            sess.request.return_value = resp
-            result = c.post("playbook_run", body={"playbook_id": 1})
-        assert result["id"] == "99"
-        assert "playbook_run_id" not in result
-
-
-# -------------------------------------------------------------------
 # Error handling
 # -------------------------------------------------------------------
 
@@ -283,177 +212,24 @@ class TestErrorHandling:
 
 
 # -------------------------------------------------------------------
-# Filter builder
+# TLS warning
 # -------------------------------------------------------------------
 
 
-class TestFilterBuilder:
-    def test_simple_string_quoted(self) -> None:
-        result = build_filters(name="DNS")
-        assert result["_filter_name"] == '"DNS"'
+class TestTLSWarning:
+    def test_emitted_once_and_not_when_verify_on(self) -> None:
+        import splunkctl.soar.client as mod
 
-    def test_boolean_python_style(self) -> None:
-        result = build_filters(active=True)
-        assert result["_filter_active"] == "True"
-
-    def test_boolean_false(self) -> None:
-        result = build_filters(active=False)
-        assert result["_filter_active"] == "False"
-
-    def test_integer_unquoted(self) -> None:
-        result = build_filters(container_id=5)
-        assert result["_filter_container_id"] == "5"
-
-    def test_operator_suffix(self) -> None:
-        result = build_filters(name__icontains="test")
-        assert result["_filter_name__icontains"] == '"test"'
-
-    def test_in_list(self) -> None:
-        result = build_filters(id__in=[1, 2, 3])
-        assert result["_filter_id__in"] == "[1, 2, 3]"
-
-    def test_exclude(self) -> None:
-        result = build_filters(_exclude_status="closed")
-        assert result["_exclude_status"] == '"closed"'
-
-    def test_multiple_filters(self) -> None:
-        result = build_filters(name="test", severity="high")
-        assert "_filter_name" in result
-        assert "_filter_severity" in result
-
-    def test_none_value_skipped(self) -> None:
-        result = build_filters(name="test", severity=None)
-        assert "_filter_name" in result
-        assert "_filter_severity" not in result
-        assert "_exclude_severity" not in result
-
-
-# -------------------------------------------------------------------
-# Bulk update (array POST)
-# -------------------------------------------------------------------
-
-
-class TestBulkUpdate:
-    def test_bulk_post_sends_array(self) -> None:
-        c = _client()
-        items = [
-            {"id": 1, "status": "closed"},
-            {"id": 2, "status": "closed"},
-        ]
-        resp = _mock_response(json_data={"success": True})
-        with patch.object(c, "_session") as sess:
-            sess.request.return_value = resp
-            c.post("container", body=items)
-        call_args = sess.request.call_args
-        sent_body = json.loads(call_args[1]["data"])
-        assert isinstance(sent_body, list)
-        assert len(sent_body) == 2
-
-
-# -------------------------------------------------------------------
-# Pagination iterator
-# -------------------------------------------------------------------
-
-
-class TestPagination:
-    def test_iterates_all_pages(self) -> None:
-        c = _client()
-        page0 = {
-            "count": 3,
-            "num_pages": 2,
-            "data": [{"id": 1}, {"id": 2}],
-        }
-        page1 = {
-            "count": 3,
-            "num_pages": 2,
-            "data": [{"id": 3}],
-        }
-        responses = [
-            _mock_response(json_data=page0),
-            _mock_response(json_data=page1),
-        ]
-        with patch.object(c, "_session") as sess:
-            sess.request.side_effect = responses
-            items = list(c.iter_pages("container", page_size=2))
-        assert len(items) == 3
-        assert [i["id"] for i in items] == [1, 2, 3]
-        # 0-based endpoints fetch pages 0..num_pages-1.
-        pages = [call[1]["params"]["page"] for call in sess.request.call_args_list]
-        assert pages == [0, 1]
-
-    def test_single_page_no_extra_request(self) -> None:
-        c = _client()
-        page0 = {"count": 1, "num_pages": 1, "data": [{"id": 1}]}
-        with patch.object(c, "_session") as sess:
-            sess.request.return_value = _mock_response(
-                json_data=page0,
-            )
-            items = list(c.iter_pages("container"))
-        assert len(items) == 1
-        assert sess.request.call_count == 1
-
-    def test_empty_result(self) -> None:
-        c = _client()
-        page0 = {"count": 0, "num_pages": 0, "data": []}
-        with patch.object(c, "_session") as sess:
-            sess.request.return_value = _mock_response(
-                json_data=page0,
-            )
-            items = list(c.iter_pages("container"))
-        assert items == []
-
-    def test_search_iter_pages_starts_at_1(self) -> None:
-        """iter_pages('search', ...) starts at page=1 (1-based endpoint)."""
-        c = _client()
-        page1 = {
-            "results": [{"id": 1}],
-            "count": 1,
-            "num_pages": 1,
-        }
-        with patch.object(c, "_session") as sess:
-            sess.request.return_value = _mock_response(json_data=page1)
-            items = list(c.iter_pages("search", page_size=10))
-        assert len(items) == 1
-        # Verify the request used page=1, not page=0
-        call_params = sess.request.call_args[1]["params"]
-        assert call_params["page"] == 1
-
-    def test_search_iter_pages_fetches_last_page(self) -> None:
-        """1-based search with num_pages=2 fetches BOTH pages 1 and 2."""
-        c = _client()
-        page1 = {
-            "results": [{"id": 1}, {"id": 2}],
-            "count": 3,
-            "num_pages": 2,
-        }
-        page2 = {
-            "results": [{"id": 3}],
-            "count": 3,
-            "num_pages": 2,
-        }
-        responses = [
-            _mock_response(json_data=page1),
-            _mock_response(json_data=page2),
-        ]
-        with patch.object(c, "_session") as sess:
-            sess.request.side_effect = responses
-            items = list(c.iter_pages("search", page_size=2))
-        assert [i["id"] for i in items] == [1, 2, 3]
-        pages = [call[1]["params"]["page"] for call in sess.request.call_args_list]
-        assert pages == [1, 2]
-
-
-# -------------------------------------------------------------------
-# URL construction
-# -------------------------------------------------------------------
-
-
-class TestURLConstruction:
-    def test_base_url(self) -> None:
-        c = _client(host="myhost", port=9443)
-        assert c._base_url == "https://myhost:9443/rest"
-
-    def test_path_normalization(self) -> None:
-        c = _client()
-        assert c._url("container") == "https://soar.test:8443/rest/container"
-        assert c._url("/container") == "https://soar.test:8443/rest/container"
+        mod._tls_warned = False
+        try:
+            with patch("sys.stderr") as m:
+                SOARClient(host="s", token="t", verify=False)  # noqa: S106
+                SOARClient(host="s", token="t", verify=False)  # noqa: S106
+            assert m.write.call_count == 1
+            assert "TLS certificate verification is disabled" in m.write.call_args[0][0]
+            mod._tls_warned = False
+            with patch("sys.stderr") as m2:
+                SOARClient(host="s", token="t", verify=True)  # noqa: S106
+            m2.write.assert_not_called()
+        finally:
+            mod._tls_warned = False

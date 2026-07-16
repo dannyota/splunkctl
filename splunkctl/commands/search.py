@@ -5,11 +5,10 @@ from pathlib import Path
 from typing import Any
 
 import click
-from splunklib.results import JSONResultsReader
 
 from splunkctl import guard, output
 from splunkctl.client import get_client
-from splunkctl.commands.common import fetch_page, list_options
+from splunkctl.commands.common import fetch_page, list_options, read_results
 
 _GENERATING = (
     "abstract",
@@ -55,16 +54,6 @@ def _time_kwargs(
     if latest:
         kw["latest_time"] = latest
     return kw
-
-
-def _read_results(stream: Any) -> list[dict[str, Any]]:
-    """Parse a Splunk results stream into a list of dicts."""
-    reader: Any = JSONResultsReader(stream)
-    rows: list[dict[str, Any]] = []
-    for item in reader:
-        if isinstance(item, dict):
-            rows.append(item)
-    return rows
 
 
 @click.group("search")
@@ -120,7 +109,7 @@ def run_search(
         time.sleep(0.5)
         job.refresh()
 
-    rows = _read_results(job.results(output_mode="json", count=limit))
+    rows = read_results(job.results(output_mode="json", count=limit))
     total = int(job.content.get("resultCount", len(rows)))
     output.render(ctx, rows)
     if total > len(rows):
@@ -157,7 +146,7 @@ def export_search(
 
     output.info(f"Exporting: {query}")
     stream: Any = svc.jobs.export(query, **kwargs)
-    rows = _read_results(stream)
+    rows = read_results(stream)
     output.render(ctx, rows)
 
 
@@ -191,7 +180,7 @@ def oneshot_search(
 
     output.info(f"Oneshot: {query}")
     stream: Any = svc.jobs.oneshot(query, **kwargs)
-    rows = _read_results(stream)
+    rows = read_results(stream)
     output.render(ctx, rows)
 
 
@@ -308,7 +297,7 @@ def get_job(
         fetch_kw["count"] = result_count
 
     stream = job.events(**fetch_kw) if show_events else job.results(**fetch_kw)
-    rows = _read_results(stream)
+    rows = read_results(stream)
     total = int(content.get("resultCount", 0))
     output.info(f"Job {sid}: DONE -- {len(rows)} of {total}")
     output.render(ctx, rows)

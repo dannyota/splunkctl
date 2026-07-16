@@ -18,6 +18,20 @@ import splunklib.client as splunk_client
 import urllib3
 
 from splunkctl import config as cfg_mod
+from splunkctl.errors import WebSessionError
+
+_tls_warned: bool = False
+
+
+def _warn_tls_off() -> None:
+    """Print one warning per process when TLS verification is disabled."""
+    global _tls_warned  # noqa: PLW0603
+    if not _tls_warned:
+        _tls_warned = True
+        click.echo(
+            "Warning: TLS certificate verification is disabled for this connection.",
+            err=True,
+        )
 
 
 class SplunkClient:
@@ -98,6 +112,7 @@ class SplunkClient:
 
             if not cfg.get("verify", False):
                 connect_args["verify"] = False
+                _warn_tls_off()
 
             if self._timeout:
                 connect_args["timeout"] = self._timeout
@@ -174,9 +189,10 @@ class _WebSession:
         self._username: str = service.username
         self._password: str = service.password
         if not self._username or not self._password:
-            raise RuntimeError(
+            raise WebSessionError(
                 "Lookup upload requires username/password authentication. "
-                "Token-only auth cannot authenticate to Splunk Web UI."
+                "Token-only auth cannot authenticate to Splunk Web UI.",
+                kind="auth",
             )
 
         web_conf = service.confs["web"]["settings"]
@@ -225,19 +241,22 @@ class _WebSession:
         try:
             body: dict[str, Any] = resp.json()
         except ValueError:
-            raise RuntimeError(
-                f"Splunk Web login failed: HTTP {resp.status_code}"
+            raise WebSessionError(
+                f"Splunk Web login failed: HTTP {resp.status_code}",
+                kind="auth",
             ) from None
         if body.get("status") == "fail":
             msg = body.get("msg", "unknown error")
-            raise RuntimeError(f"Splunk Web login failed: {msg}")
+            raise WebSessionError(f"Splunk Web login failed: {msg}", kind="auth")
 
         for cookie in self._session.cookies:
             if cookie.name and cookie.name.startswith("splunkweb_csrf_token"):
                 self._csrf_token = cookie.value
                 break
         if not self._csrf_token:
-            raise RuntimeError("Could not obtain CSRF token from Splunk Web")
+            raise WebSessionError(
+                "Could not obtain CSRF token from Splunk Web", kind="web"
+            )
         self._logged_in = True
 
     def upload_lookup(
@@ -315,7 +334,9 @@ class _WebSession:
             },
         )
         if resp.status_code >= 400:
-            raise RuntimeError(f"App install failed: HTTP {resp.status_code}")
+            raise WebSessionError(
+                f"App install failed: HTTP {resp.status_code}", kind="web"
+            )
 
 
 def _expect_ok(resp: requests.Response, what: str) -> None:
@@ -323,12 +344,15 @@ def _expect_ok(resp: requests.Response, what: str) -> None:
     try:
         result: dict[str, Any] = resp.json()
     except ValueError:
-        raise RuntimeError(
+        raise WebSessionError(
             f"{what} failed: HTTP {resp.status_code} — "
-            f"unexpected response: {resp.text[:200]!r}"
+            f"unexpected response: {resp.text[:200]!r}",
+            kind="web",
         ) from None
     if result.get("status") != "OK":
-        raise RuntimeError(f"{what} failed: {result.get('msg', 'unknown error')}")
+        raise WebSessionError(
+            f"{what} failed: {result.get('msg', 'unknown error')}", kind="web"
+        )
 
 
 def rest_get_json(

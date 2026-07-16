@@ -75,13 +75,13 @@ def defaults() -> dict[str, Any]:
         "username": "admin",
         "password": "",
         "scheme": "https",
-        "verify": False,
+        "verify": True,
     }
 
 
 def soar_defaults() -> dict[str, Any]:
     """Return default SOAR configuration values (port and verify only)."""
-    return {"port": 8443, "verify": False}
+    return {"port": 8443, "verify": True}
 
 
 def _read_raw(path: Path) -> dict[str, Any]:

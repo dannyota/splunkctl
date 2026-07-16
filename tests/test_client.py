@@ -8,6 +8,7 @@ import click
 from click.testing import CliRunner
 
 from splunkctl.client import SplunkClient, get_client
+from splunkctl.errors import WebSessionError
 
 
 def test_client_lazy_no_connect() -> None:
@@ -155,7 +156,7 @@ def test_upload_lookup_error_raises(
     csv = tmp_path / "x.csv"
     csv.write_text("a,b\n")
     ws = _WebSession(_mock_service(), verify=False)
-    with pytest.raises(RuntimeError, match="already exists"):
+    with pytest.raises(WebSessionError, match="already exists"):
         ws.upload_lookup("x.csv", csv, app="search")
 
 

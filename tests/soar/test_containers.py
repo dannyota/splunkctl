@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 
 from click.testing import CliRunner
 
+from splunkctl.commands.soar.containers import _extract_payload
 from splunkctl.main import cli
 from splunkctl.soar.client import SOARError
 from tests.soar.conftest import PATCH_CLIENT, PATCH_RESOLVE, soar_cfg
@@ -352,3 +353,58 @@ class TestContainersList:
         assert len(container_call) == 1
         params = container_call[0][1].get("params", {})
         assert params.get("_filter_status") == '"open"'
+
+
+# ---------------------------------------------------------------------------
+# IntRange enforcement for --limit / --offset
+# ---------------------------------------------------------------------------
+
+
+class TestContainersLimitValidation:
+    def test_limit_zero_exits_2(self) -> None:
+        """--limit 0 is rejected by Click IntRange(min=1)."""
+        result = CliRunner().invoke(
+            cli, ["--json", "soar", "containers", "list", "--limit", "0"]
+        )
+        assert result.exit_code == 2
+
+    def test_negative_limit_exits_2(self) -> None:
+        result = CliRunner().invoke(
+            cli, ["--json", "soar", "containers", "list", "--limit", "-1"]
+        )
+        assert result.exit_code == 2
+
+    def test_negative_offset_exits_2(self) -> None:
+        result = CliRunner().invoke(
+            cli,
+            [
+                "--json",
+                "soar",
+                "containers",
+                "list",
+                "--limit",
+                "5",
+                "--offset",
+                "-1",
+            ],
+        )
+        assert result.exit_code == 2
+
+
+# ---------------------------------------------------------------------------
+# _extract_payload fallback behaviour
+# ---------------------------------------------------------------------------
+
+
+class TestExtractPayloadFallback:
+    def test_non_dict_non_list_sub_view_returns_list(self) -> None:
+        """Non-dict, non-list result with a sub_view returns [] (not {})."""
+        result = _extract_payload("unexpected string", "artifacts")
+        assert result == []
+        assert isinstance(result, list)
+
+    def test_sub_view_data_non_standard_returns_list(self) -> None:
+        """data key with non-list/non-dict inner returns []."""
+        result = _extract_payload({"data": "string_value"}, "notes")
+        assert result == []
+        assert isinstance(result, list)

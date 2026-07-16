@@ -101,3 +101,45 @@ class TestArtifactsGet:
 
         result = CliRunner().invoke(cli, ["--json", "soar", "artifacts", "get", "999"])
         assert result.exit_code == 1
+
+
+# ---------------------------------------------------------------------------
+# IntRange enforcement for --limit / --offset
+# ---------------------------------------------------------------------------
+
+
+class TestArtifactsLimitValidation:
+    def test_limit_zero_exits_2(self) -> None:
+        """--limit 0 is rejected by Click IntRange(min=1)."""
+        result = CliRunner().invoke(
+            cli,
+            [
+                "--json",
+                "soar",
+                "artifacts",
+                "list",
+                "--container",
+                "1",
+                "--limit",
+                "0",
+            ],
+        )
+        assert result.exit_code == 2
+
+    def test_negative_offset_exits_2(self) -> None:
+        result = CliRunner().invoke(
+            cli,
+            [
+                "--json",
+                "soar",
+                "artifacts",
+                "list",
+                "--container",
+                "1",
+                "--limit",
+                "5",
+                "--offset",
+                "-1",
+            ],
+        )
+        assert result.exit_code == 2

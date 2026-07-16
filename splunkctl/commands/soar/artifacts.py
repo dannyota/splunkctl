@@ -217,8 +217,6 @@ def create_cmd(
     no_automation: bool,
 ) -> None:
     """Create an artifact in a container."""
-    client = get_soar_client(ctx)
-
     # Build CEF dict from --cef and --cef-file
     cef: dict[str, Any] = {}
     if cef_file:
@@ -228,28 +226,6 @@ def create_cmd(
     # Build cef_types with auto-population from CEF_CONTAINS_MAP
     explicit_types = _parse_cef_type_pairs(cef_type_pairs)
     cef_types = _auto_cef_types(cef, explicit_types)
-
-    # Client-side SDI dedup precheck
-    if sdi is not None:
-        try:
-            existing = client.get(
-                "artifact",
-                params={
-                    "_filter_source_data_identifier": json.dumps(sdi),
-                    "_filter_container": container_id,
-                },
-            )
-            data = existing.get("data", []) if isinstance(existing, dict) else []
-            if data:
-                eid = data[0].get("id", "?")
-                output.warning(
-                    f"SDI '{sdi}' already exists as artifact {eid} "
-                    f"in container {container_id} (server does not dedup)"
-                )
-        except SOARError as exc:
-            output.warning(
-                f"could not verify SDI uniqueness ({exc.message}); proceeding"
-            )
 
     # Build payload
     payload: dict[str, Any] = {
@@ -272,6 +248,30 @@ def create_cmd(
     details = json.dumps(payload, indent=2, default=str)
     if not soar_check(ctx, f"Create artifact '{name}'", details=details):
         return
+
+    client = get_soar_client(ctx)
+
+    # Client-side SDI dedup precheck
+    if sdi is not None:
+        try:
+            existing = client.get(
+                "artifact",
+                params={
+                    "_filter_source_data_identifier": json.dumps(sdi),
+                    "_filter_container": container_id,
+                },
+            )
+            data = existing.get("data", []) if isinstance(existing, dict) else []
+            if data:
+                eid = data[0].get("id", "?")
+                output.warning(
+                    f"SDI '{sdi}' already exists as artifact {eid} "
+                    f"in container {container_id} (server does not dedup)"
+                )
+        except SOARError as exc:
+            output.warning(
+                f"could not verify SDI uniqueness ({exc.message}); proceeding"
+            )
 
     try:
         if severity is not None:

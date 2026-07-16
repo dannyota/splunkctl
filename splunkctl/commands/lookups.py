@@ -18,7 +18,12 @@ import click
 from splunkctl import guard, output
 from splunkctl.client import get_client
 from splunkctl.commands import conf_ops, lookups_wiring
-from splunkctl.commands.common import app_scope, fetch_page, list_options
+from splunkctl.commands.common import (
+    app_scope,
+    fetch_page,
+    list_options,
+    spl_quote_lookup_name,
+)
 
 
 @click.group("lookups")
@@ -76,8 +81,8 @@ def get_lookup(ctx: click.Context, name: str, *, app: str) -> None:
         if not matches:
             raise KeyError(name)
         lk = matches[0]
-    except (KeyError, Exception) as exc:
-        output.error(f"Lookup '{name}' not found: {exc}", kind="not_found")
+    except KeyError:
+        output.error(f"Lookup '{name}' not found.", kind="not_found")
         ctx.exit(1)
         return
     row: dict[str, Any] = {
@@ -146,8 +151,9 @@ def download_lookup(
         ctx.exit(1)
         return
     try:
+        quoted = spl_quote_lookup_name(name)
         stream = client.service.jobs.oneshot(
-            f"| inputlookup {name}",
+            f"| inputlookup {quoted}",
             output_mode="csv",
             app=app,
         )
@@ -215,8 +221,8 @@ def delete_lookup(ctx: click.Context, name: str, *, app: str) -> None:
         if not matches:
             raise KeyError(name)
         matches[0].delete()
-    except (KeyError, Exception) as exc:
-        output.error(f"Delete failed: {exc}")
+    except KeyError:
+        output.error(f"Lookup '{name}' not found in app '{app}'.", kind="not_found")
         ctx.exit(1)
         return
     output.info(f"Deleted lookup '{name}' from app '{app}'.")

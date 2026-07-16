@@ -16,6 +16,7 @@ def test_defaults_has_required_keys() -> None:
     assert "username" in d
     assert "scheme" in d
     assert d["port"] == 8089
+    assert d["verify"] is True
 
 
 def test_load_defaults_when_no_file(tmp_path: Path) -> None:
@@ -290,7 +291,7 @@ def test_soar_defaults() -> None:
     """soar_defaults returns correct default port and verify."""
     d = config.soar_defaults()
     assert d["port"] == 8443
-    assert d["verify"] is False
+    assert d["verify"] is True
     # No host/token/username/password defaults — those must be explicit.
     assert "host" not in d
     assert "token" not in d
@@ -371,7 +372,7 @@ def test_resolve_soar_no_soar_section(tmp_path: Path) -> None:
     _write_v2(p, {"lab": {"host": "siem"}}, current="lab")
     resolved = config.resolve_soar(p)
     assert resolved["port"] == 8443
-    assert resolved["verify"] is False
+    assert resolved["verify"] is True
     assert "host" not in resolved
 
 
@@ -474,5 +475,26 @@ def test_siem_profile_unaffected_by_soar_section(tmp_path: Path) -> None:
     assert siem["cfg"]["host"] == "siem-host"
     # SIEM resolve must strip the nested soar: map entirely.
     assert "soar" not in siem["cfg"]
-    # And SOAR credentials must not leak into the SIEM top-level config.
     assert "token" not in siem["cfg"]
+
+
+def test_resolve_inherits_verify_true_when_profile_omits_it(tmp_path: Path) -> None:
+    p = tmp_path / "config.yaml"
+    _write_v2(p, {"prod": {"host": "prod-host"}}, current="prod")
+    assert config.load(p)["verify"] is True
+
+
+def test_profile_explicit_verify_false_overrides_default(tmp_path: Path) -> None:
+    p = tmp_path / "config.yaml"
+    _write_v2(p, {"lab": {"host": "lab-host", "verify": False}}, current="lab")
+    assert config.load(p)["verify"] is False
+
+
+def test_soar_profile_explicit_verify_false(tmp_path: Path) -> None:
+    p = tmp_path / "config.yaml"
+    _write_v2(
+        p,
+        {"lab": {"host": "siem", "soar": {"host": "soar-host", "verify": False}}},
+        current="lab",
+    )
+    assert config.resolve_soar(p)["verify"] is False
