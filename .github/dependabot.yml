@@ -8,6 +8,8 @@ updates:
       day: "monday"
       time: "09:00"
       timezone: "Asia/Ho_Chi_Minh"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     groups:
       python-dependencies:
@@ -21,6 +23,8 @@ updates:
       day: "monday"
       time: "09:30"
       timezone: "Asia/Ho_Chi_Minh"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     groups:
       github-actions:

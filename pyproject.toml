@@ -13,7 +13,7 @@ license-files = ["LICENSE"]
 authors = [{ name = "dannyota" }]
 keywords = ["splunk", "mcp", "model-context-protocol", "siem", "soar", "security", "cli", "detection", "spl"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Environment :: Console",
     "Intended Audience :: System Administrators",
     "Operating System :: OS Independent",
@@ -48,8 +48,10 @@ splunkctl = "splunkctl.main:cli"
 
 [project.urls]
 Homepage = "https://github.com/dannyota/splunkctl"
+Documentation = "https://splunkctl.danny.vn"
 Repository = "https://github.com/dannyota/splunkctl"
 Issues = "https://github.com/dannyota/splunkctl/issues"
+Changelog = "https://github.com/dannyota/splunkctl/blob/master/CHANGELOG.md"
 
 # Auto-discover subpackages — a hardcoded list silently dropped
 # splunkctl.commands.soar from every wheel (v0.7.0–v0.10.0).
@@ -60,7 +62,7 @@ include = ["splunkctl*"]
 version = { attr = "splunkctl.__version__" }
 
 [tool.setuptools.package-data]
-"splunkctl.mcp" = ["py.typed"]
+"splunkctl" = ["py.typed"]
 
 # --- Ruff (lint + format) ---
 

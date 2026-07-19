@@ -1,12 +1,17 @@
 <div align="center">
 
-<a href="https://splunk.danny.vn"><img src="docs/assets/banner.svg" alt="splunkctl — operate Splunk Enterprise and Splunk SOAR as code" width="600"></a>
+<a href="https://splunkctl.danny.vn"><img src="https://raw.githubusercontent.com/dannyota/splunkctl/master/docs/assets/banner.svg" alt="splunkctl — operate Splunk Enterprise and Splunk SOAR as code" width="600"></a>
 
 # splunkctl
 
+[![PyPI](https://img.shields.io/pypi/v/splunkctl)](https://pypi.org/project/splunkctl/)
+[![Python](https://img.shields.io/pypi/pyversions/splunkctl)](https://pypi.org/project/splunkctl/)
+[![CI](https://img.shields.io/github/actions/workflow/status/dannyota/splunkctl/ci.yml?branch=master&label=CI)](https://github.com/dannyota/splunkctl/actions/workflows/ci.yml)
+[![License](https://img.shields.io/pypi/l/splunkctl)](https://github.com/dannyota/splunkctl/blob/master/LICENSE)
+
 **Operate Splunk Enterprise and Splunk SOAR as code — for SOC teams, detection engineers, and AI agents.**
 
-[Docs](https://splunk.danny.vn) · [Catalog](docs/design/catalog.md) · [Releases](https://github.com/dannyota/splunkctl/releases)
+[Docs](https://splunkctl.danny.vn) · [Catalog](https://github.com/dannyota/splunkctl/blob/master/docs/design/catalog.md) · [Releases](https://github.com/dannyota/splunkctl/releases)
 
 </div>
 
@@ -19,9 +24,9 @@ are built on the
 fork with [Click](https://click.palletsprojects.com/); SOAR commands use
 `SOARClient`, a requests-based Django REST client with dual auth (token +
 Basic fallback). The SIEM core loop is **pull live state, review the diff,
-push it back** -- one `state` engine covering rules, parsers, macros,
-lookups, and dashboards, with a change-evidence report artifact for change
-tickets. The SOAR surface covers ops visibility, container/artifact
+push it back** — one `state` engine covering rules, parsers, macros,
+lookups, dashboards, and SOAR playbooks/assets/lists, with a
+change-evidence report artifact for change tickets. The SOAR surface covers ops visibility, container/artifact
 lifecycle, the first playbooks-as-code loop anywhere, and SIEM-to-SOAR
 ingest. Built for humans and LLM agents alike: deterministic flags,
 `--json` everywhere, structured error envelopes, and a built-in MCP server
@@ -33,9 +38,9 @@ ingest. Built for humans and LLM agents alike: deterministic flags,
 ## What it does
 
 - **Config as code** — `state pull` → edit → `state diff` → `state push`
-  across rules, parsers, macros, lookups, and dashboards (diff-only). Push
-  writes a before→after JSON report artifact usable as change-ticket
-  evidence. Push never deletes.
+  across rules, parsers, macros, lookups, dashboards (diff-only), and
+  SOAR playbooks/assets/lists. Push writes a before→after JSON report
+  artifact usable as change-ticket evidence. Push never deletes.
 - **Detection engineering** — rules CRUD + YAML import/export, macros,
   eventtypes, tags, data model acceleration health, lookup definitions +
   automatic lookups (transforms.conf/props.conf wiring), and first-class
@@ -59,7 +64,7 @@ ingest. Built for humans and LLM agents alike: deterministic flags,
 - **SOAR ops** — `soar` command tree: containers, artifacts, vault, notes,
   cases/workbooks, approvals, custom lists, indicators, evidence, users,
   roles, audit, and cross-object search. Full lifecycle: create, update,
-  close, assign, delete -- with the same dry-run guard and typed error
+  close, assign, delete — with the same dry-run guard and typed error
   envelopes.
 - **Playbooks as code** — `soar playbooks export --unpack` / `import`
   round-trips playbook tgz bundles (the first such tool anywhere);
@@ -72,7 +77,7 @@ ingest. Built for humans and LLM agents alike: deterministic flags,
   field map, with SDI dedup, severity mapping, and last-artifact automation
   batching.
 - **Built for agents** — built-in MCP server with 259 auto-generated tools,
-  progressive discovery (5 meta-tools + focus/unfocus), 33 guide resources,
+  progressive discovery (5 meta-tools + focus/unfocus), 36 guide resources,
   guard markers on every mutation, dual output (TTY = table, pipe = JSON).
 
 ## Install
@@ -159,6 +164,7 @@ splunkctl state push --dir config/ --report r.json --yes  # deploy + evidence
 | `state` | Config-as-code pull/diff/push with change-evidence reports |
 | `soar` | SOAR: containers, artifacts, vault, playbooks, actions, cases, ingest |
 | `commands` | Machine-readable command tree (JSON) |
+| `completion` | Shell completion script (bash, zsh, fish) |
 | `mcp` | Built-in MCP server for AI agent integration |
 
 ## Global flags
@@ -170,6 +176,7 @@ splunkctl state push --dir config/ --report r.json --yes  # deploy + evidence
 --out FILE          Write output to file
 --yes / -y          Apply mutations (skip dry-run preview)
 --timeout N         Request timeout in seconds (default 30)
+--watch N           Re-run the command every N seconds (read-only commands)
 --config FILE       Config file path
 --profile NAME      Named profile (dev/UAT/prod)
 --debug             HTTP request/response logging
@@ -230,10 +237,10 @@ splunkctl mcp serve                # start stdio MCP server
 ```
 
 The MCP server auto-generates 259 typed tools from the Click command tree
-(SIEM + SOAR) with progressive discovery -- agents start with 5 meta-tools
+(SIEM + SOAR) with progressive discovery — agents start with 5 meta-tools
 (`help`, `usage`, `focus`, `unfocus`, `run`) and dynamically load typed
 schemas per command group. Subgroup-granular focus works for nested groups
-like `soar containers`. 33 guide resources are served as `guide://` URIs.
+like `soar containers`. 36 guide resources are served as `guide://` URIs.
 Mutations are guarded: `yes=true` to apply (dry-run by default).
 
 ## License

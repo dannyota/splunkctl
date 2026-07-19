@@ -1,0 +1,5 @@
+prune tests
+prune docs
+prune samples
+prune scripts
+prune installers

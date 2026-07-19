@@ -328,6 +328,9 @@ def _unpack_tgz(tgz_bytes: bytes, out_dir: str | None, ctx: click.Context) -> No
     """Extract a playbook tgz to *out_dir* (or cwd)."""
     dest = Path(out_dir) if out_dir else Path.cwd()
     try:
+        # filter="data" rejects path traversal, absolute paths, and
+        # symlink escapes (PEP 706).
+        # nosemgrep
         with tarfile.open(fileobj=io.BytesIO(tgz_bytes), mode="r:gz") as tar:
             tar.extractall(path=dest, filter="data")
     except (tarfile.TarError, OSError) as exc:
