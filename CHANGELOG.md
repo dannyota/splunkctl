@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.12.0
+
+MCP 2 migration for local agent integrations.
+
+### Breaking
+
+- Require MCP Python SDK 2.x. Use splunkctl 0.11.2 for clients or
+  environments that still require MCP 1.x.
+- Tool-list changes use MCP 2 subscriptions instead of legacy
+  `notifications/tools/list_changed` delivery.
+- Streamable HTTP accepts loopback hosts only: `127.0.0.1`,
+  `localhost`, or `::1`.
+
+### Changed
+
+- Replace `FastMCP` with MCP 2's `MCPServer`, client, prompt, model,
+  transport, and snake-case APIs.
+- Keep progressive disclosure through the five meta-tools and
+  Click-derived typed tools.
+- Replace private SDK tool-manager mutation with a splunkctl-owned
+  dynamic registry built on the public `list_tools()` and
+  `call_tool()` extension points.
+- Package MCP guide resources in source and wheel distributions.
+- Move Streamable HTTP host and port configuration to MCP 2's
+  transport runner.
+
 ## 0.11.2
 
 MCP compatibility and repository documentation update.

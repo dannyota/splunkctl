@@ -17,7 +17,7 @@ splunkctl mcp install [OPTIONS]
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--transport` | choice: stdio, http | stdio | Transport for the generated config. 'http' writes a URL-based entry. |
-| `--host` | text | 127.0.0.1 | Host for HTTP config (ignored for stdio). |
+| `--host` | choice: 127.0.0.1, localhost, ::1 | 127.0.0.1 | Loopback host for HTTP config (ignored for stdio). |
 | `--port` | integer | 8765 | Port for HTTP config (ignored for stdio). |
 
 ## mcp serve
@@ -29,8 +29,8 @@ splunkctl mcp serve [OPTIONS]
 ```
 
 ```text
-Default is stdio (standard MCP transport). Use --transport http to run
-a streamable-HTTP server for shared/team use on trusted networks.
+Default is stdio (standard MCP transport). HTTP is restricted to the
+local machine and does not provide authentication.
 ```
 
 **Flags**
@@ -38,5 +38,5 @@ a streamable-HTTP server for shared/team use on trusted networks.
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--transport` | choice: stdio, http | stdio | Transport type. 'http' runs streamable-HTTP. |
-| `--host` | text | 127.0.0.1 | Bind address for HTTP transport (ignored for stdio). |
+| `--host` | choice: 127.0.0.1, localhost, ::1 | 127.0.0.1 | Loopback address for HTTP transport (ignored for stdio). |
 | `--port` | integer | 8765 | Port for HTTP transport (ignored for stdio). |

@@ -6,21 +6,15 @@ import json
 from typing import Any
 
 import click
-from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.mcpserver import Context
 from mcp.types import ToolAnnotations
 
 from splunkctl import __version__
+from splunkctl.mcp.dynamic_server import SplunkMCPServer
 from splunkctl.mcp.output_cap import sweep_spill_dir
 from splunkctl.mcp.resources import load_guides
-from splunkctl.mcp.runner import (
-    exec_cli as _exec_cli,
-)
-from splunkctl.mcp.runner import (
-    register_tool as _register_tool_impl,
-)
-from splunkctl.mcp.runner import (
-    split_command as _split_command,
-)
+from splunkctl.mcp.runner import exec_cli as _exec_cli
+from splunkctl.mcp.runner import split_command as _split_command
 from splunkctl.mcp.tools import (
     ToolIndex,
     build_tool_index,
@@ -32,6 +26,7 @@ from splunkctl.mcp.tools import (
     leaf_count,
     subgroup_names,
 )
+from splunkctl.mcp.transport import require_loopback_host
 
 _INSTRUCTIONS = """\
 splunkctl is a CLI for Splunk Enterprise SIEM operations. Start with \
@@ -46,38 +41,15 @@ focus at subgroup granularity: `focus "soar containers"`, not `focus soar`. \
 `help soar` lists available subgroups."""
 
 
-def create_server(
-    host: str = "127.0.0.1",
-    port: int = 8765,
-) -> FastMCP:
-    """Build the MCP server with meta-tools and guide resources.
-
-    Args:
-        host: Bind address for HTTP transport (ignored for stdio).
-        port: Port for HTTP transport (ignored for stdio).
-    """
+def create_server() -> SplunkMCPServer:
+    """Build the MCP server with meta-tools and guide resources."""
     from splunkctl.main import cli
 
-    mcp = FastMCP(
+    mcp = SplunkMCPServer(
         name="splunkctl",
         instructions=_INSTRUCTIONS,
-        host=host,
-        port=port,
+        version=__version__,
     )
-    mcp._mcp_server.version = __version__
-
-    from mcp.server.lowlevel.server import NotificationOptions
-
-    _orig = mcp._mcp_server.create_initialization_options
-
-    def _init_opts_with_list_changed(**kwargs: Any) -> Any:
-        kwargs.setdefault(
-            "notification_options",
-            NotificationOptions(tools_changed=True),
-        )
-        return _orig(**kwargs)
-
-    mcp._mcp_server.create_initialization_options = _init_opts_with_list_changed  # type: ignore[assignment]
 
     all_tools: ToolIndex = build_tool_index(cli)
     focused: dict[str, list[str]] = {}
@@ -87,7 +59,7 @@ def create_server(
     @mcp.tool(
         name="help",
         description="List command groups, or subcommands within a group.",
-        annotations=ToolAnnotations(readOnlyHint=True),
+        annotations=ToolAnnotations(read_only_hint=True),
     )
     async def help_tool(group: str | None = None) -> str:
         """List command groups, or subcommands within a group."""
@@ -137,19 +109,21 @@ def create_server(
             "Auto-loads it as a callable tool. "
             'Accepts nested paths: usage "soar playbooks run".'
         ),
-        annotations=ToolAnnotations(readOnlyHint=True),
+        annotations=ToolAnnotations(read_only_hint=True),
     )
-    async def usage_tool(command: str, ctx: Context) -> str:  # type: ignore[type-arg]
+    async def usage_tool(command: str, ctx: Context) -> str:
         """Show full schema for one command and auto-load it."""
         tool_name = command.strip().replace(" ", "_").replace("-", "_")
         entry = all_tools.get(tool_name)
         if entry is None:
             return f"Unknown command: {command}"
 
-        if not any(tool_name in names for names in focused.values()):
-            _register_tool_impl(mcp, entry, exec_fn=_exec_cli)
-            focused.setdefault("_usage", []).append(tool_name)
-            await ctx.session.send_tool_list_changed()
+        if not mcp.has_cli_tool(tool_name):
+            mcp.add_cli_tool(entry, _exec_cli)
+            usage_tools = focused.setdefault("_usage", [])
+            if tool_name not in usage_tools:
+                usage_tools.append(tool_name)
+            await ctx.notify_tools_changed()
 
         return json.dumps(
             {
@@ -170,9 +144,9 @@ def create_server(
             "Preferred over run for validated arguments. "
             'Nested groups like soar require subgroup: focus "soar containers".'
         ),
-        annotations=ToolAnnotations(readOnlyHint=True),
+        annotations=ToolAnnotations(read_only_hint=True),
     )
-    async def focus_tool(group: str, ctx: Context) -> str:  # type: ignore[type-arg]
+    async def focus_tool(group: str, ctx: Context) -> str:
         """Load typed tools for a command group."""
         if group in focused:
             count = len(focused[group])
@@ -207,10 +181,10 @@ def create_server(
 
         names: list[str] = []
         for entry in entries:
-            _register_tool_impl(mcp, entry, exec_fn=_exec_cli)
+            mcp.add_cli_tool(entry, _exec_cli)
             names.append(entry.name)
         focused[group] = names
-        await ctx.session.send_tool_list_changed()
+        await ctx.notify_tools_changed()
 
         lines = [f"Loaded {len(names)} tools for '{group}':"]
         for entry in entries:
@@ -223,11 +197,11 @@ def create_server(
     @mcp.tool(
         name="unfocus",
         description="Unload a command group's typed tools to free context.",
-        annotations=ToolAnnotations(readOnlyHint=True),
+        annotations=ToolAnnotations(read_only_hint=True),
     )
     async def unfocus_tool(
         group: str | None = None,
-        ctx: Context = None,  # type: ignore[type-arg,assignment]
+        ctx: Context | None = None,
     ) -> str:
         """Unload a command group or all groups."""
         if group is None:
@@ -235,13 +209,13 @@ def create_server(
             for names in focused.values():
                 for n in names:
                     try:
-                        mcp.remove_tool(n)
-                    except Exception:  # noqa: BLE001, S110
+                        mcp.remove_cli_tool(n)
+                    except KeyError:
                         pass
                     removed += 1
             focused.clear()
             if ctx is not None:
-                await ctx.session.send_tool_list_changed()
+                await ctx.notify_tools_changed()
             return f"Unloaded all focused tools ({removed} total)."
 
         # Try exact key first, then normalized form for subgroup paths
@@ -256,12 +230,12 @@ def create_server(
             return f"Group '{group}' is not focused."
         for n in focused[key]:
             try:
-                mcp.remove_tool(n)
-            except Exception:  # noqa: BLE001, S110
+                mcp.remove_cli_tool(n)
+            except KeyError:
                 pass
         count = len(focused.pop(key))
         if ctx is not None:
-            await ctx.session.send_tool_list_changed()
+            await ctx.notify_tools_changed()
         return f"Unloaded {count} tools for '{group}'."
 
     # --- Meta-tool: run ---
@@ -274,7 +248,7 @@ def create_server(
             "Use shell-style quoting for values with spaces. "
             "Prefer focus + typed tools for complex commands."
         ),
-        annotations=ToolAnnotations(readOnlyHint=False),
+        annotations=ToolAnnotations(read_only_hint=False),
     )
     async def run_tool(command: str, yes: bool = False) -> str:
         """Execute a raw splunkctl command string."""
@@ -350,9 +324,14 @@ def run_server(
         host: Bind address for HTTP transport (ignored for stdio).
         port: Port for HTTP transport (ignored for stdio).
     """
+    http_host = require_loopback_host(host) if transport == "streamable-http" else host
     sweep_spill_dir()
-    server = create_server(host=host, port=port)
+    server = create_server()
     if transport == "streamable-http":
-        server.run(transport="streamable-http")
+        server.run(
+            transport="streamable-http",
+            host=http_host,
+            port=port,
+        )
     else:
         server.run(transport="stdio")

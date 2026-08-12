@@ -7,6 +7,7 @@ from pathlib import Path
 import click
 
 from splunkctl import output
+from splunkctl.mcp.transport import LOOPBACK_HOSTS, local_mcp_url
 
 
 @click.group("mcp")
@@ -24,9 +25,10 @@ def mcp_group() -> None:
 )
 @click.option(
     "--host",
+    type=click.Choice(LOOPBACK_HOSTS),
     default="127.0.0.1",
     show_default=True,
-    help="Bind address for HTTP transport (ignored for stdio).",
+    help="Loopback address for HTTP transport (ignored for stdio).",
 )
 @click.option(
     "--port",
@@ -38,8 +40,8 @@ def mcp_group() -> None:
 def mcp_serve(transport: str, host: str, port: int) -> None:
     """Start the MCP server.
 
-    Default is stdio (standard MCP transport). Use --transport http to run
-    a streamable-HTTP server for shared/team use on trusted networks.
+    Default is stdio (standard MCP transport). HTTP is restricted to the
+    local machine and does not provide authentication.
     """
     from splunkctl.mcp.server import run_server
 
@@ -57,9 +59,10 @@ def mcp_serve(transport: str, host: str, port: int) -> None:
 )
 @click.option(
     "--host",
+    type=click.Choice(LOOPBACK_HOSTS),
     default="127.0.0.1",
     show_default=True,
-    help="Host for HTTP config (ignored for stdio).",
+    help="Loopback host for HTTP config (ignored for stdio).",
 )
 @click.option(
     "--port",
@@ -72,7 +75,7 @@ def mcp_install(transport: str, host: str, port: int) -> None:
     """Write .mcp.json for Claude Code registration."""
     if transport == "http":
         server_entry: dict[str, object] = {
-            "url": f"http://{host}:{port}/mcp",
+            "url": local_mcp_url(host, port),
         }
     else:
         exe = sys.executable

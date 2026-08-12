@@ -16,7 +16,8 @@ instances.
 The server uses **dynamic tool loading**: instead of exposing all 259 tools
 upfront, it starts with 5 meta-tools and loads group-specific typed tools on
 demand. This keeps the agent's context window small while covering every
-command.
+command. Version 0.12 uses MCP Python SDK 2 and publishes tool-list changes
+through MCP 2 subscriptions.
 
 ## Install
 
@@ -140,36 +141,33 @@ The server exposes:
 All tool output is JSON. Mutations are dry-run by default — the agent must
 pass `yes=true` to apply, same as the CLI's `--yes`.
 
-## HTTP transport (shared/team mode)
+## HTTP transport (local mode)
 
-By default the MCP server uses stdio (one agent, one process). For shared or
-team use you can run it as a streamable-HTTP server:
+By default the MCP server uses stdio (one agent, one process). For local
+clients that need a URL, run it as a streamable-HTTP server:
 
 ```bash
 splunkctl mcp serve --transport http
 ```
 
-This starts an HTTP listener on `127.0.0.1:8765`. Override with `--host` and
-`--port`:
+This starts an HTTP listener on `127.0.0.1:8765`. The host is restricted to
+`127.0.0.1`, `localhost`, or `::1`; you can change the loopback address and
+port:
 
 ```bash
-splunkctl mcp serve --transport http --host 0.0.0.0 --port 9000
+splunkctl mcp serve --transport http --host localhost --port 9000
 ```
 
 To generate a client config pointing at the HTTP server:
 
 ```bash
 splunkctl mcp install --transport http
-# or with custom host/port:
-splunkctl mcp install --transport http --host 10.0.0.5 --port 9000
+# or with a different loopback host and port:
+splunkctl mcp install --transport http --host ::1 --port 9000
 ```
 
-This writes a URL-based entry (`"url": "http://host:port/mcp"`) instead of the
-stdio command entry.
-
-> **Trusted networks only.** HTTP mode has no authentication. Run it only on
-> localhost or a private network you control. An auth layer is planned for a
-> future release.
+This writes a URL-based entry instead of the stdio command entry. HTTP mode
+has no authentication and cannot bind to a non-loopback address.
 
 ## Security
 
@@ -178,7 +176,7 @@ stdio command entry.
 - All mutations require `yes=true` — the agent cannot accidentally modify your
   environment without explicit confirmation.
 - **stdio mode** runs locally with no network listener.
-- **HTTP mode** opens a network port — use only on trusted networks (no auth).
+- **HTTP mode** listens only on a loopback address and has no authentication.
 - Credentials live in `~/.splunkctl/config.yaml` (0600) or environment
   variables, never in the MCP config itself.
 

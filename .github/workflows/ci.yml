@@ -58,6 +58,24 @@ jobs:
       - run: splunkctl --version
       - run: splunkctl commands --json > /dev/null
       - run: splunkctl soar playbooks --help > /dev/null
+      - name: Check MCP guides in a relocated user install
+        run: |
+          userbase="$(mktemp -d)"
+          PYTHONUSERBASE="$userbase" python -m pip install --user --no-deps --force-reinstall dist/*.whl
+          cd "$(mktemp -d)"
+          PYTHONUSERBASE="$userbase" python - <<'PY'
+          import os
+          from pathlib import Path
+
+          import splunkctl
+          from splunkctl.mcp.resources import load_guides
+
+          userbase = Path(os.environ["PYTHONUSERBASE"]).resolve()
+          package = Path(splunkctl.__file__).resolve()
+          assert package.is_relative_to(userbase), (package, userbase)
+          guides = load_guides()
+          assert len(guides) == 36, f"expected 36 packaged guides, found {len(guides)}"
+          PY
 
   semgrep:
     runs-on: ubuntu-latest

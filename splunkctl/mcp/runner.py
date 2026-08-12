@@ -9,11 +9,6 @@ import sys
 from collections.abc import Callable
 from typing import Any
 
-from mcp.server.fastmcp import FastMCP
-from mcp.server.fastmcp.utilities.func_metadata import ArgModelBase, FuncMetadata
-from mcp.types import ToolAnnotations
-from pydantic import ConfigDict
-
 from splunkctl.mcp.output_cap import (
     MAX_OUTPUT_BYTES,
     SUBPROCESS_TIMEOUT,
@@ -119,63 +114,4 @@ def build_cli_args(entry: ToolEntry, params: dict[str, Any]) -> list[str]:
     return args
 
 
-class PassThroughArgs(ArgModelBase):
-    """Arg model that forwards arbitrary fields to the CLI unvalidated.
-
-    Focused tools advertise a Click-derived JSON Schema, but runtime
-    validation belongs to Click itself — the subprocess rejects bad args
-    with a usage error. FastMCP's default ``func_metadata`` would instead
-    validate against the runner's ``**kwargs`` signature, which no client
-    payload can ever satisfy.
-    """
-
-    model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
-
-    def model_dump_one_level(self) -> dict[str, Any]:
-        """Return the extra (client-sent) fields as-is."""
-        return dict(self.__pydantic_extra__ or {})
-
-
 type ExecFn = Callable[[list[str]], str]
-
-
-def register_tool(
-    mcp: FastMCP,
-    entry: ToolEntry,
-    *,
-    exec_fn: ExecFn | None = None,
-) -> None:
-    """Register a focused tool that executes via subprocess.
-
-    Args:
-        mcp: The FastMCP server instance.
-        entry: Tool entry from the Click-derived index.
-        exec_fn: Optional override for the CLI execution function.
-            Defaults to :func:`exec_cli`.  Passing an override lets
-            callers patch a single module-level name for testability.
-    """
-    from mcp.server.fastmcp.tools import Tool as MCPTool
-
-    run = exec_fn or exec_cli
-
-    annotations = ToolAnnotations(
-        readOnlyHint=not entry.guarded,
-        destructiveHint=entry.guarded,
-    )
-
-    async def _runner(**kwargs: Any) -> str:
-        cli_args = build_cli_args(entry, kwargs)
-        return run(cli_args)
-
-    tool = MCPTool(
-        fn=_runner,
-        name=entry.name,
-        title=None,
-        description=entry.description,
-        parameters=entry.schema,
-        fn_metadata=FuncMetadata(arg_model=PassThroughArgs),
-        is_async=True,
-        context_kwarg=None,
-        annotations=annotations,
-    )
-    mcp._tool_manager._tools[tool.name] = tool

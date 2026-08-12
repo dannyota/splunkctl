@@ -1,10 +1,13 @@
 """Tests for MCP streamable-HTTP transport support."""
 
+import asyncio
 import json
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from click.testing import CliRunner
+from mcp.server.mcpserver import MCPServer
 
 from splunkctl.main import cli
 
@@ -28,8 +31,8 @@ def test_mcp_serve_http_transport() -> None:
     )
 
 
-def test_mcp_serve_http_custom_host_port() -> None:
-    """Custom --host and --port are forwarded."""
+def test_mcp_serve_http_localhost_custom_port() -> None:
+    """A loopback hostname and custom port are forwarded."""
     runner = CliRunner()
     with patch("splunkctl.mcp.server.run_server") as mock_run:
         result = runner.invoke(
@@ -40,7 +43,7 @@ def test_mcp_serve_http_custom_host_port() -> None:
                 "--transport",
                 "http",
                 "--host",
-                "0.0.0.0",  # noqa: S104
+                "localhost",
                 "--port",
                 "9999",
             ],
@@ -48,9 +51,29 @@ def test_mcp_serve_http_custom_host_port() -> None:
     assert result.exit_code == 0
     mock_run.assert_called_once_with(
         transport="streamable-http",
-        host="0.0.0.0",  # noqa: S104
+        host="localhost",
         port=9999,
     )
+
+
+def test_mcp_serve_rejects_non_loopback_host() -> None:
+    """The CLI must not expose the unauthenticated MCP server remotely."""
+    runner = CliRunner()
+    with patch("splunkctl.mcp.server.run_server") as mock_run:
+        result = runner.invoke(
+            cli,
+            [
+                "mcp",
+                "serve",
+                "--transport",
+                "http",
+                "--host",
+                "0.0.0.0",  # noqa: S104 - verifies unsafe bind is rejected
+            ],
+        )
+    assert result.exit_code != 0
+    assert "127.0.0.1" in result.output
+    mock_run.assert_not_called()
 
 
 def test_mcp_serve_invalid_transport() -> None:
@@ -85,12 +108,12 @@ def test_run_server_stdio_calls_run() -> None:
         patch("splunkctl.mcp.server.sweep_spill_dir"),
     ):
         run_server(transport="stdio")
-    mock_create.assert_called_once_with(host="127.0.0.1", port=8765)
+    mock_create.assert_called_once_with()
     mock_server.run.assert_called_once_with(transport="stdio")
 
 
-def test_run_server_http_calls_run_with_host_port() -> None:
-    """run_server with streamable-http passes host/port to create_server."""
+def test_run_server_http_passes_host_port_to_transport() -> None:
+    """MCP 2 receives HTTP settings at run(), not construction."""
     mock_server = MagicMock()
     with (
         patch(
@@ -100,12 +123,40 @@ def test_run_server_http_calls_run_with_host_port() -> None:
     ):
         from splunkctl.mcp.server import run_server
 
-        run_server(transport="streamable-http", host="0.0.0.0", port=9000)  # noqa: S104
-    mock_create.assert_called_once_with(
-        host="0.0.0.0",  # noqa: S104
+        run_server(transport="streamable-http", host="localhost", port=9000)
+    mock_create.assert_called_once_with()
+    mock_server.run.assert_called_once_with(
+        transport="streamable-http",
+        host="localhost",
         port=9000,
     )
-    mock_server.run.assert_called_once_with(transport="streamable-http")
+
+
+def test_run_server_rejects_non_loopback_host() -> None:
+    """Direct Python callers cannot bypass the local HTTP boundary."""
+    from splunkctl.mcp.server import run_server
+
+    with pytest.raises(ValueError, match="loopback"):
+        run_server(transport="streamable-http", host="192.168.1.10", port=8765)
+
+
+def test_created_server_rejects_direct_non_loopback_http() -> None:
+    """The server object itself must enforce the local HTTP boundary."""
+    from splunkctl.mcp.server import create_server
+
+    server = create_server()
+    with patch.object(
+        MCPServer,
+        "run_streamable_http_async",
+        new_callable=AsyncMock,
+    ) as parent_run:
+        with pytest.raises(ValueError, match="loopback"):
+            asyncio.run(
+                server.run_streamable_http_async(
+                    host="0.0.0.0",  # noqa: S104 - verifies unsafe bind is rejected
+                )
+            )
+    parent_run.assert_not_awaited()
 
 
 def test_mcp_install_stdio_default(tmp_path: Path) -> None:
@@ -134,7 +185,7 @@ def test_mcp_install_http_writes_url(tmp_path: Path) -> None:
 
 
 def test_mcp_install_http_custom_host_port(tmp_path: Path) -> None:
-    """Custom host/port reflected in the URL."""
+    """A custom loopback host and port are reflected in the URL."""
     runner = CliRunner()
     with patch("splunkctl.commands.mcp_cmd.Path.cwd", return_value=tmp_path):
         result = runner.invoke(
@@ -145,7 +196,7 @@ def test_mcp_install_http_custom_host_port(tmp_path: Path) -> None:
                 "--transport",
                 "http",
                 "--host",
-                "10.0.0.5",
+                "localhost",
                 "--port",
                 "4000",
             ],
@@ -153,7 +204,32 @@ def test_mcp_install_http_custom_host_port(tmp_path: Path) -> None:
     assert result.exit_code == 0
     config = json.loads((tmp_path / ".mcp.json").read_text())
     server = config["mcpServers"]["splunkctl"]
-    assert server["url"] == "http://10.0.0.5:4000/mcp"
+    assert server["url"] == "http://localhost:4000/mcp"
+
+
+def test_mcp_install_http_formats_ipv6_loopback(tmp_path: Path) -> None:
+    """IPv6 loopback URLs must contain brackets around the address."""
+    runner = CliRunner()
+    with patch("splunkctl.commands.mcp_cmd.Path.cwd", return_value=tmp_path):
+        result = runner.invoke(
+            cli,
+            ["mcp", "install", "--transport", "http", "--host", "::1"],
+        )
+    assert result.exit_code == 0
+    config = json.loads((tmp_path / ".mcp.json").read_text())
+    assert config["mcpServers"]["splunkctl"]["url"] == "http://[::1]:8765/mcp"
+
+
+def test_mcp_install_rejects_non_loopback_host(tmp_path: Path) -> None:
+    """Generated configs cannot point at a non-loopback HTTP listener."""
+    runner = CliRunner()
+    with patch("splunkctl.commands.mcp_cmd.Path.cwd", return_value=tmp_path):
+        result = runner.invoke(
+            cli,
+            ["mcp", "install", "--transport", "http", "--host", "10.0.0.5"],
+        )
+    assert result.exit_code != 0
+    assert not (tmp_path / ".mcp.json").exists()
 
 
 def test_mcp_install_http_merges_existing(tmp_path: Path) -> None:

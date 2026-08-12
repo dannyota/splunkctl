@@ -3,3 +3,4 @@ prune docs
 prune samples
 prune scripts
 prune installers
+graft docs/guides

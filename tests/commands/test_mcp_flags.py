@@ -9,12 +9,21 @@ MCP guard; binary output (playbook export) crashed the result path.
 import asyncio
 from unittest.mock import patch
 
+from mcp.types import CallToolResult, TextContent
+
 from splunkctl.main import cli
 from splunkctl.mcp.runner import _decode_stream, build_cli_args
 from splunkctl.mcp.server import create_server
 from splunkctl.mcp.tools import build_tool_index, leaf_count
 
 IDX = build_tool_index(cli)
+
+
+def _text(result: CallToolResult) -> str:
+    """Collect text content from an MCP tool result."""
+    return "\n".join(
+        item.text for item in result.content if isinstance(item, TextContent)
+    )
 
 
 def test_renamed_option_maps_to_real_flag() -> None:
@@ -94,7 +103,6 @@ def test_run_tool_rejects_yes_in_command_string() -> None:
     flag, so stripping would corrupt legitimate commands.
     """
     server = create_server()
-    run_tool = server._tool_manager._tools["run"].fn
 
     for cmd in (
         "soar containers delete 1 --yes",
@@ -102,19 +110,25 @@ def test_run_tool_rejects_yes_in_command_string() -> None:
         'soar containers delete 1 "--yes"',  # quoting must not sneak past
     ):
         with patch("splunkctl.mcp.server._exec_cli") as mock_exec:
-            result = asyncio.run(run_tool(command=cmd, yes=False))
+            result = asyncio.run(
+                server.call_tool("run", {"command": cmd, "yes": False})
+            )
         mock_exec.assert_not_called()
-        assert "yes=true" in result  # the error tells the agent how
+        assert "yes=true" in _text(result)  # the error tells the agent how
 
 
 def test_run_tool_yes_param_appends_flag() -> None:
     """yes=true is the one sanctioned way to apply through run."""
     server = create_server()
-    run_tool = server._tool_manager._tools["run"].fn
 
     with patch("splunkctl.mcp.server._exec_cli") as mock_exec:
         mock_exec.return_value = "applied"
-        asyncio.run(run_tool(command="soar containers delete 1", yes=True))
+        asyncio.run(
+            server.call_tool(
+                "run",
+                {"command": "soar containers delete 1", "yes": True},
+            )
+        )
     tokens = mock_exec.call_args[0][0]
     assert tokens.count("--yes") == 1
     assert tokens[-1] == "--yes"
@@ -125,11 +139,16 @@ def test_run_tool_quoted_yes_value_never_eaten() -> None:
     silently deleted — the old strip turned ``--content "-y"`` into a
     malformed command (argument shift / wrong write)."""
     server = create_server()
-    run_tool = server._tool_manager._tools["run"].fn
 
     with patch("splunkctl.mcp.server._exec_cli") as mock_exec:
         result = asyncio.run(
-            run_tool(command='soar containers add-note 5 --content "-y"', yes=True)
+            server.call_tool(
+                "run",
+                {
+                    "command": 'soar containers add-note 5 --content "-y"',
+                    "yes": True,
+                },
+            )
         )
     mock_exec.assert_not_called()
-    assert "typed tool" in result  # points at the lossless alternative
+    assert "typed tool" in _text(result)  # points at the lossless alternative

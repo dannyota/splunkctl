@@ -107,8 +107,7 @@ def test_server_reports_splunkctl_version() -> None:
     from splunkctl.mcp.server import create_server
 
     server = create_server()
-    opts = server._mcp_server.create_initialization_options()  # noqa: SLF001
-    assert opts.server_version == __version__
+    assert server.version == __version__
 
 
 def test_group_names_returns_groups() -> None:

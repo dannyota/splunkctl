@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
-from mcp.server.fastmcp import FastMCP
-from mcp.server.fastmcp.prompts.base import AssistantMessage, Message, UserMessage
+from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver.prompts.base import (
+    AssistantMessage,
+    Message,
+    UserMessage,
+)
 
 
-def register_prompts(mcp: FastMCP) -> None:
+def register_prompts(mcp: MCPServer[Any]) -> None:
     """Register canned workflow prompts on the server."""
 
     @mcp.prompt(
