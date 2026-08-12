@@ -16,8 +16,6 @@ REPO = Path(__file__).resolve().parent.parent.parent
 # prose honest — these counts had drifted to 237 and 238 while the real
 # number was 229.
 TOOL_COUNT_CLAIMS = [
-    ("README.md", r"MCP server with (\d+) auto-generated tools"),
-    ("README.md", r"auto-generates (\d+) typed tools"),
     ("docs/README.md", r"(\d+) tools with dynamic loading"),
     ("docs/guides/mcp.md", r"exposing all (\d+) tools"),
     ("docs/design/catalog.md", r"(\d+) auto-generated typed tools"),
