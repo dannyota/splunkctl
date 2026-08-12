@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.11.2
+
+MCP compatibility and repository documentation update.
+
+### Fixed
+
+- Constrain the MCP Python SDK to the supported 1.x line so fresh
+  installs do not select the incompatible 2.x API.
+
+### Changed
+
+- Rewrite the README around installation, local MCP setup, core
+  workflows, and safety behavior.
+- Remove obsolete internal planning documents.
+
 ## 0.11.1
 
 PyPI presentation and packaging polish — no functional changes.

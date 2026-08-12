@@ -36,7 +36,7 @@ def test_commands_includes_version() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["commands"])
     data = json.loads(result.output)
-    assert data["version"] == "0.11.1"
+    assert data["version"] == "0.11.2"
 
 
 def test_commands_search_has_subcommands() -> None:
