@@ -313,3 +313,114 @@ def test_import_skips_a_complete_indexed_batch(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr
     assert "batch 000001 already indexed; skipping" in result.stdout
     assert "services/collector/event" not in curl_log.read_text()
+
+
+def test_splunk_install_skips_copy_when_pinned_version_is_ready(
+    tmp_path: Path,
+) -> None:
+    rpm_name = "splunk-10.4.2-33c3bf42cd73.x86_64.rpm"
+    (tmp_path / rpm_name).write_bytes(b"rpm")
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    scp_log = tmp_path / "scp.log"
+    write_executable(fake_bin / "nc", "#!/bin/sh\nexit 0\n")
+    write_executable(fake_bin / "curl", "#!/bin/sh\nprintf '303'\n")
+    write_executable(
+        fake_bin / "scp",
+        '#!/bin/sh\nprintf \'%s\\n\' "$*" >> "$FAKE_SCP_LOG"\n',
+    )
+    write_executable(
+        fake_bin / "ssh",
+        "#!/bin/sh\n"
+        'case "$*" in\n'
+        "  *'rpm -q --qf'*) printf '10.4.2-33c3bf42cd73.x86_64\\n' ;;\n"
+        "esac\n"
+        "exit 0\n",
+    )
+    key = tmp_path / "lab-key"
+    key.write_text("test key")
+
+    result = subprocess.run(  # noqa: S603
+        [str(VMLAB / "install-splunk.sh"), "--ip", "192.0.2.10"],
+        cwd=ROOT,
+        env={
+            **os.environ,
+            "FAKE_SCP_LOG": str(scp_log),
+            "INSTALLERS_DIR": str(tmp_path),
+            "LAB_SSH_KEY": str(key),
+            "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            "SPLUNK_RPM": rpm_name,
+        },
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "already installed and running" in result.stdout
+    assert not scp_log.exists()
+
+
+def test_soar_install_changes_directory_after_switching_user(tmp_path: Path) -> None:
+    tgz_name = "splunk_soar-unpriv-8.6.0.530-test-el9-x86_64.tgz"
+    (tmp_path / tgz_name).write_bytes(b"tgz")
+    vm_base = tmp_path / "vms"
+    vm_dir = vm_base / "soar"
+    vm_dir.mkdir(parents=True)
+    (vm_dir / "soar.vmx").write_text("test vmx")
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    ssh_log = tmp_path / "ssh.log"
+    installed = tmp_path / "soar-installed"
+    write_executable(fake_bin / "nc", "#!/bin/sh\nexit 0\n")
+    write_executable(fake_bin / "sleep", "#!/bin/sh\nexit 0\n")
+    write_executable(fake_bin / "scp", "#!/bin/sh\nexit 0\n")
+    write_executable(fake_bin / "curl", "#!/bin/sh\nprintf '200'\n")
+    write_executable(fake_bin / "vmrun", "#!/bin/sh\nexit 0\n")
+    write_executable(
+        fake_bin / "ssh",
+        "#!/bin/sh\n"
+        'printf \'%s\\n\' "$*" >> "$FAKE_SSH_LOG"\n'
+        'case "$*" in\n'
+        "  *'test -x /opt/phantom/bin/phsvc'*) "
+        'test -f "$FAKE_SOAR_INSTALLED"; exit $? ;;\n'
+        "  *'test -x /home/soar/splunk-soar/soar-install'*) exit 0 ;;\n"
+        "  *'./soar-install'*) : > \"$FAKE_SOAR_INSTALLED\" ;;\n"
+        "  *product_version*) "
+        "test -f \"$FAKE_SOAR_INSTALLED\" && printf '8.6.0.530\\n' ;;\n"
+        "esac\n"
+        "exit 0\n",
+    )
+    key = tmp_path / "lab-key"
+    key.write_text("test key")
+
+    result = subprocess.run(  # noqa: S603
+        [
+            str(VMLAB / "install-soar.sh"),
+            "--name",
+            "soar",
+            "--ip",
+            "192.0.2.11",
+        ],
+        cwd=ROOT,
+        env={
+            **os.environ,
+            "FAKE_SOAR_INSTALLED": str(installed),
+            "FAKE_SSH_LOG": str(ssh_log),
+            "INSTALLERS_DIR": str(tmp_path),
+            "LAB_SSH_KEY": str(key),
+            "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            "SOAR_TGZ": tgz_name,
+            "VM_BASE_DIR": str(vm_base),
+        },
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    install_command = next(
+        line for line in ssh_log.read_text().splitlines() if "./soar-install" in line
+    )
+    assert "cd /home/soar/splunk-soar && sudo -u soar" not in install_command
+    assert "sudo -u soar bash -c" in install_command

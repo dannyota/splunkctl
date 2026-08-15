@@ -1,21 +1,42 @@
 #!/usr/bin/env bash
-# Install Splunk Enterprise (SIEM) on a prepared RHEL VM. Embedded postgres stays
-# ENABLED (SPL2 / Data Orchestration intact) — run this on a DEDICATED Splunk VM.
-#
-#   ./install-splunk.sh --ip 100.65.1.10
+# Install or verify Splunk Enterprise on the existing SIEM VM.
 set -euo pipefail
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib.sh
+source "$HERE/lib.sh"
 
-IP=""
-while [[ $# -gt 0 ]]; do case "$1" in
-  --ip) IP="$2"; shift 2;; *) die "unknown arg: $1";; esac; done
-[[ -n "$IP" ]] || die "usage: --ip IP"
-RPM="$(require_artifact "$SPLUNK_RPM")"; RPM_BASE="$(basename "$RPM")"
+usage() {
+  printf 'Usage: %s [--ip ADDRESS]\n' "${0##*/}"
+}
 
-log "copying $RPM_BASE to $IP"
-scp_to "$IP" "$RPM" /var/tmp/
+IP="$SIEM_IP"
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --ip)
+      [[ $# -ge 2 ]] || die "--ip requires an address"
+      IP="$2"
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *) die "unknown argument: $1" ;;
+  esac
+done
 
-log "OS prep: disable THP, raise ulimits, create splunk user"
+RPM="$(require_artifact "$SPLUNK_RPM")"
+RPM_BASE="$(basename "$RPM")"
+EXPECTED_VERSION="${RPM_BASE#splunk-}"
+EXPECTED_VERSION="${EXPECTED_VERSION%.rpm}"
+
+ensure_ssh_key
+wait_ssh "$IP"
+if ! ssh_vm "$IP" true >/dev/null 2>&1; then
+  seed_ssh_key "$IP" || die "cannot authenticate to $IP"
+fi
+
+log "verifying Splunk host settings"
 ssh_vm "$IP" 'sudo bash -s' <<'REMOTE'
 set -e
 getent group splunk >/dev/null || groupadd -r splunk
@@ -30,7 +51,7 @@ ExecStart=/bin/sh -c 'echo never > /sys/kernel/mm/transparent_hugepage/enabled; 
 [Install]
 WantedBy=multi-user.target
 EOF
-systemctl enable --now disable-thp.service
+systemctl enable --now disable-thp.service >/dev/null
 cat > /etc/security/limits.d/99-splunk.conf <<'EOF'
 splunk soft nofile 64000
 splunk hard nofile 64000
@@ -41,20 +62,50 @@ splunk hard fsize  unlimited
 EOF
 REMOTE
 
-log "installing RPM to /opt/splunk"
-ssh_vm "$IP" "sudo rpm -q splunk >/dev/null 2>&1 || sudo rpm -i /var/tmp/$RPM_BASE; sudo chown -R splunk:splunk /opt/splunk"
+installed_version="$(ssh_vm "$IP" \
+  "rpm -q --qf '%{VERSION}-%{RELEASE}.%{ARCH}' splunk 2>/dev/null || true")"
+was_ready=no
+if [[ "$installed_version" == "$EXPECTED_VERSION" ]] && splunk_is_ready "$IP"; then
+  was_ready=yes
+fi
 
-log "seeding admin credentials"
-seed="$(mktemp)"; printf '[user_info]\nUSERNAME = admin\nPASSWORD = %s\n' "$SPLUNK_ADMIN_PASSWORD" > "$seed"
-scp_to "$IP" "$seed" /var/tmp/user-seed.conf; rm -f "$seed"
-ssh_vm "$IP" 'sudo install -o splunk -g splunk -m600 /var/tmp/user-seed.conf /opt/splunk/etc/system/local/user-seed.conf && sudo rm -f /var/tmp/user-seed.conf'
+if [[ "$installed_version" != "$EXPECTED_VERSION" ]]; then
+  log "copying $RPM_BASE to $IP"
+  scp_to "$IP" "$RPM" "/var/tmp/$RPM_BASE"
+  log "installing pinned Splunk Enterprise $EXPECTED_VERSION"
+  ssh_vm "$IP" "sudo rpm -Uvh --replacepkgs '/var/tmp/$RPM_BASE' >/dev/null; \
+    sudo chown -R splunk:splunk /opt/splunk; sudo rm -f '/var/tmp/$RPM_BASE'"
+fi
 
-log "enabling boot-start (systemd) and starting"
-ssh_vm "$IP" 'sudo /opt/splunk/bin/splunk enable boot-start -user splunk -systemd-managed 1 --accept-license --answer-yes --no-prompt >/dev/null && sudo systemctl start Splunkd'
+if ! ssh_vm "$IP" 'sudo test -s /opt/splunk/etc/passwd'; then
+  log "seeding the first-start administrator credential"
+  seed="$(mktemp)"
+  chmod 600 "$seed"
+  printf '[user_info]\nUSERNAME = admin\nPASSWORD = %s\n' \
+    "$SPLUNK_ADMIN_PASSWORD" > "$seed"
+  scp_to "$IP" "$seed" /var/tmp/user-seed.conf
+  rm -f "$seed"
+  ssh_vm "$IP" 'sudo install -o splunk -g splunk -m 600 /var/tmp/user-seed.conf /opt/splunk/etc/system/local/user-seed.conf; sudo rm -f /var/tmp/user-seed.conf'
+fi
 
-log "opening firewall (8000/8089/8088/8191)"
-ssh_vm "$IP" 'sudo firewall-cmd --permanent --add-port=8000/tcp --add-port=8089/tcp --add-port=8088/tcp --add-port=8191/tcp >/dev/null && sudo firewall-cmd --reload >/dev/null'
+if ! ssh_vm "$IP" 'sudo test -f /etc/systemd/system/Splunkd.service'; then
+  log "enabling Splunk boot-start"
+  ssh_vm "$IP" 'sudo /opt/splunk/bin/splunk enable boot-start -user splunk -systemd-managed 1 --accept-license --answer-yes --no-prompt >/dev/null'
+fi
+ssh_vm "$IP" 'sudo systemctl enable --now Splunkd >/dev/null'
 
-log "waiting for Splunk web…"
-ssh_vm "$IP" 'for i in $(seq 1 24); do c=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000); [ "$c" = "303" ] && break; sleep 5; done; echo "  web8000=$c"; sudo -u splunk /opt/splunk/bin/splunk status | head -1'
-log "Splunk Enterprise ready: http://$IP:8000  (admin / $SPLUNK_ADMIN_PASSWORD)"
+log "verifying Splunk firewall ports"
+ssh_vm "$IP" 'sudo firewall-cmd --permanent --add-port=8000/tcp --add-port=8089/tcp --add-port=8088/tcp --add-port=8191/tcp >/dev/null 2>&1 && sudo firewall-cmd --reload >/dev/null'
+wait_http "http://$IP:8000" 303 240
+
+installed_version="$(ssh_vm "$IP" \
+  "rpm -q --qf '%{VERSION}-%{RELEASE}.%{ARCH}' splunk")"
+[[ "$installed_version" == "$EXPECTED_VERSION" ]] ||
+  die "Splunk version mismatch: expected $EXPECTED_VERSION, got $installed_version"
+splunk_is_ready "$IP" || die "Splunk service verification failed on $IP"
+
+if [[ "$was_ready" == yes ]]; then
+  log "Splunk $EXPECTED_VERSION is already installed and running on $IP"
+else
+  log "Splunk $EXPECTED_VERSION is ready on $IP"
+fi
