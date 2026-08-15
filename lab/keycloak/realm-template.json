@@ -47,7 +47,6 @@
       "email": "@@TEST_USER@@@example.com",
       "firstName": "SAML",
       "lastName": "Lab User",
-      "requiredActions": ["CONFIGURE_TOTP"],
       "realmRoles": ["splunk-admin", "soar-admin"],
       "credentials": [
         {

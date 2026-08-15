@@ -21,7 +21,7 @@ do_start() {
   # shellcheck disable=SC2046
   $(compose_cmd) up -d
   log "waiting for Keycloak health..."
-  wait_http "$KC_URL/health/ready" "200" 180
+  wait_http "$KC_URL/realms/master" "200" 180
   log "Keycloak is ready"
 }
 
@@ -35,7 +35,7 @@ do_stop() {
 do_status() {
   require_podman
   local code
-  code="$(curl -s -o /dev/null -w '%{http_code}' "$KC_URL/health/ready" 2>/dev/null || true)"
+  code="$(curl -s -o /dev/null -w '%{http_code}' "$KC_URL/realms/master" 2>/dev/null || true)"
   if [ "$code" == "200" ]; then
     log "Keycloak is running at $KC_URL"
     # shellcheck disable=SC2046
@@ -91,7 +91,7 @@ do_configure() {
 do_verify() {
   require_podman
   local code
-  code="$(curl -s -o /dev/null -w '%{http_code}' "$KC_URL/health/ready" 2>/dev/null || true)"
+  code="$(curl -s -o /dev/null -w '%{http_code}' "$KC_URL/realms/master" 2>/dev/null || true)"
   [ "$code" == "200" ] || die "Keycloak health check failed (HTTP ${code:-none})"
   local token clients
   token="$(admin_token)"

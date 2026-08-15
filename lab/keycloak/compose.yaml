@@ -32,7 +32,9 @@ services:
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?set KEYCLOAK_ADMIN_PASSWORD in lab/keycloak/.env}
       KC_HOSTNAME: ${KEYCLOAK_HOST:-100.65.1.1}
       KC_HTTP_PORT: 8080
-    command: start --optimized
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+    command: start
     ports:
       - "${KEYCLOAK_HOST:-100.65.1.1}:${KEYCLOAK_PORT:-8080}:8080"
     volumes:
