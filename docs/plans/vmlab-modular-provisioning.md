@@ -43,9 +43,9 @@ VMLAB = Path(__file__).parents[2] / "installers" / "vmlab"
 def test_config_pins_sse_and_lab_paths() -> None:
     text = (VMLAB / "config.env").read_text()
     assert "splunk-security-essentials_383.tgz" in text
-    assert 'SSE_INDEX:=sse_lab' in text
-    assert 'SIEM_IP:=100.65.1.10' in text
-    assert 'SOAR_IP:=100.65.1.11' in text
+    assert "SSE_INDEX:=sse_lab" in text
+    assert "SIEM_IP:=100.65.1.10" in text
+    assert "SOAR_IP:=100.65.1.11" in text
 
 
 def test_reset_guard_accepts_only_the_configured_lab_index() -> None:
