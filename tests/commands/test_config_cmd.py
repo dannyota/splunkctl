@@ -355,7 +355,7 @@ def test_config_init_soar_prompts_and_saves(tmp_path: Path) -> None:
     result = runner.invoke(
         cli,
         ["config", "init", "--soar", "--path", str(cfg)],
-        input="soar-host\n8443\ntok123\nsoar-admin\nsoarpass\n",
+        input="soar-host\n8443\ntok123\nsoar-admin\nsoarpass\n\n",
     )
     assert result.exit_code == 0, result.output
     raw = yaml.safe_load(cfg.read_text())
@@ -365,6 +365,7 @@ def test_config_init_soar_prompts_and_saves(tmp_path: Path) -> None:
     assert soar["token"] == "tok123"
     assert soar["username"] == "soar-admin"
     assert soar["password"] == "soarpass"
+    assert soar["verify"] is True
 
 
 def test_config_init_soar_with_profile_flag(tmp_path: Path) -> None:
@@ -379,7 +380,7 @@ def test_config_init_soar_with_profile_flag(tmp_path: Path) -> None:
     result = runner.invoke(
         cli,
         ["config", "init", "--soar", "--path", str(cfg), "--profile", "lab"],
-        input="soar-lab\n8443\ntok-lab\n\n\n",
+        input="soar-lab\n8443\ntok-lab\n\n\n\n",
     )
     assert result.exit_code == 0, result.output
     raw = yaml.safe_load(cfg.read_text())
@@ -400,7 +401,7 @@ def test_config_init_soar_preserves_siem_fields(tmp_path: Path) -> None:
     result = runner.invoke(
         cli,
         ["config", "init", "--soar", "--path", str(cfg)],
-        input="soar-host\n8443\ntok\n\n\n",
+        input="soar-host\n8443\ntok\n\n\n\n",
     )
     assert result.exit_code == 0, result.output
     raw = yaml.safe_load(cfg.read_text())
@@ -496,3 +497,14 @@ def test_init_saves_password_mode_when_no_saml(mock_probe) -> None:
     assert result.exit_code == 0, result.output
     cfg = cfg_mod.load(cfg_mod.DEFAULT_PATH)
     assert cfg["auth_mode"] == "password"
+
+
+@patch("splunkctl.commands.config_cmd.detector.probe", return_value="browser")
+def test_init_soar_probes_with_collected_verify(mock_probe) -> None:
+    args = (
+        f"config init --soar --web-url https://soar:8443 --path {cfg_mod.DEFAULT_PATH}"
+    ).split()
+    result = CliRunner().invoke(cli, args, input="soar-host\n8443\n\n\n\nn\n")
+    assert result.exit_code == 0, result.output
+    assert mock_probe.call_args.kwargs["verify"] is False
+    assert cfg_mod.resolve_soar(cfg_mod.DEFAULT_PATH)["verify"] is False

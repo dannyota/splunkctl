@@ -154,8 +154,13 @@ def _init_soar(
     soar_token = click.prompt("SOAR token", default="", type=str)
     soar_user = click.prompt("SOAR username", default="", type=str)
     soar_pass = click.prompt("SOAR password", default="", hide_input=True, type=str)
+    soar_verify = click.confirm("Verify TLS certificates", default=True)
 
-    soar_cfg: dict[str, Any] = {"host": soar_host, "port": soar_port}
+    soar_cfg: dict[str, Any] = {
+        "host": soar_host,
+        "port": soar_port,
+        "verify": soar_verify,
+    }
     if soar_token:
         soar_cfg["token"] = soar_token
     if soar_user:
@@ -166,7 +171,7 @@ def _init_soar(
         soar_cfg["web_url"] = web_url
         if auth_mode == "auto":
             auth_mode = detector.probe(
-                detector.soar_login_url(web_url), verify=True, timeout=30
+                detector.soar_login_url(web_url), verify=soar_verify, timeout=30
             )
     elif auth_mode == "auto":
         auth_mode = None
