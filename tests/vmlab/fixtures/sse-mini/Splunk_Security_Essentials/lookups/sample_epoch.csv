@@ -1,0 +1,5 @@
+_time,Password_Last_Set,date_hour,date_mday,date_minute,date_month,date_second,date_wday,date_year,date_zone,_raw,user
+1577836800.000,01/01/2010 2:03:04 PM,0,1,0,january,0,wednesday,2020,local,"01/01/2020 12:00:00 AM
+EventCode=4624",alice
+1577836860,01/01/2010 2:04:04 PM,0,1,1,january,0,wednesday,2020,local,"01/01/2020 12:01:00 AM
+EventCode=4625",bob

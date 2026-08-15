@@ -2,17 +2,18 @@ import os
 import subprocess
 from pathlib import Path
 
-
 ROOT = Path(__file__).parents[2]
 VMLAB = ROOT / "installers" / "vmlab"
 
 
-def run_bash(script: str, *, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+def run_bash(
+    script: str, *, env: dict[str, str] | None = None
+) -> subprocess.CompletedProcess[str]:
     command_env = os.environ.copy()
     if env:
         command_env.update(env)
-    return subprocess.run(
-        ["bash", "-c", script],
+    return subprocess.run(  # noqa: S603
+        ["/usr/bin/bash", "-c", script],
         cwd=ROOT,
         env=command_env,
         check=False,
@@ -24,8 +25,8 @@ def run_bash(script: str, *, env: dict[str, str] | None = None) -> subprocess.Co
 def test_config_exposes_pinned_sse_and_lab_defaults(tmp_path: Path) -> None:
     result = run_bash(
         f"source {VMLAB / 'config.env'}; "
-        "printf '%s\n' \"$SSE_TGZ\" \"$SSE_INDEX\" \"$SIEM_IP\" \"$SOAR_IP\" "
-        "\"$SSE_DATA_DIR\" \"$SSE_HEC_TOKEN_FILE\"",
+        'printf \'%s\n\' "$SSE_TGZ" "$SSE_INDEX" "$SIEM_IP" "$SOAR_IP" '
+        '"$SSE_DATA_DIR" "$SSE_HEC_TOKEN_FILE"',
         env={"HOME": str(tmp_path)},
     )
 
@@ -79,7 +80,7 @@ def test_installer_directory_can_point_at_shared_ignored_artifacts(
 
 
 def test_preflight_help_lists_role_selection() -> None:
-    result = subprocess.run(
+    result = subprocess.run(  # noqa: S603
         [str(VMLAB / "check-lab.sh"), "--help"],
         cwd=ROOT,
         check=False,
