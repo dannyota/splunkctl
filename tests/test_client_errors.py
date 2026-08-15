@@ -8,6 +8,7 @@ import pytest
 from click.testing import CliRunner
 
 import splunkctl.client as client_mod
+from splunkctl.auth.session import SessionError
 from splunkctl.client import SplunkClient
 from splunkctl.errors import WebSessionError, classify
 from splunkctl.main import _CLI
@@ -247,3 +248,10 @@ def test_tls_on_no_warning(
     assert "TLS" not in captured.err
 
     client_mod._tls_warned = False
+
+
+def test_classify_session_error_carries_kind() -> None:
+    classified = classify(SessionError("boom", kind="usage"))
+    assert classified is not None
+    assert classified.kind == "usage"
+    assert classified.message == "boom"

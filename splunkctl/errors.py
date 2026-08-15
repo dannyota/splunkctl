@@ -68,6 +68,13 @@ def classify(exc: Exception) -> Classified | None:
     if isinstance(exc, SOARError):
         return Classified(exc.message, exc.kind, exc.http_status)
 
+    # SessionError carries kind natively — pass through (lazy import avoids a
+    # cycle: session imports config, and errors is imported everywhere).
+    from splunkctl.auth.session import SessionError
+
+    if isinstance(exc, SessionError):
+        return Classified(exc.message, exc.kind, None)
+
     name = type(exc).__name__
     if name == "HTTPError":
         status: int | None = getattr(exc, "status", None)
