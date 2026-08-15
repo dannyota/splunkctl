@@ -57,3 +57,55 @@ def test_start_requires_podman(tmp_path: Path) -> None:
     )
     assert result.returncode != 0
     assert "required command not found: podman" in result.stderr
+
+
+def test_configure_renders_and_imports_realm(tmp_path: Path) -> None:
+    (tmp_path / "bin").mkdir(exist_ok=True)
+    fake_bin = tmp_path / "bin"
+    (fake_bin / "podman").write_text("#!/bin/sh\nexit 0\n")
+    (fake_bin / "podman-compose").write_text("#!/bin/sh\nexit 0\n")
+    log_file = tmp_path / "curl.log"
+    write_executable(
+        fake_bin / "curl",
+        "#!/bin/sh\n"
+        'printf \'%s\\n\' "$*" >> "$FAKE_CURL_LOG"\n'
+        'case "$*" in\n'
+        '  *openid-connect/token*) printf \'{"access_token":"tok"}\' ;;\n'
+        "  *) printf '201' ;;\n"
+        "esac\n",
+    )
+    result = subprocess.run(  # noqa: S603
+        [str(KC / "labctl.sh"), "configure"],
+        cwd=ROOT,
+        env={
+            "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            "HOME": str(tmp_path),
+            "FAKE_CURL_LOG": str(log_file),
+            "KEYCLOAK_ADMIN_PASSWORD": "pw",
+        },
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    calls = log_file.read_text()
+    assert "realms/master/protocol/openid-connect/token" in calls
+    assert "admin/realms" in calls
+
+
+def test_verify_fails_when_health_is_down(tmp_path: Path) -> None:
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    write_executable(fake_bin / "podman", "#!/bin/sh\nexit 0\n")
+    write_executable(fake_bin / "podman-compose", "#!/bin/sh\nexit 0\n")
+    write_executable(fake_bin / "curl", "#!/bin/sh\nprintf '000'\n")
+    result = subprocess.run(  # noqa: S603
+        [str(KC / "labctl.sh"), "verify"],
+        cwd=ROOT,
+        env={"PATH": f"{fake_bin}:{os.environ['PATH']}", "HOME": str(tmp_path)},
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode != 0
+    assert "health" in result.stderr
