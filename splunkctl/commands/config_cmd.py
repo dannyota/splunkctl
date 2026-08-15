@@ -96,7 +96,7 @@ def init(
     """
     dest = Path(path) if path else None
     if soar_mode:
-        _init_soar(profile_name, dest, web_url, auth_mode)
+        _init_soar(profile_name, dest, web_url, auth_mode, verify)
         return
 
     # Prompt for SIEM fields not supplied via flags.
@@ -147,6 +147,7 @@ def _init_soar(
     dest: Path | None,
     web_url: str | None,
     auth_mode: str | None,
+    verify: bool | None,
 ) -> None:
     """Prompt for SOAR fields and merge into the target profile."""
     soar_host = click.prompt("SOAR host", type=str)
@@ -154,7 +155,11 @@ def _init_soar(
     soar_token = click.prompt("SOAR token", default="", type=str)
     soar_user = click.prompt("SOAR username", default="", type=str)
     soar_pass = click.prompt("SOAR password", default="", hide_input=True, type=str)
-    soar_verify = click.confirm("Verify TLS certificates", default=True)
+    soar_verify = (
+        verify
+        if verify is not None
+        else click.confirm("Verify TLS certificates", default=True)
+    )
 
     soar_cfg: dict[str, Any] = {
         "host": soar_host,

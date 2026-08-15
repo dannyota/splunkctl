@@ -42,3 +42,14 @@ def test_init_soar_probes_with_collected_verify(mock_probe) -> None:
     assert result.exit_code == 0, result.output
     assert mock_probe.call_args.kwargs["verify"] is False
     assert cfg_mod.resolve_soar(cfg_mod.DEFAULT_PATH)["verify"] is False
+
+
+@patch("splunkctl.commands.config_cmd.detector.probe", return_value="browser")
+def test_init_soar_no_verify_flag_skips_prompt(mock_probe) -> None:
+    args = (
+        f"config init --soar --no-verify --web-url https://soar:8443 "
+        f"--path {cfg_mod.DEFAULT_PATH}"
+    ).split()
+    result = CliRunner().invoke(cli, args, input="soar-host\n8443\n\n\n\n")
+    assert result.exit_code == 0, result.output
+    assert cfg_mod.resolve_soar(cfg_mod.DEFAULT_PATH)["verify"] is False
