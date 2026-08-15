@@ -12,6 +12,7 @@ from splunkctl import errors as err_mod
 from splunkctl.commands.alerts import alerts_group
 from splunkctl.commands.apps import apps_group
 from splunkctl.commands.audit import audit_group
+from splunkctl.commands.auth import auth_group
 from splunkctl.commands.commands_meta import commands_meta
 from splunkctl.commands.common import resolve_leaf_command, watch_loop
 from splunkctl.commands.conf import conf_group
@@ -259,6 +260,7 @@ def completion_cmd(shell: str) -> None:
 cli.add_command(alerts_group)
 cli.add_command(apps_group)
 cli.add_command(audit_group)
+cli.add_command(auth_group)
 cli.add_command(commands_meta)
 cli.add_command(conf_group)
 cli.add_command(config_group)
