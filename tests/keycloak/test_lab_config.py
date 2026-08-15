@@ -41,7 +41,6 @@ def test_realm_template_renders_to_valid_json(tmp_path: Path) -> None:
         f"render {KC / 'realm-template.json'} "
         "'REALM=splunklab' "
         "'SIEM_ACS=http://siem/acs' 'SOAR_ACS=https://soar/acs' "
-        "'SIEM_SP_ENTITY_ID=http://siem' 'SOAR_SP_ENTITY_ID=https://soar' "
         "'TEST_USER=bob' 'TEST_USER_PASSWORD=secret'",
         env={"HOME": str(tmp_path)},
     )

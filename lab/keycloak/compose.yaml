@@ -37,3 +37,6 @@ services:
       - "${KEYCLOAK_HOST:-100.65.1.1}:${KEYCLOAK_PORT:-8080}:8080"
     volumes:
       - ./.runtime:/opt/keycloak/data/runtime
+
+volumes:
+  pgdata:
