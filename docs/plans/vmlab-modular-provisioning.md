@@ -30,7 +30,7 @@
 - Create: `tests/vmlab/__init__.py`
 - Create: `tests/vmlab/test_scripts.py`
 
-- [ ] **Step 1: Write failing configuration and shell-contract tests**
+- [x] **Step 1: Write failing configuration and shell-contract tests**
 
 Add tests that read the shell files and assert these contracts:
 
@@ -56,7 +56,7 @@ def test_reset_guard_accepts_only_the_configured_lab_index() -> None:
 
 Also assert that `check-lab.sh` checks required host commands, all four pinned artifacts, NAT configuration, both VMX paths, and free disk space without changing VM state.
 
-- [ ] **Step 2: Run the tests and confirm they fail**
+- [x] **Step 2: Run the tests and confirm they fail**
 
 Run:
 
@@ -66,7 +66,7 @@ python3 -m pytest tests/vmlab/test_scripts.py -q
 
 Expected: failures for the missing SSE settings, guard, and check command.
 
-- [ ] **Step 3: Add shared configuration**
+- [x] **Step 3: Add shared configuration**
 
 Add environment-overridable values to `config.env`:
 
@@ -85,7 +85,7 @@ Add environment-overridable values to `config.env`:
 
 Keep `LAB_PASSWORD` and `SPLUNK_ADMIN_PASSWORD` as defaults that can be set by the ignored `config.local.env`.
 
-- [ ] **Step 4: Add reusable state and safety helpers**
+- [x] **Step 4: Add reusable state and safety helpers**
 
 Extend `lib.sh` with functions having these exact interfaces:
 
@@ -101,7 +101,7 @@ soar_is_ready IP
 
 `ensure_vm_running` must start an existing VM with `vmrun -T ws start "$vmx" nogui`; it must fail if the VMX does not exist. `require_sse_lab_index` must require the literal configured value `sse_lab` before any event-data cleanup.
 
-- [ ] **Step 5: Implement the read-only preflight command**
+- [x] **Step 5: Implement the read-only preflight command**
 
 `check-lab.sh` accepts `--only siem|soar|both` and reports:
 
@@ -114,7 +114,7 @@ soar_is_ready IP
 
 Missing prerequisites return nonzero. Missing VMs are reported but are not a preflight failure when installation artifacts are present and a build can proceed.
 
-- [ ] **Step 6: Verify syntax and tests**
+- [x] **Step 6: Verify syntax and tests**
 
 Run:
 
@@ -126,7 +126,7 @@ python3 -m pytest tests/vmlab/test_scripts.py -q
 
 Expected: all checks pass.
 
-- [ ] **Step 7: Commit the shared lab state work**
+- [x] **Step 7: Commit the shared lab state work**
 
 ```bash
 git add installers/vmlab/config.env installers/vmlab/lib.sh \
@@ -147,7 +147,7 @@ git commit -m "Add vmlab preflight and shared state checks"
 - Create: `tests/vmlab/fixtures/sse-mini/Splunk_Security_Essentials/lookups/sample_epoch.csv`
 - Create: `tests/vmlab/fixtures/sse-mini/Splunk_Security_Essentials/lookups/sample_text.csv`
 
-- [ ] **Step 1: Write failing timestamp parsing tests**
+- [x] **Step 1: Write failing timestamp parsing tests**
 
 Cover the formats found in SSE 3.8.3:
 
@@ -170,7 +170,7 @@ def test_parse_supported_timestamp(value: str, expected: str) -> None:
 
 Test formatting after a fixed shift. Require retention of epoch decimal precision, `Z`, numeric timezone suffix, AM/PM style, and fractional-second width.
 
-- [ ] **Step 2: Run parsing tests and confirm they fail**
+- [x] **Step 2: Run parsing tests and confirm they fail**
 
 Run:
 
@@ -180,7 +180,7 @@ python3 -m pytest tests/vmlab/test_sse_data.py -q
 
 Expected: import failure because `sse_data.py` does not exist.
 
-- [ ] **Step 3: Implement the timestamp value model**
+- [x] **Step 3: Implement the timestamp value model**
 
 Implement typed standard-library structures:
 
@@ -200,7 +200,7 @@ def is_temporal_field(field_name: str) -> bool: ...
 
 Normalize parsed instants to UTC for comparison. Treat timezone-free SSE timestamps as UTC. Limit numeric epoch detection to temporal fields or the primary `_time` field so ordinary numeric values are never shifted.
 
-- [ ] **Step 4: Write failing global-shift and validation tests**
+- [x] **Step 4: Write failing global-shift and validation tests**
 
 The fixture manifest contains two datasets with different ranges and secondary fields such as `Password_Last_Set`, `CreationUtcTime`, `PreviousCreationUtcTime`, `lastLogonTimestamp`, `pwdLastSet`, and `maxtime`. Tests must prove:
 
@@ -214,7 +214,7 @@ The fixture manifest contains two datasets with different ranges and secondary f
 - unsupported non-empty values in classified temporal fields fail preparation;
 - dry run writes a report but no batches.
 
-- [ ] **Step 5: Implement package scanning and two-pass transformation**
+- [x] **Step 5: Implement package scanning and two-pass transformation**
 
 Use these public interfaces:
 
@@ -265,7 +265,7 @@ Each NDJSON line is a complete HEC event envelope:
 
 The import ID is a SHA-256 digest of package SHA-256, anchor, delta, transformer schema version, index, and sorted dataset list. `manifest.json` includes the import ID, hashes, anchor, delta, source/shifted ranges, all dataset counts, batch counts, field formats, and unsupported-value count.
 
-- [ ] **Step 6: Add the CLI**
+- [x] **Step 6: Add the CLI**
 
 `prepare-sse-data.py` accepts:
 
@@ -280,7 +280,7 @@ The import ID is a SHA-256 digest of package SHA-256, anchor, delta, transformer
 
 Defaults come from `config.env` only through the calling shell script; the Python command itself requires explicit paths and index, which keeps it testable. Print a concise JSON summary to stdout and detailed errors to stderr.
 
-- [ ] **Step 7: Run focused and static checks**
+- [x] **Step 7: Run focused and static checks**
 
 Run:
 
@@ -293,7 +293,7 @@ mypy installers/vmlab/sse_data.py installers/vmlab/prepare-sse-data.py
 
 Expected: all checks pass.
 
-- [ ] **Step 8: Validate against the real package without writing batches**
+- [x] **Step 8: Validate against the real package without writing batches**
 
 Run:
 
@@ -306,7 +306,7 @@ python3 installers/vmlab/prepare-sse-data.py \
 
 Expected: 43 datasets, zero unsupported temporal values, unchanged global span, and no `batches` directory replacement.
 
-- [ ] **Step 9: Commit the transformer**
+- [x] **Step 9: Commit the transformer**
 
 ```bash
 git add installers/vmlab/sse_data.py installers/vmlab/prepare-sse-data.py \
@@ -324,7 +324,7 @@ git commit -m "Add SSE recent-data transformer"
 - Create: `installers/vmlab/import-sse-data.sh`
 - Modify: `tests/vmlab/test_scripts.py`
 
-- [ ] **Step 1: Write failing shell safety and interface tests**
+- [x] **Step 1: Write failing shell safety and interface tests**
 
 Assert:
 
@@ -335,7 +335,7 @@ Assert:
 - no cleanup command names `_internal`, `_audit`, `main`, or a wildcard;
 - token permissions are `0600` and no log statement prints the token or password.
 
-- [ ] **Step 2: Run the tests and confirm they fail**
+- [x] **Step 2: Run the tests and confirm they fail**
 
 Run:
 
@@ -345,7 +345,7 @@ python3 -m pytest tests/vmlab/test_scripts.py -q
 
 Expected: failures for the missing commands.
 
-- [ ] **Step 3: Implement idempotent SSE app installation**
+- [x] **Step 3: Implement idempotent SSE app installation**
 
 `install-sse.sh --ip "$SIEM_IP"` must:
 
@@ -358,7 +358,7 @@ Expected: failures for the missing commands.
 
 Pass credentials through a mode-`0600` temporary file or protected stdin. Do not include the password in log output.
 
-- [ ] **Step 4: Implement lab-owned HEC configuration**
+- [x] **Step 4: Implement lab-owned HEC configuration**
 
 The import command creates `/opt/splunk/etc/apps/sse_lab_loader/local` on the SIEM VM with:
 
@@ -368,7 +368,7 @@ The import command creates `/opt/splunk/etc/apps/sse_lab_loader/local` on the SI
 
 Restart Splunk only if the configuration changes. Verify HEC with an authenticated health request before importing.
 
-- [ ] **Step 5: Implement prepare, import, status, and reset**
+- [x] **Step 5: Implement prepare, import, status, and reset**
 
 Use this command contract:
 
@@ -394,7 +394,7 @@ Before sending a stable manifest again, query counts grouped by `lab_batch_id`. 
 
 It must not remove SSE lookups, app files, other indexes, or either VM.
 
-- [ ] **Step 6: Run tests and shell analysis**
+- [x] **Step 6: Run tests and shell analysis**
 
 Run:
 
@@ -406,7 +406,7 @@ shellcheck installers/vmlab/*.sh
 
 Expected: all checks pass.
 
-- [ ] **Step 7: Commit SSE installation and import commands**
+- [x] **Step 7: Commit SSE installation and import commands**
 
 ```bash
 git add installers/vmlab/install-sse.sh installers/vmlab/import-sse-data.sh \
@@ -424,7 +424,7 @@ git commit -m "Add SSE app and scoped lab data import"
 - Modify: `installers/vmlab/install-soar.sh:1-44`
 - Modify: `tests/vmlab/test_scripts.py`
 
-- [ ] **Step 1: Add failing idempotency and ownership tests**
+- [x] **Step 1: Add failing idempotency and ownership tests**
 
 Assert that `install-splunk.sh` checks installed RPM version, service state, boot-start, firewall, and authenticated readiness before deciding what to change.
 
@@ -436,7 +436,7 @@ Assert that `install-soar.sh`:
 - configures `soar_local_admin` from `LAB_PASSWORD` without printing it;
 - detaches the DVD and disables its repository on success or error.
 
-- [ ] **Step 2: Run the tests and confirm the SOAR ownership test fails**
+- [x] **Step 2: Run the tests and confirm the SOAR ownership test fails**
 
 Run:
 
@@ -446,7 +446,7 @@ python3 -m pytest tests/vmlab/test_scripts.py -q
 
 Expected: failure showing the current outer `cd` runs as `labadmin`.
 
-- [ ] **Step 3: Refactor Splunk into postcondition steps**
+- [x] **Step 3: Refactor Splunk into postcondition steps**
 
 Make each of these safe to rerun:
 
@@ -459,7 +459,7 @@ Make each of these safe to rerun:
 
 Do not overwrite an existing admin password seed after Splunk has initialized.
 
-- [ ] **Step 4: Fix SOAR ownership and resume state**
+- [x] **Step 4: Fix SOAR ownership and resume state**
 
 The install command must have no outer directory change:
 
@@ -470,7 +470,7 @@ ssh_vm "$IP" "sudo -u soar bash -c \
 
 Check separate postconditions for user/directory setup, archive extraction, OS preparation, product installation, firewall, password configuration, and web readiness. Use an EXIT trap for the DVD/repository cleanup. A current successful SOAR 8.6 VM should take only the verify path on rerun.
 
-- [ ] **Step 5: Run local checks**
+- [x] **Step 5: Run local checks**
 
 Run:
 
@@ -482,7 +482,7 @@ shellcheck installers/vmlab/*.sh
 
 Expected: all checks pass.
 
-- [ ] **Step 6: Run both commands against the existing VMs**
+- [x] **Step 6: Run both commands against the existing VMs**
 
 Run:
 
@@ -493,7 +493,7 @@ installers/vmlab/install-soar.sh --name soar --ip 100.65.1.11
 
 Expected: both commands preserve the VMs and report existing installed product state. SOAR must not repeat `soar-prepare-system` or `soar-install`.
 
-- [ ] **Step 7: Commit resumable product installation**
+- [x] **Step 7: Commit resumable product installation**
 
 ```bash
 git add installers/vmlab/install-splunk.sh installers/vmlab/install-soar.sh \
@@ -511,7 +511,7 @@ git commit -m "Make vmlab product installs resumable"
 - Create: `installers/vmlab/verify-lab.sh`
 - Modify: `tests/vmlab/test_scripts.py`
 
-- [ ] **Step 1: Add failing orchestration tests**
+- [x] **Step 1: Add failing orchestration tests**
 
 Assert that the orchestrator:
 
@@ -526,7 +526,7 @@ Assert that the orchestrator:
 
 Assert that no path invokes VM directory deletion.
 
-- [ ] **Step 2: Run tests and confirm they fail**
+- [x] **Step 2: Run tests and confirm they fail**
 
 Run:
 
@@ -536,7 +536,7 @@ python3 -m pytest tests/vmlab/test_scripts.py -q
 
 Expected: failures because the current orchestrator always builds and no verifier exists.
 
-- [ ] **Step 3: Implement VM reuse in the orchestrator**
+- [x] **Step 3: Implement VM reuse in the orchestrator**
 
 For each selected role:
 
@@ -551,7 +551,7 @@ fi
 
 SIEM order is Splunk, SSE, data preparation if absent, data import, verification. SOAR order is product install then verification. Existing import data is reused when its manifest matches the package and index; the normal provision path must not clear data.
 
-- [ ] **Step 4: Implement verification**
+- [x] **Step 4: Implement verification**
 
 `verify-lab.sh --only siem|soar|both` checks:
 
@@ -564,7 +564,7 @@ SIEM order is Splunk, SSE, data preparation if absent, data import, verification
 
 Return nonzero for any failed postcondition. Print no secrets.
 
-- [ ] **Step 5: Run tests and syntax checks**
+- [x] **Step 5: Run tests and syntax checks**
 
 Run:
 
@@ -576,7 +576,7 @@ shellcheck installers/vmlab/*.sh
 
 Expected: all checks pass.
 
-- [ ] **Step 6: Commit orchestration and verification**
+- [x] **Step 6: Commit orchestration and verification**
 
 ```bash
 git add installers/vmlab/provision-lab.sh installers/vmlab/verify-lab.sh \
@@ -594,7 +594,7 @@ git commit -m "Reuse vmlab VMs and verify each stage"
 - Generate, outside Git: `/home/danny/vmware/sse-data/`
 - Generate, outside Git: `/home/danny/vmware/.sse_hec_token`
 
-- [ ] **Step 1: Copy and verify the installer package**
+- [x] **Step 1: Copy and verify the installer package**
 
 Run:
 
@@ -607,7 +607,7 @@ sha256sum /home/danny/Documents/ISOs/splunk-security-essentials_383.tgz \
 
 Expected: both hashes match. Confirm `git status --ignored` shows the copied package as ignored.
 
-- [ ] **Step 2: Run read-only preflight**
+- [x] **Step 2: Run read-only preflight**
 
 Run:
 
@@ -617,7 +617,7 @@ installers/vmlab/check-lab.sh --only both
 
 Expected: pinned artifacts and existing VM state are reported; required endpoints are reachable.
 
-- [ ] **Step 3: Install and verify SSE**
+- [x] **Step 3: Install and verify SSE**
 
 Run:
 
@@ -628,7 +628,7 @@ installers/vmlab/install-sse.sh --ip 100.65.1.10
 
 Expected: first run installs SSE 3.8.3; second run verifies and skips installation.
 
-- [ ] **Step 4: Prepare all recent data**
+- [x] **Step 4: Prepare all recent data**
 
 Run:
 
@@ -638,7 +638,7 @@ installers/vmlab/import-sse-data.sh prepare
 
 Expected: manifest covers 43 datasets; its latest shifted timestamp equals the recorded current UTC anchor; source and shifted spans match.
 
-- [ ] **Step 5: Import without clearing unrelated data**
+- [x] **Step 5: Import without clearing unrelated data**
 
 Run:
 
@@ -649,7 +649,7 @@ installers/vmlab/import-sse-data.sh status
 
 Expected: all batches return successful HEC responses, indexed count equals the manifest, and all 43 dataset sources are searchable in `sse_lab`.
 
-- [ ] **Step 6: Prove idempotency and scoped reset**
+- [x] **Step 6: Prove idempotency and scoped reset**
 
 Run a second import and confirm it skips complete batches. Record counts from `main`, `_internal`, and `_audit`, then run:
 
@@ -659,7 +659,7 @@ installers/vmlab/import-sse-data.sh reset
 
 Expected: a new current anchor and import ID are created; `sse_lab` contains exactly the new import; the comparison indexes retain their prior data; both VMs still exist and run.
 
-- [ ] **Step 7: Run end-to-end verification**
+- [x] **Step 7: Run end-to-end verification**
 
 Run:
 
@@ -678,7 +678,7 @@ Expected: verification passes; provisioning reuses both VMX files and completes 
 
 - Modify: `installers/vmlab/README.md:1-65`
 
-- [ ] **Step 1: Write the runbook**
+- [x] **Step 1: Write the runbook**
 
 Document:
 
@@ -695,7 +695,7 @@ Document:
 - recovery commands for failed SIEM, SSE, data, and SOAR stages;
 - generated paths and how to replace only generated preparation output.
 
-- [ ] **Step 2: Check command names against scripts**
+- [x] **Step 2: Check command names against scripts**
 
 Run:
 
@@ -706,7 +706,7 @@ rg --files installers/vmlab | sort
 
 Expected: every documented script and option exists.
 
-- [ ] **Step 3: Run the full local verification suite**
+- [x] **Step 3: Run the full local verification suite**
 
 Run:
 
@@ -722,14 +722,14 @@ git diff --check
 
 Expected: all checks pass.
 
-- [ ] **Step 4: Commit the runbook**
+- [x] **Step 4: Commit the runbook**
 
 ```bash
 git add installers/vmlab/README.md
 git commit -m "Document the modular Splunk lab workflow"
 ```
 
-- [ ] **Step 5: Inspect final scope**
+- [x] **Step 5: Inspect final scope**
 
 Run:
 
