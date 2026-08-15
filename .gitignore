@@ -31,8 +31,9 @@ credentials.json
 # Hooks
 .githooks/denylist.local
 
-# Local-only working plan
+# Local-only working plans
 PLAN.md
+docs/plans/
 
 # Installer binaries (large); scripts under installers/ stay tracked
 installers/*.iso

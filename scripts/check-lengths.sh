@@ -7,7 +7,8 @@
 #
 # docs/commands/*.md are EXEMPT: generated verbatim from the command tree
 # (`splunkctl docs generate`), so page size follows the CLI, not authored
-# prose.
+# prose. docs/plans/*.md are EXEMPT because they are local implementation
+# notes, not user documentation.
 #
 # Exit 1 on any violation.
 set -euo pipefail
@@ -27,7 +28,7 @@ while IFS= read -r f; do
     echo "DOC TOO LONG  $f: $n lines (max $MD_MAX) — split or trim"
     violations=$((violations + 1))
   fi
-done < <(find . -name '*.md' -not -path './.git/*' -not -path './.claude/*' -not -path './docs/commands/*' | sed 's#^\./##' | sort)
+done < <(find . -name '*.md' -not -path './.git/*' -not -path './.claude/*' -not -path './docs/commands/*' -not -path './docs/plans/*' | sed 's#^\./##' | sort)
 
 # --- Python source ---
 while IFS= read -r f; do
