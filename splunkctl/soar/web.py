@@ -33,6 +33,17 @@ def ensure_web_login(client: SOARClient) -> requests.Session:
     if client._web_session is not None:  # noqa: SLF001
         return client._web_session  # noqa: SLF001
 
+    # Browser-mode clients already hold a Django session; reuse it instead of
+    # attempting username/password login (which browser profiles don't have).
+    if client._cookies:  # noqa: SLF001
+        sess = requests.Session()
+        sess.verify = client._verify  # noqa: SLF001
+        for name, value in client._cookies.items():  # noqa: SLF001
+            sess.cookies.set(name, value)
+        client._web_csrf = client._cookies.get("csrftoken", "")  # noqa: SLF001
+        client._web_session = sess  # noqa: SLF001
+        return sess
+
     if not client._has_basic():  # noqa: SLF001
         raise SOARError(
             "Playbook deletion requires username/password credentials "

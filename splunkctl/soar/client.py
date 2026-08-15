@@ -136,6 +136,7 @@ class SOARClient:
         password: str | None = None,
         verify: bool = False,
         timeout: tuple[int, int] | int | None = None,
+        cookies: dict[str, str] | None = None,
     ) -> None:
         self._host = host
         self._port = port
@@ -143,6 +144,7 @@ class SOARClient:
         self._username = username
         self._password = password
         self._verify = verify
+        self._cookies = cookies
         self._session = requests.Session()
         self._session.verify = verify
 
@@ -192,6 +194,11 @@ class SOARClient:
         DELETE uses Basic (server refuses tokens) except for decided_list.
         Everything else prefers token, falls back to Basic.
         """
+        if self._cookies:
+            headers: dict[str, str] = {}
+            if method != "GET":
+                headers["X-CSRFToken"] = self._cookies.get("csrftoken", "")
+            return {"cookies": self._cookies, "headers": headers}
         if method == "DELETE":
             endpoint_root = path.lstrip("/").split("/")[0]
             if endpoint_root not in _TOKEN_DELETE_OK:
@@ -243,6 +250,8 @@ class SOARClient:
             kwargs["data"] = data
         if "auth" in auth_kw:
             kwargs["auth"] = auth_kw["auth"]
+        if "cookies" in auth_kw:
+            kwargs["cookies"] = auth_kw["cookies"]
 
         resp: requests.Response = self._session.request(**kwargs)
         return self._handle_response(resp, path=path, method=method)
@@ -406,6 +415,8 @@ class SOARClient:
         }
         if "auth" in auth_kw:
             kwargs["auth"] = auth_kw["auth"]
+        if "cookies" in auth_kw:
+            kwargs["cookies"] = auth_kw["cookies"]
 
         resp: requests.Response = self._session.request(**kwargs)
         if resp.status_code >= 400:
