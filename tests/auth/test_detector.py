@@ -23,6 +23,26 @@ def test_redirect_to_same_host_is_password() -> None:
     assert mode == "password"
 
 
+def test_relative_redirect_is_password() -> None:
+    mode = detector.classify(
+        login_url="http://siem:8000/en-US/account/login",
+        status=302,
+        headers={"Location": "/en-US/account/login"},
+        body="",
+    )
+    assert mode == "password"
+
+
+def test_same_host_scheme_change_is_password() -> None:
+    mode = detector.classify(
+        login_url="http://siem:8000/en-US/account/login",
+        status=302,
+        headers={"Location": "https://siem:8000/en-US/account/login"},
+        body="",
+    )
+    assert mode == "password"
+
+
 def test_http_401_is_password_not_mfa() -> None:
     mode = detector.classify(
         login_url="http://siem:8000/en-US/account/login",

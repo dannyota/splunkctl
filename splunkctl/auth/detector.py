@@ -20,16 +20,17 @@ type AuthMode = Literal["password", "browser", "unknown"]
 _REDIRECT = (301, 302, 303, 307, 308)
 
 
-def _origin_of(url: str) -> tuple[str, str, int | None]:
-    parts = urlsplit(url)
-    port = parts.port
-    if port is None:
-        port = 443 if parts.scheme == "https" else 80
-    return parts.scheme, parts.hostname or "", port
+def _different_host(location: str, login_url: str) -> bool:
+    """True when a redirect Location targets a different host than login_url.
 
-
-def _different_host(a: str, b: str) -> bool:
-    return _origin_of(a) != _origin_of(b)
+    A relative or protocol-relative Location stays on the login host and is
+    not an external-IdP signal; a scheme/port change on the same host is
+    likewise not a different host.
+    """
+    host = urlsplit(location).hostname
+    if host is None:
+        return False
+    return host != urlsplit(login_url).hostname
 
 
 def classify(
