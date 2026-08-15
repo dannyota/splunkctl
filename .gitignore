@@ -44,3 +44,8 @@ installers/vmlab/config.local.env
 # OS
 .DS_Store
 Thumbs.db
+
+# Keycloak lab
+lab/keycloak/.runtime/
+lab/keycloak/.env
+!lab/keycloak/.env.example

@@ -1,0 +1,3 @@
+# Local state and secrets — never committed.
+.env
+.runtime/
