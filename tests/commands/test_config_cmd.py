@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 import yaml
 from click.testing import CliRunner
 
+from splunkctl import config as cfg_mod
 from splunkctl.main import cli
 
 
@@ -468,3 +469,30 @@ def test_config_init_always_writes_explicit_verify(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.output
     raw = yaml.safe_load(cfg.read_text())
     assert "verify" in raw
+
+
+@patch("splunkctl.commands.config_cmd.detector.probe", return_value="browser")
+def test_init_detects_saml_and_saves_browser_mode(mock_probe) -> None:
+    args = (
+        "config init --host 100.65.1.10 --port 8089 --username admin "
+        "--password pw --verify --web-url http://100.65.1.10:8000 "
+        f"--path {cfg_mod.DEFAULT_PATH}"
+    ).split()
+    result = CliRunner().invoke(cli, args)
+    assert result.exit_code == 0, result.output
+    cfg = cfg_mod.load(cfg_mod.DEFAULT_PATH)
+    assert cfg["auth_mode"] == "browser"
+    assert cfg["web_url"] == "http://100.65.1.10:8000"
+
+
+@patch("splunkctl.commands.config_cmd.detector.probe", return_value="password")
+def test_init_saves_password_mode_when_no_saml(mock_probe) -> None:
+    args = (
+        "config init --host 100.65.1.10 --port 8089 --username admin "
+        "--password pw --verify --web-url http://100.65.1.10:8000 "
+        f"--path {cfg_mod.DEFAULT_PATH}"
+    ).split()
+    result = CliRunner().invoke(cli, args)
+    assert result.exit_code == 0, result.output
+    cfg = cfg_mod.load(cfg_mod.DEFAULT_PATH)
+    assert cfg["auth_mode"] == "password"

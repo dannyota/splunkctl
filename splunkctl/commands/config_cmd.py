@@ -8,6 +8,7 @@ import click
 from splunkctl import config as cfg_mod
 from splunkctl import errors as err_mod
 from splunkctl import output
+from splunkctl.auth import detector
 from splunkctl.client import SplunkClient
 
 
@@ -51,6 +52,19 @@ def config_group() -> None:
     default=None,
     help="Config file path (default: ~/.splunkctl/config.yaml).",
 )
+@click.option(
+    "--web-url",
+    default=None,
+    help="Product web origin (Splunk Web, e.g. http://host:8000). Required "
+    "for browser SAML login on SIEM.",
+)
+@click.option(
+    "--auth-mode",
+    "auth_mode",
+    type=click.Choice(["auto", "token", "password", "browser"]),
+    default="auto",
+    help="Authentication mode. 'auto' probes the login route to detect SAML.",
+)
 @click.pass_context
 def init(
     ctx: click.Context,
@@ -63,6 +77,8 @@ def init(
     soar_mode: bool,
     profile_name: str | None,
     path: str | None,
+    web_url: str | None,
+    auth_mode: str | None,
 ) -> None:
     """Interactive setup — create or overwrite config.
 
@@ -80,7 +96,7 @@ def init(
     """
     dest = Path(path) if path else None
     if soar_mode:
-        _init_soar(profile_name, dest)
+        _init_soar(profile_name, dest, web_url, auth_mode)
         return
 
     # Prompt for SIEM fields not supplied via flags.
@@ -96,6 +112,15 @@ def init(
     if verify is None:
         verify = click.confirm("Verify TLS certificates", default=True)
 
+    if auth_mode == "auto":
+        auth_mode = (
+            detector.probe(
+                detector.siem_login_url(web_url), verify=bool(verify), timeout=30
+            )
+            if web_url
+            else None
+        )
+
     cfg: dict[str, Any] = {
         "host": host,
         "port": port,
@@ -104,6 +129,10 @@ def init(
         "scheme": scheme,
         "verify": verify,
     }
+    if web_url:
+        cfg["web_url"] = web_url
+    if auth_mode in ("browser", "password", "token"):
+        cfg["auth_mode"] = auth_mode
     if profile_name:
         saved = cfg_mod.save_profile(cfg, profile_name, dest)
     elif cfg_mod.is_v2_file(dest):
@@ -116,6 +145,8 @@ def init(
 def _init_soar(
     profile_name: str | None,
     dest: Path | None,
+    web_url: str | None,
+    auth_mode: str | None,
 ) -> None:
     """Prompt for SOAR fields and merge into the target profile."""
     soar_host = click.prompt("SOAR host", type=str)
@@ -131,6 +162,16 @@ def _init_soar(
         soar_cfg["username"] = soar_user
     if soar_pass:
         soar_cfg["password"] = soar_pass
+    if web_url:
+        soar_cfg["web_url"] = web_url
+        if auth_mode == "auto":
+            auth_mode = detector.probe(
+                detector.soar_login_url(web_url), verify=True, timeout=30
+            )
+    elif auth_mode == "auto":
+        auth_mode = None
+    if auth_mode in ("browser", "password", "token"):
+        soar_cfg["auth_mode"] = auth_mode
 
     # Resolve which profile to update (same precedence as resolve()).
     config_path = dest or cfg_mod.DEFAULT_PATH
