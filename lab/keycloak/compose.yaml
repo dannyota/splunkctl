@@ -1,0 +1,39 @@
+name: splunkctl-keycloak
+
+services:
+  postgres:
+    image: ${POSTGRES_IMAGE:-docker.io/library/postgres:16-alpine}
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-keycloak}
+      POSTGRES_USER: ${POSTGRES_USER:-keycloak}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in lab/keycloak/.env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-keycloak}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  keycloak:
+    image: ${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.2}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      KC_DB: postgres
+      KC_DB_URL_HOST: postgres
+      KC_DB_URL_DATABASE: ${POSTGRES_DB:-keycloak}
+      KC_DB_USERNAME: ${POSTGRES_USER:-keycloak}
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in lab/keycloak/.env}
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?set KEYCLOAK_ADMIN_PASSWORD in lab/keycloak/.env}
+      KC_HOSTNAME: ${KEYCLOAK_HOST:-100.65.1.1}
+      KC_HTTP_PORT: 8080
+    command: start --optimized
+    ports:
+      - "${KEYCLOAK_HOST:-100.65.1.1}:${KEYCLOAK_PORT:-8080}:8080"
+    volumes:
+      - ./.runtime:/opt/keycloak/data/runtime

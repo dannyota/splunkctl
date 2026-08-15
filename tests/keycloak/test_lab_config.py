@@ -1,5 +1,6 @@
 """Tests for the Keycloak lab config and shared library."""
 
+import json
 import subprocess
 from pathlib import Path
 
@@ -32,3 +33,37 @@ def test_render_substitutes_tokens(tmp_path: Path) -> None:
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == '{"acs": "http://x/y"}'
+
+
+def test_realm_template_renders_to_valid_json(tmp_path: Path) -> None:
+    result = run_bash(
+        f"source {KC / 'lib.sh'}; "
+        f"render {KC / 'realm-template.json'} "
+        "'REALM=splunklab' "
+        "'SIEM_ACS=http://siem/acs' 'SOAR_ACS=https://soar/acs' "
+        "'SIEM_SP_ENTITY_ID=http://siem' 'SOAR_SP_ENTITY_ID=https://soar' "
+        "'TEST_USER=bob' 'TEST_USER_PASSWORD=secret'",
+        env={"HOME": str(tmp_path)},
+    )
+    assert result.returncode == 0, result.stderr
+    realm = json.loads(result.stdout)
+    assert realm["realm"] == "splunklab"
+    assert realm["otpPolicyType"] == "totp"
+    client_ids = {c["clientId"] for c in realm["clients"]}
+    assert client_ids == {"splunk-siem", "splunk-soar"}
+    users = {u["username"]: u for u in realm["users"]}
+    assert "CONFIGURE_TOTP" in users["bob"]["requiredActions"]
+
+
+def test_compose_declares_keycloak_and_postgres() -> None:
+    result = subprocess.run(  # noqa: S603
+        ["podman-compose", "-f", str(KC / "compose.yaml"), "config"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    # `podman-compose config` may be absent in CI; only assert when it exists.
+    if "command not found" in result.stderr or result.returncode == 127:
+        return
+    assert "image: quay.io/keycloak/keycloak:26.2" in result.stdout
+    assert "image: docker.io/library/postgres:16-alpine" in result.stdout

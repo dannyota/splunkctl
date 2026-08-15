@@ -1,0 +1,61 @@
+{
+  "realm": "@@REALM@@",
+  "enabled": true,
+  "registrationAllowed": false,
+  "otpPolicyType": "totp",
+  "otpPolicyAlgorithm": "HmacSHA1",
+  "otpPolicyPeriod": 30,
+  "otpPolicyDigits": 6,
+  "roles": {
+    "realm": [
+      { "name": "splunk-admin", "description": "Maps to the Splunk admin role" },
+      { "name": "soar-admin", "description": "Maps to the SOAR admin role" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "splunk-siem",
+      "enabled": true,
+      "protocol": "saml",
+      "redirectUris": ["@@SIEM_ACS@@"],
+      "attributes": {
+        "saml.assertion.signature": "false",
+        "saml.force.post.binding": "true",
+        "saml_name_id_format": "email",
+        "saml_assertion_consumer_url_post": "@@SIEM_ACS@@",
+        "saml.client.signature": "false"
+      }
+    },
+    {
+      "clientId": "splunk-soar",
+      "enabled": true,
+      "protocol": "saml",
+      "redirectUris": ["@@SOAR_ACS@@"],
+      "attributes": {
+        "saml.assertion.signature": "false",
+        "saml.force.post.binding": "true",
+        "saml_name_id_format": "email",
+        "saml_assertion_consumer_url_post": "@@SOAR_ACS@@",
+        "saml.client.signature": "false"
+      }
+    }
+  ],
+  "users": [
+    {
+      "username": "@@TEST_USER@@",
+      "enabled": true,
+      "email": "@@TEST_USER@@@example.com",
+      "firstName": "SAML",
+      "lastName": "Lab User",
+      "requiredActions": ["CONFIGURE_TOTP"],
+      "realmRoles": ["splunk-admin", "soar-admin"],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "@@TEST_USER_PASSWORD@@",
+          "temporary": false
+        }
+      ]
+    }
+  ]
+}
