@@ -74,6 +74,7 @@ splunkctl rules disable 'My Rule'
 # Add and verify Splunk SOAR when needed
 splunkctl config init --soar
 splunkctl soar test
+splunkctl auth login --target siem             # browser SAML/MFA login
 splunkctl soar containers list
 ```
 
@@ -152,6 +153,7 @@ streamable HTTP configuration.
 |---|---|
 | `doctor` | Check connection, authentication, health, and permissions |
 | `config` | Configure profiles and test connectivity |
+| `auth` | Browser SAML login, session status, and logout |
 | `info` | Show server version, operating system, and license details |
 | `search` | Run, export, upload, and manage search jobs |
 | `rules` | Manage detection rules and YAML import/export |

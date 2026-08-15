@@ -11,6 +11,7 @@ the standard dry-run/`--yes` gate; everything else is a read.
 | [alerts](alerts.md) | 5 | Manage fired alerts and alert actions. |
 | [apps](apps.md) | 6 | Manage Splunk apps. |
 | [audit](audit.md) | 2 | Change audit and RBAC attestation — regulator evidence, read-only. |
+| [auth](auth.md) | 3 | Browser SAML login, session status, and logout for SIEM and SOAR. |
 | [conf](conf.md) | 6 | Generic conf file/stanza editor (any conf, including sensitive ones). |
 | [config](config.md) | 4 | Manage splunkctl configuration. |
 | [dashboards](dashboards.md) | 7 | Dashboard management. |

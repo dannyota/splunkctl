@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+Browser SAML authentication and a reusable Keycloak lab.
+
+### Added
+
+- **`auth` command group** — complete Splunk SAML single sign-on (including a
+  second factor) in a headed Chromium window and reuse the product session
+  until it expires. `auth login --target <siem|soar>` runs the browser flow,
+  `auth status` reports `missing`/`valid`/`expired`/`unreachable`, and
+  `auth logout` clears the cached session.
+- **Automatic SAML detection** — `config init` probes the public login route
+  and records `auth_mode: browser` when it sees a redirect to an external
+  identity provider.
+- **Keycloak lab** — rootless Podman Keycloak (`lab/keycloak`) as an external
+  IdP for the SIEM and SOAR VMs, with `labctl.sh start/configure/verify` to
+  exercise the browser SAML flow end to end.
+
 ## 0.12.0
 
 MCP 2 migration for local agent integrations.

@@ -363,6 +363,93 @@ splunkctl config test    # test connectivity + auth
 
 ---
 
+# Browser SAML authentication
+
+splunkctl can complete Splunk SAML single sign-on (including a second factor)
+in a headed Chromium window and then reuse the resulting product session until
+it expires. The browser handles the identity provider; splunkctl never reads or
+stores TOTP secrets or codes.
+
+## How it works
+
+1. `splunkctl config init` probes the public login route. When it sees a
+   redirect to an external identity provider, it records `auth_mode: browser`
+   and stores the product `web_url`.
+2. `splunkctl auth login --target <siem|soar>` opens Chromium at the product
+   login route. You complete the IdP prompts, including any TOTP code.
+3. splunkctl extracts only the product session (Splunk `splunkd_<port>` cookie,
+   or SOAR `sessionid` + `csrftoken`) and proves it against the product API.
+4. Normal commands reuse the cached session whenever the active profile selects
+   browser mode. A missing or expired session never opens a browser; the command
+   prints the exact login instruction instead.
+
+## Commands
+
+```text
+splunkctl auth login --target siem
+splunkctl auth login --target soar
+splunkctl auth status [--target siem|soar|both]
+splunkctl auth logout [--target siem|soar|both]
+```
+
+`login` requires exactly one target; two back-to-back browser flows are easy to
+confuse. `status` reports `missing`, `valid`, `expired`, or `unreachable`.
+`logout` always removes the local session, even if the remote endpoint refuses.
+
+## Optional dependency
+
+Browser login needs Playwright and Chromium:
+
+```bash
+pip install 'splunkctl[browser]'
+python -m playwright install chromium
+```
+
+Configuration still succeeds without them. `splunkctl auth login` prints the
+exact commands when they are missing.
+
+## Session storage and security
+
+Sessions are stored under `~/.splunkctl/sessions/<profile>/<target>.json` with
+directory mode `0700` and file mode `0600`. A record holds only the target,
+profile, product origin, product session values, and validation timestamps. It
+never stores passwords, Playwright storage state, identity-provider cookies, or
+TOTP secrets. Session values are redacted from all output.
+
+## What is and is not supported
+
+Supported: SAML browser login for SIEM and SOAR, one target per login, session
+status and logout, automatic SAML detection, and a reusable Keycloak lab.
+
+Not supported in this release: reading or storing TOTP secrets, native Splunk
+Duo or RSA flows, OpenID Connect or OAuth, logging in to both products in one
+command, and a local splunkctl callback redirect.
+
+---
+
+# Keycloak SAML lab
+
+The lab runs Keycloak in rootless Podman as an external identity provider for
+the Splunk SIEM and SOAR VMs. It lets you exercise the browser SAML flow,
+including manual TOTP entry, without giving splunkctl access to the TOTP secret.
+
+See `lab/keycloak/README.md` in the source tree for topology, setup, reset, and
+recovery. The short version:
+
+```bash
+cd lab/keycloak
+cp .env.example .env      # set the two *_PASSWORD secrets
+./labctl.sh start
+./labctl.sh configure
+./labctl.sh verify
+```
+
+Then run `splunkctl config init` against a product that uses SAML, or configure
+the products to point at `http://100.65.1.1:8080` as their IdP, and log in with
+`splunkctl auth login --target siem`.
+
+---
+
 # Doctor
 
 Diagnose connection, authentication, server health, and user permissions
@@ -4750,6 +4837,7 @@ the standard dry-run/`--yes` gate; everything else is a read.
 | [alerts](alerts.md) | 5 | Manage fired alerts and alert actions. |
 | [apps](apps.md) | 6 | Manage Splunk apps. |
 | [audit](audit.md) | 2 | Change audit and RBAC attestation — regulator evidence, read-only. |
+| [auth](auth.md) | 3 | Browser SAML login, session status, and logout for SIEM and SOAR. |
 | [conf](conf.md) | 6 | Generic conf file/stanza editor (any conf, including sensitive ones). |
 | [config](config.md) | 4 | Manage splunkctl configuration. |
 | [dashboards](dashboards.md) | 7 | Dashboard management. |
@@ -4967,7 +5055,7 @@ that are not SDK list surfaces (e.g. `audit rbac`) are exempt by design.
 
 | Feature | Status | Notes |
 |---|---|---|
-| MCP server | ✅ built | 5 meta-tools (help/usage/focus/unfocus/run), 259 auto-generated typed tools (array schemas for variadic/repeated params, explicit `yes` on guarded schemas, additionalProperties:false), subgroup-granular focus for the nested soar tree, 36 guide resources, protocol-level test suite |
+| MCP server | ✅ built | 5 meta-tools (help/usage/focus/unfocus/run), 259 auto-generated typed tools (array schemas for variadic/repeated params, explicit `yes` on guarded schemas, additionalProperties:false), subgroup-granular focus for the nested soar tree, 38 guide resources, protocol-level test suite |
 | `mcp install` | ✅ built | Write `.mcp.json` for Claude Code registration |
 | `commands --json` | ✅ built | Guard markers, global options, note field |
 | `doctor --strict` | ✅ built | CI-friendly health gate |

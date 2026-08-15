@@ -118,6 +118,19 @@ splunkctl --yes lookups upload threats.csv --file threats.csv --app search
 splunkctl --yes apps install --path TA_windows.spl
 ```
 
+### Browser SAML auth
+
+Complete Splunk SAML SSO and MFA in a headed browser and reuse the product
+session from every command:
+
+```bash
+splunkctl config init                          # probes for SAML automatically
+splunkctl auth login --target siem
+splunkctl auth status
+```
+
+[Browser SAML auth guide &rarr;](guides/auth.md)
+
 ## Global flags
 
 ```

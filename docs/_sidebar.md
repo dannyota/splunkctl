@@ -4,6 +4,8 @@
   - [MCP server](guides/mcp.md)
   - [Install](guides/install.md)
   - [Configure](guides/configure.md)
+  - [Browser SAML auth](guides/auth.md)
+  - [Keycloak lab](guides/keycloak-lab.md)
   - [Doctor](guides/doctor.md)
 
 - **Commands**
@@ -48,6 +50,7 @@
   - [alerts](commands/alerts.md)
   - [apps](commands/apps.md)
   - [audit](commands/audit.md)
+  - [auth](commands/auth.md)
   - [conf](commands/conf.md)
   - [config](commands/config.md)
   - [dashboards](commands/dashboards.md)

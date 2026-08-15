@@ -12,7 +12,8 @@ KC = ROOT / "lab" / "keycloak"
 def test_env_example_exposes_defaults(tmp_path: Path) -> None:
     result = run_bash(
         f"source {KC / '.env.example'}; "
-        'printf \'%s\\n\' "$KEYCLOAK_HOST" "$KEYCLOAK_PORT" "$REALM" "$SIEM_ACS" "$SOAR_ACS"'
+        "printf '%s\\n' "
+        '"$KEYCLOAK_HOST" "$KEYCLOAK_PORT" "$REALM" "$SIEM_ACS" "$SOAR_ACS"'
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout.splitlines() == [
@@ -57,7 +58,7 @@ def test_realm_template_renders_to_valid_json(tmp_path: Path) -> None:
 def test_compose_declares_keycloak_and_postgres() -> None:
     try:
         result = subprocess.run(  # noqa: S603
-            ["podman-compose", "-f", str(KC / "compose.yaml"), "config"],
+            ["podman-compose", "-f", str(KC / "compose.yaml"), "config"],  # noqa: S607
             check=False,
             capture_output=True,
             text=True,

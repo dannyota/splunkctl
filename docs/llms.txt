@@ -9,6 +9,8 @@
 - [MCP server](https://splunkctl.danny.vn/#/guides/mcp): Use splunkctl as a Model Context Protocol server to give AI agents — Claude Code, Claude Desktop, Cursor, Windsurf, or any MCP client — direct access
 - [Install](https://splunkctl.danny.vn/#/guides/install): This pulls the forked SDK (splunkctl branch) automatically as a dependency.
 - [Configure](https://splunkctl.danny.vn/#/guides/configure): Prompts for host, port, auth method (token or username/password), tests the connection, and writes ~/.splunkctl/config.yaml with 0600 permissions.
+- [Browser SAML auth](https://splunkctl.danny.vn/#/guides/auth): splunkctl can complete Splunk SAML single sign-on (including a second factor) in a headed Chromium window and then reuse the resulting product
+- [Keycloak lab](https://splunkctl.danny.vn/#/guides/keycloak-lab): The lab runs Keycloak in rootless Podman as an external identity provider for the Splunk SIEM and SOAR VMs. It lets you exercise the browser SAML
 - [Doctor](https://splunkctl.danny.vn/#/guides/doctor): Diagnose connection, authentication, server health, and user permissions in a single command.
 
 ## Commands
@@ -56,6 +58,7 @@
 - [alerts](https://splunkctl.danny.vn/#/commands/alerts): Manage fired alerts and alert actions.
 - [apps](https://splunkctl.danny.vn/#/commands/apps): Manage Splunk apps.
 - [audit](https://splunkctl.danny.vn/#/commands/audit): Change audit and RBAC attestation — regulator evidence, read-only.
+- [auth](https://splunkctl.danny.vn/#/commands/auth): Browser SAML login, session status, and logout for SIEM and SOAR.
 - [conf](https://splunkctl.danny.vn/#/commands/conf): Generic conf file/stanza editor (any conf, including sensitive ones).
 - [config](https://splunkctl.danny.vn/#/commands/config): Manage splunkctl configuration.
 - [dashboards](https://splunkctl.danny.vn/#/commands/dashboards): Dashboard management.

@@ -74,7 +74,7 @@ jobs:
           package = Path(splunkctl.__file__).resolve()
           assert package.is_relative_to(userbase), (package, userbase)
           guides = load_guides()
-          assert len(guides) == 36, f"expected 36 packaged guides, found {len(guides)}"
+          assert len(guides) == 38, f"expected 38 packaged guides, found {len(guides)}"
           PY
 
   semgrep:

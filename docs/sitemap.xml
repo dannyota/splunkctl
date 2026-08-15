@@ -4,6 +4,8 @@
   <url><loc>https://splunkctl.danny.vn/#/guides/mcp</loc><priority>0.9</priority></url>
   <url><loc>https://splunkctl.danny.vn/#/guides/install</loc><priority>0.9</priority></url>
   <url><loc>https://splunkctl.danny.vn/#/guides/configure</loc><priority>0.8</priority></url>
+  <url><loc>https://splunkctl.danny.vn/#/guides/auth</loc><priority>0.7</priority></url>
+  <url><loc>https://splunkctl.danny.vn/#/guides/keycloak-lab</loc><priority>0.7</priority></url>
   <url><loc>https://splunkctl.danny.vn/#/guides/doctor</loc><priority>0.8</priority></url>
   <url><loc>https://splunkctl.danny.vn/#/guides/search</loc><priority>0.9</priority></url>
   <url><loc>https://splunkctl.danny.vn/#/guides/rules</loc><priority>0.9</priority></url>
@@ -39,6 +41,7 @@
   <url><loc>https://splunkctl.danny.vn/#/commands/alerts</loc><priority>0.7</priority></url>
   <url><loc>https://splunkctl.danny.vn/#/commands/apps</loc><priority>0.7</priority></url>
   <url><loc>https://splunkctl.danny.vn/#/commands/audit</loc><priority>0.7</priority></url>
+  <url><loc>https://splunkctl.danny.vn/#/commands/auth</loc><priority>0.7</priority></url>
   <url><loc>https://splunkctl.danny.vn/#/commands/conf</loc><priority>0.7</priority></url>
   <url><loc>https://splunkctl.danny.vn/#/commands/config</loc><priority>0.7</priority></url>
   <url><loc>https://splunkctl.danny.vn/#/commands/dashboards</loc><priority>0.7</priority></url>
