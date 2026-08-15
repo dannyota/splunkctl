@@ -28,7 +28,7 @@ while IFS= read -r f; do
     echo "DOC TOO LONG  $f: $n lines (max $MD_MAX) — split or trim"
     violations=$((violations + 1))
   fi
-done < <(find . -name '*.md' -not -path './.git/*' -not -path './.claude/*' -not -path './docs/commands/*' -not -path './docs/plans/*' | sed 's#^\./##' | sort)
+done < <(find . -name '*.md' -not -path './.git/*' -not -path './.claude/*' -not -path './.worktrees/*' -not -path './docs/commands/*' -not -path './docs/plans/*' | sed 's#^\./##' | sort)
 
 # --- Python source ---
 while IFS= read -r f; do
@@ -37,7 +37,7 @@ while IFS= read -r f; do
     echo "PY FILE TOO LONG  $f: $n lines (max $PY_MAX) — split by topic"
     violations=$((violations + 1))
   fi
-done < <(find . -name '*.py' -not -path './.git/*' -not -path './.claude/*' | sed 's#^\./##' | sort)
+done < <(find . -name '*.py' -not -path './.git/*' -not -path './.claude/*' -not -path './.worktrees/*' | sed 's#^\./##' | sort)
 
 if (( violations > 0 )); then
   echo "FAIL: $violations file(s) over the length budget."

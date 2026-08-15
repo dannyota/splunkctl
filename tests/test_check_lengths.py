@@ -44,3 +44,23 @@ def test_length_check_still_rejects_oversized_user_docs(tmp_path: Path) -> None:
 
     assert result.returncode == 1
     assert "DOC TOO LONG  docs/user-guide.md: 451 lines" in result.stdout
+
+
+def test_length_check_ignores_local_worktrees(tmp_path: Path) -> None:
+    scripts = tmp_path / "scripts"
+    scripts.mkdir()
+    shutil.copy2(CHECK_LENGTHS, scripts / CHECK_LENGTHS.name)
+    dependency = tmp_path / ".worktrees" / ".venv" / "dependency.py"
+    dependency.parent.mkdir(parents=True)
+    dependency.write_text("value = 1\n" * 501)
+
+    result = subprocess.run(  # noqa: S603
+        ["/usr/bin/bash", str(scripts / CHECK_LENGTHS.name)],
+        cwd=tmp_path,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert ".worktrees/.venv/dependency.py" not in result.stdout
