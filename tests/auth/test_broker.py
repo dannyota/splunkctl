@@ -11,6 +11,7 @@ from splunkctl.auth import broker
 def test_run_login_returns_cookies_on_origin(mock_sp: MagicMock) -> None:
     page = MagicMock()
     page.url = "http://siem:8000/en-US/account/login"
+    page.is_closed.return_value = False
     context = MagicMock()
     cookies = [
         {"name": "splunkd_8000", "value": "SESSIONKEY"},
@@ -29,6 +30,7 @@ def test_run_login_returns_cookies_on_origin(mock_sp: MagicMock) -> None:
     )
     assert result == {"splunkd_8000": "SESSIONKEY", "splunkweb_csrf_token": "x"}
     page.goto.assert_called_once()
+    context.cookies.assert_called_once_with(urls=["http://siem:8000"])
     context.close.assert_called_once()
 
 

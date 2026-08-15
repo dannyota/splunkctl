@@ -77,20 +77,22 @@ def run_login(
         try:
             page.goto(login_url)
             # Wait for the IdP to bounce the browser back to the product origin.
-            while _origin_of(page.url) != _origin_of(expected_origin):
+            while True:
+                if page.is_closed():
+                    raise BrokerError(
+                        "The browser was closed before login finished.", kind="auth"
+                    )
+                if _origin_of(page.url) == _origin_of(expected_origin):
+                    break
                 if time.monotonic() > deadline:
                     raise BrokerError(
                         f"Timed out waiting for login to reach the expected origin "
                         f"({expected_origin}).",
                         kind="timeout",
                     )
-                if page.is_closed():
-                    raise BrokerError(
-                        "The browser was closed before login finished.", kind="auth"
-                    )
                 page.wait_for_timeout(500)
             cookies = {}
-            for cookie in context.cookies():
+            for cookie in context.cookies(urls=[expected_origin]):
                 if cookie.get("name") and cookie.get("value"):
                     cookies[cookie["name"]] = cookie["value"]
             return cookies
