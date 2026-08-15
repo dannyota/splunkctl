@@ -1,6 +1,6 @@
 # splunkctl
 
-> Open-source MCP server and CLI for Splunk Enterprise SIEM and Splunk SOAR. Give AI agents access to 259 Splunk commands via Model Context Protocol, or operate your instances as code from the terminal.
+> Open-source MCP server and CLI for Splunk Enterprise SIEM and Splunk SOAR. Give AI agents access to 262 Splunk commands via Model Context Protocol, or operate your instances as code from the terminal.
 
 - [Home](https://splunkctl.danny.vn/#/): Open-source MCP server and CLI for Splunk Enterprise SIEM and Splunk SOAR. One tool, two interfaces — operate your Splunk environment from any AI
 

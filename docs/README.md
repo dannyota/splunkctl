@@ -11,7 +11,7 @@ from the terminal.
 
 | Interface | What it does | Get started |
 |-----------|-------------|-------------|
-| **MCP Server** | Give Claude, Cursor, or any MCP client full access to your Splunk SIEM and SOAR — 259 tools with dynamic loading | [MCP guide](guides/mcp.md) |
+| **MCP Server** | Give Claude, Cursor, or any MCP client full access to your Splunk SIEM and SOAR — 262 tools with dynamic loading | [MCP guide](guides/mcp.md) |
 | **CLI** | `splunkctl search run`, `splunkctl rules export`, `splunkctl soar containers list` — operate Splunk as code from your laptop | [Install](guides/install.md) |
 
 ## MCP server — quick start

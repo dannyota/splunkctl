@@ -13,7 +13,7 @@ SKIP_PARAMS = frozenset({"help", "yes"})
 
 # Internal/maintainer groups that never become MCP tools.
 INTERNAL_GROUPS = frozenset(
-    {"mcp", "commands", "skill", "config", "doctor", "info", "docs", "auth"}
+    {"mcp", "commands", "skill", "config", "doctor", "info", "docs"}
 )
 
 _YES_PROP: dict[str, Any] = {

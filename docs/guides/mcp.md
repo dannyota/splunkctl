@@ -5,7 +5,7 @@ server to give AI agents — Claude Code, Claude Desktop, Cursor, Windsurf, or
 any MCP client — direct access to your Splunk Enterprise SIEM and Splunk SOAR
 instances.
 
-The server uses **dynamic tool loading**: instead of exposing all 259 tools
+The server uses **dynamic tool loading**: instead of exposing all 262 tools
 upfront, it starts with 5 meta-tools and loads group-specific typed tools on
 demand. This keeps the agent's context window small while covering every
 command. Version 0.12 uses MCP Python SDK 2 and publishes tool-list changes
