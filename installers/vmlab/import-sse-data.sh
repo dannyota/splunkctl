@@ -175,16 +175,17 @@ import json, sys
 for line in sys.stdin:
     record = json.loads(line)
     result = record.get("result")
-    if result:
+    if result and not record.get("preview", False):
         print("{}\t{}".format(result["lab_batch_id"], result["count"]))'
 }
 
 clear_existing() {
   require_sse_lab_index
   log "clearing event data only from index $SSE_INDEX"
-  ssh_vm "$SIEM_IP" "sudo -u splunk /opt/splunk/bin/splunk stop >/dev/null; \
-    sudo -u splunk /opt/splunk/bin/splunk clean eventdata -index '$SSE_INDEX' -f >/dev/null; \
-    sudo systemctl start Splunkd"
+  ssh_vm "$SIEM_IP" "set -e; sudo systemctl stop Splunkd; \
+    if ! sudo -u splunk /opt/splunk/bin/splunk clean eventdata -index '$SSE_INDEX' -f >/dev/null; then \
+      sudo systemctl start Splunkd; exit 1; \
+    fi; sudo systemctl start Splunkd"
   wait_http "http://$SIEM_IP:8000" 303 240
   wait_http "https://$SIEM_IP:8088/services/collector/health" 200 180
 }
@@ -212,8 +213,8 @@ verify_import_count() {
     actual="$(splunk_search "index=$SSE_INDEX lab_import_id=\"$import_id\" | stats count" |
       python3 -c 'import json,sys
 for line in sys.stdin:
- result=json.loads(line).get("result")
- if result: print(result["count"])')"
+ record=json.loads(line); result=record.get("result")
+ if result and not record.get("preview", False): print(result["count"])')"
     [[ "${actual:-0}" == "$expected" ]] && return 0
     sleep 2
   done
@@ -262,8 +263,9 @@ show_status() {
   summary="$(splunk_search "index=$SSE_INDEX lab_import_id=\"$import_id\" | stats count dc(lab_dataset) as datasets earliest(_time) as earliest latest(_time) as latest" |
     python3 -c 'import json,sys
 for line in sys.stdin:
- result=json.loads(line).get("result")
- if result: print("\t".join(result.get(k, "0") for k in ("count","datasets","earliest","latest")))')"
+ record=json.loads(line); result=record.get("result")
+ if result and not record.get("preview", False):
+  print("\t".join(result.get(k, "0") for k in ("count","datasets","earliest","latest")))')"
   printf 'import_id=%s\nexpected=%s\nindexed=%s\n' \
     "$import_id" "$expected" "${summary:-0\t0\t0\t0}"
 }

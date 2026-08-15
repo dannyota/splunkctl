@@ -37,7 +37,6 @@ RHEL="$(require_artifact "$RHEL_ISO")"
 ensure_ssh_key
 VMDIR="$VM_BASE_DIR/$NAME"; VMX="$VMDIR/$NAME.vmx"
 if [[ -d "$VMDIR" ]]; then
-  vm_running "$VMX" && vmrun -T ws stop "$VMX" hard >/dev/null 2>&1 || true
   die "VM dir already exists: $VMDIR (remove it to rebuild)"
 fi
 mkdir -p "$VMDIR"
