@@ -8,9 +8,9 @@ source "$LAB_DIR/lib.sh"
 
 compose_cmd() {
   if podman compose version >/dev/null 2>&1; then
-    printf 'podman compose -f "%s" --env-file "%s"' "$LAB_DIR/compose.yaml" "$LAB_DIR/.env"
+    printf 'podman compose -f %s --env-file %s' "$LAB_DIR/compose.yaml" "$LAB_DIR/.env"
   else
-    printf 'podman-compose -f "%s" --env-file "%s"' "$LAB_DIR/compose.yaml" "$LAB_DIR/.env"
+    printf 'podman-compose -f %s --env-file %s' "$LAB_DIR/compose.yaml" "$LAB_DIR/.env"
   fi
 }
 
