@@ -56,14 +56,16 @@ def test_realm_template_renders_to_valid_json(tmp_path: Path) -> None:
 
 
 def test_compose_declares_keycloak_and_postgres() -> None:
-    result = subprocess.run(  # noqa: S603
-        ["podman-compose", "-f", str(KC / "compose.yaml"), "config"],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    # `podman-compose config` may be absent in CI; only assert when it exists.
-    if "command not found" in result.stderr or result.returncode == 127:
+    try:
+        result = subprocess.run(  # noqa: S603
+            ["podman-compose", "-f", str(KC / "compose.yaml"), "config"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError:
+        return
+    if result.returncode != 0:
         return
     assert "image: quay.io/keycloak/keycloak:26.2" in result.stdout
     assert "image: docker.io/library/postgres:16-alpine" in result.stdout
