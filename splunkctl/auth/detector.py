@@ -9,6 +9,7 @@ interstitial before redirecting.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from typing import Literal
 from urllib.parse import urlsplit
@@ -88,3 +89,32 @@ def siem_login_url(web_url: str) -> str:
 def soar_login_url(web_url: str) -> str:
     """SOAR Django login route (SAML auto-redirects when configured)."""
     return f"{web_url.rstrip('/')}/login"
+
+
+_SAML_SSO_SUFFIX = "/protocol/saml"
+
+
+def siem_idp_issuer(web_url: str, *, verify: bool, timeout: int) -> str | None:
+    """Return the SAML IdP issuer the SIEM is configured against, or ``None``.
+
+    Splunk's SAML login route renders a form that auto-submits to the IdP (its
+    ``action`` is the IdP SSO URL); strip the ``/protocol/saml`` suffix to get
+    the issuer. Used to derive another product's SSO URL from the same IdP.
+    Returns ``None`` when the login route is unreachable, not SAML, or does not
+    reveal an issuer.
+    """
+    login_url = siem_login_url(web_url)
+    try:
+        resp = requests.get(
+            login_url, allow_redirects=False, verify=verify, timeout=timeout
+        )
+    except requests.RequestException:
+        return None
+    if resp.status_code in _REDIRECT:
+        target = resp.headers.get("Location", "")
+    else:
+        match = re.search(r'action="([^"]*)"', resp.text)
+        target = match.group(1) if match else ""
+    if _SAML_SSO_SUFFIX not in target:
+        return None
+    return target.split(_SAML_SSO_SUFFIX, 1)[0]

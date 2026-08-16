@@ -149,6 +149,30 @@ def init(
     output.info(f"Config saved to {saved}")
 
 
+def _auto_detect_sso_url(
+    config_path: Path,
+    profile: str,
+    soar_base_url: str,
+    verify: bool,
+) -> str | None:
+    """Derive the SOAR SSO URL from the SIEM's IdP, if the SIEM is SAML-enabled.
+
+    Only works when the SIEM in the same profile is already browser
+    authenticated against the same IdP (the lab's Keycloak). Returns ``None``
+    when the SIEM is not configured for browser auth or its login route does
+    not reveal an IdP issuer.
+    """
+    siem = cfg_mod.load(config_path, profile=profile)
+    if siem.get("auth_mode") != "browser" or not siem.get("web_url"):
+        return None
+    issuer = detector.siem_idp_issuer(
+        str(siem["web_url"]), verify=bool(siem.get("verify", True)), timeout=30
+    )
+    if not issuer:
+        return None
+    return f"{soar_base_url.rstrip('/')}/saml2/login?idp={issuer}&next=/"
+
+
 def _init_soar(
     profile_name: str | None,
     dest: Path | None,
@@ -158,6 +182,11 @@ def _init_soar(
     verify: bool | None,
 ) -> None:
     """Prompt for SOAR fields and merge into the target profile."""
+    # Resolve the profile first so the SSO URL can be derived from its SIEM.
+    config_path = dest or cfg_mod.DEFAULT_PATH
+    raw = cfg_mod._read_raw(config_path)  # noqa: SLF001
+    name = cfg_mod._active_profile_name(raw, profile_name)  # noqa: SLF001
+
     soar_host = click.prompt("SOAR host", type=str)
     soar_port = click.prompt("SOAR port", default=8443, type=int)
     soar_token = click.prompt("SOAR token", default="", type=str)
@@ -168,6 +197,22 @@ def _init_soar(
         if verify is not None
         else click.confirm("Verify TLS certificates", default=True)
     )
+
+    # Derive the SSO URL from the SIEM's IdP unless it was supplied; ask the
+    # user when derivation fails and browser auth was requested.
+    if not sso_url:
+        soar_base_url = f"https://{soar_host}:{soar_port}"
+        sso_url = _auto_detect_sso_url(
+            config_path, name, soar_base_url, bool(soar_verify)
+        )
+        if sso_url:
+            output.info("SOAR SSO login URL derived from the SIEM IdP.")
+        elif auth_mode in ("auto", "browser"):
+            sso_url = click.prompt(
+                "SOAR SAML login URL (leave empty to skip browser auth)",
+                default="",
+                type=str,
+            )
 
     soar_cfg: dict[str, Any] = {
         "host": soar_host,
@@ -191,11 +236,6 @@ def _init_soar(
         auth_mode = None
     if auth_mode in ("browser", "password", "token"):
         soar_cfg["auth_mode"] = auth_mode
-
-    # Resolve which profile to update (same precedence as resolve()).
-    config_path = dest or cfg_mod.DEFAULT_PATH
-    raw = cfg_mod._read_raw(config_path)  # noqa: SLF001
-    name = cfg_mod._active_profile_name(raw, profile_name)  # noqa: SLF001
 
     # Load existing SIEM fields (if any) and attach the new soar: map.
     try:

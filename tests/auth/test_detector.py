@@ -1,5 +1,9 @@
 """Tests for login-flow classification."""
 
+from unittest.mock import MagicMock, patch
+
+import requests
+
 from splunkctl.auth import detector
 
 
@@ -85,3 +89,41 @@ def test_login_url_helpers() -> None:
         == "https://siem:8000/en-US/account/login"
     )
     assert detector.soar_login_url("https://soar:8443") == "https://soar:8443/login"
+
+
+@patch("splunkctl.auth.detector.requests.get")
+def test_siem_idp_issuer_from_form_action(mock_get: MagicMock) -> None:
+    mock_get.return_value = MagicMock(
+        status_code=200,
+        headers={},
+        text=(
+            '<form method="post" '
+            'action="http://idp:8080/realms/splunklab/protocol/saml">'
+        ),
+    )
+    issuer = detector.siem_idp_issuer("http://siem:8000", verify=True, timeout=30)
+    assert issuer == "http://idp:8080/realms/splunklab"
+
+
+@patch("splunkctl.auth.detector.requests.get")
+def test_siem_idp_issuer_from_redirect(mock_get: MagicMock) -> None:
+    mock_get.return_value = MagicMock(
+        status_code=302,
+        headers={"Location": "http://idp:8080/realms/splunklab/protocol/saml"},
+        text="",
+    )
+    issuer = detector.siem_idp_issuer("http://siem:8000", verify=True, timeout=30)
+    assert issuer == "http://idp:8080/realms/splunklab"
+
+
+@patch("splunkctl.auth.detector.requests.get")
+def test_siem_idp_issuer_none_when_not_saml(mock_get: MagicMock) -> None:
+    mock_get.return_value = MagicMock(
+        status_code=200, headers={}, text='<form action="/local/login">'
+    )
+    assert detector.siem_idp_issuer("http://siem:8000", verify=True, timeout=30) is None
+
+
+@patch("splunkctl.auth.detector.requests.get", side_effect=requests.RequestException)
+def test_siem_idp_issuer_none_on_error(mock_get: MagicMock) -> None:
+    assert detector.siem_idp_issuer("http://siem:8000", verify=True, timeout=30) is None

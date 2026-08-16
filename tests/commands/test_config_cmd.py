@@ -354,7 +354,7 @@ def test_config_init_soar_prompts_and_saves(tmp_path: Path) -> None:
     result = runner.invoke(
         cli,
         ["config", "init", "--soar", "--path", str(cfg)],
-        input="soar-host\n8443\ntok123\nsoar-admin\nsoarpass\n\n",
+        input="soar-host\n8443\ntok123\nsoar-admin\nsoarpass\n\n\n",
     )
     assert result.exit_code == 0, result.output
     raw = yaml.safe_load(cfg.read_text())
@@ -379,7 +379,7 @@ def test_config_init_soar_with_profile_flag(tmp_path: Path) -> None:
     result = runner.invoke(
         cli,
         ["config", "init", "--soar", "--path", str(cfg), "--profile", "lab"],
-        input="soar-lab\n8443\ntok-lab\n\n\n\n",
+        input="soar-lab\n8443\ntok-lab\n\n\n\n\n",
     )
     assert result.exit_code == 0, result.output
     raw = yaml.safe_load(cfg.read_text())
@@ -400,7 +400,7 @@ def test_config_init_soar_preserves_siem_fields(tmp_path: Path) -> None:
     result = runner.invoke(
         cli,
         ["config", "init", "--soar", "--path", str(cfg)],
-        input="soar-host\n8443\ntok\n\n\n\n",
+        input="soar-host\n8443\ntok\n\n\n\n\n",
     )
     assert result.exit_code == 0, result.output
     raw = yaml.safe_load(cfg.read_text())
