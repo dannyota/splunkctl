@@ -40,6 +40,7 @@ SIEM fields.
 | `--profile` | text | - | Create or update this named profile (schema v2), instead of the flat/default config file. A legacy file is upgraded, folding its existing values into 'profiles.default'. |
 | `--path` | path | - | Config file path (default: ~/.splunkctl/config.yaml). |
 | `--web-url` | text | - | Product web origin (Splunk Web, e.g. http://host:8000). Required for browser SAML login on SIEM. |
+| `--sso-url` | text | - | SOAR SAML login URL (e.g. https://soar:8443/saml2/login?idp=...&next=/). Use with --soar; SOAR's /login route is local-only. |
 | `--auth-mode` | choice: auto, token, password, browser | auto | Authentication mode. 'auto' probes the login route to detect SAML. |
 
 ## config show

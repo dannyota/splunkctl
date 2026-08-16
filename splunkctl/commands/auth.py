@@ -75,7 +75,7 @@ def login(ctx: click.Context, target: str) -> None:
     adapter = get_adapter(tgt)
     try:
         cookies = run_login(
-            login_url=adapter.login_url(ta.web_url),
+            login_url=ta.login_url,
             expected_origin=ta.web_url,
             verify=ta.verify,
             timeout=timeout,

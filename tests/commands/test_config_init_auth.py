@@ -53,3 +53,17 @@ def test_init_soar_no_verify_flag_skips_prompt(mock_probe) -> None:
     result = CliRunner().invoke(cli, args, input="soar-host\n8443\n\n\n\n")
     assert result.exit_code == 0, result.output
     assert cfg_mod.resolve_soar(cfg_mod.DEFAULT_PATH)["verify"] is False
+
+
+@patch("splunkctl.commands.config_cmd.detector.probe", return_value="browser")
+def test_init_soar_sso_url_is_stored_and_probed(mock_probe) -> None:
+    sso = "https://soar:8443/saml2/login?idp=https://idp&next=/"
+    args = (
+        "config init --soar --no-verify --web-url https://soar:8443 "
+        f"--sso-url {sso} --path {cfg_mod.DEFAULT_PATH}"
+    ).split()
+    result = CliRunner().invoke(cli, args, input="soar-host\n8443\n\n\n\n")
+    assert result.exit_code == 0, result.output
+    cfg = cfg_mod.resolve_soar(cfg_mod.DEFAULT_PATH)
+    assert cfg["sso_url"] == sso
+    assert mock_probe.call_args.args[0] == sso

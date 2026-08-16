@@ -82,6 +82,7 @@ def test_resolve_target_siem_derives_management_api_base(
     )
     ta = sess.resolve_target(tmp_path / "cfg.yaml", None, "siem")
     assert ta.web_url == "http://100.65.1.10:8000"
+    assert ta.login_url == "http://100.65.1.10:8000/en-US/account/login"
     assert ta.api_base == "https://100.65.1.10:8089"
     assert ta.profile == "default"
 
@@ -100,7 +101,35 @@ def test_resolve_target_soar_defaults_web_url_to_origin(
     )
     ta = sess.resolve_target(tmp_path / "cfg.yaml", None, "soar")
     assert ta.web_url == "https://100.65.1.11:8443"
+    assert ta.login_url == "https://100.65.1.11:8443/login"
     assert ta.api_base == ta.web_url
+
+
+def test_resolve_target_soar_uses_sso_url_for_login(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setattr(cfg_mod, "DEFAULT_DIR", tmp_path / ".splunkctl")
+    monkeypatch.setattr(cfg_mod, "DEFAULT_PATH", tmp_path / "cfg.yaml")
+    sso = (
+        "https://100.65.1.11:8443/saml2/login"
+        "?idp=http://100.65.1.1:8080/realms/splunklab&next=/"
+    )
+    cfg_mod.save(
+        {
+            "host": "100.65.1.10",
+            "soar": {
+                "host": "100.65.1.11",
+                "port": 8443,
+                "auth_mode": "browser",
+                "web_url": "https://100.65.1.11:8443",
+                "sso_url": sso,
+            },
+        },
+        tmp_path / "cfg.yaml",
+    )
+    ta = sess.resolve_target(tmp_path / "cfg.yaml", None, "soar")
+    assert ta.web_url == "https://100.65.1.11:8443"
+    assert ta.login_url == sso
 
 
 def test_resolve_target_siem_requires_web_url(tmp_path: Path, monkeypatch) -> None:

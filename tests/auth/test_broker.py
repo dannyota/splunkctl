@@ -1,6 +1,6 @@
 """Tests for the Playwright browser broker (no real browser launched)."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
 
@@ -10,7 +10,16 @@ from splunkctl.auth import broker
 @patch("splunkctl.auth.broker._sync_playwright")
 def test_run_login_returns_cookies_on_origin(mock_sp: MagicMock) -> None:
     page = MagicMock()
-    page.url = "http://siem:8000/en-US/account/login"
+    # The login route stays on the product origin, then bounces to the IdP,
+    # then returns to the product once the user finishes the IdP flow.
+    type(page).url = PropertyMock(
+        side_effect=[
+            "http://siem:8000/en-US/account/login",  # still on the login page
+            "http://idp:8080/realms/x/login",  # bounced to the IdP
+            "http://idp:8080/realms/x/login",  # still on the IdP
+            "http://siem:8000/app/launcher",  # back on the product
+        ]
+    )
     page.is_closed.return_value = False
     context = MagicMock()
     cookies = [
@@ -56,6 +65,29 @@ def test_run_login_wrong_origin_raises(
         )
     assert "expected origin" in exc.value.message
     assert "evil.example.com" not in exc.value.message
+
+
+@patch("splunkctl.auth.broker.time.monotonic", side_effect=[0.0, 1000.0])
+@patch("splunkctl.auth.broker._sync_playwright")
+def test_run_login_times_out_when_login_page_stays_on_origin(
+    mock_sp: MagicMock, mock_monotonic: MagicMock
+) -> None:
+    page = MagicMock()
+    page.url = "http://siem:8000/en-US/account/login"  # never leaves the product
+    page.is_closed.return_value = False
+    context = MagicMock()
+    context.new_page.return_value = page
+    browser = mock_sp.return_value.__enter__.return_value.chromium.launch.return_value
+    browser.new_context.return_value = context
+
+    with pytest.raises(broker.BrokerError) as exc:
+        broker.run_login(
+            login_url="http://siem:8000/en-US/account/login",
+            expected_origin="http://siem:8000",
+            verify=True,
+            timeout=60,
+        )
+    assert "identity provider" in exc.value.message
 
 
 @patch("splunkctl.auth.broker.importlib.import_module", side_effect=ImportError)

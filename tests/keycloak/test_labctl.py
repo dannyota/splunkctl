@@ -17,6 +17,8 @@ def _run_labctl(
     fake_bin.mkdir()
     write_executable(fake_bin / "podman", podman_body)
     write_executable(fake_bin / "podman-compose", "#!/bin/sh\nexit 0\n")
+    # status probes the health URL; report "down" so the test is hermetic.
+    write_executable(fake_bin / "curl", "#!/bin/sh\nprintf '000'\n")
     return subprocess.run(  # noqa: S603
         [str(KC / "labctl.sh"), subcmd],
         cwd=ROOT,

@@ -13,7 +13,6 @@ from typing import Literal, Protocol
 
 import requests
 
-from splunkctl.auth.detector import siem_login_url, soar_login_url
 from splunkctl.auth.session import Target
 
 type ValidationStatus = Literal["valid", "expired", "unreachable"]
@@ -27,10 +26,6 @@ class SessionAdapter(Protocol):
     """A product's cookie->session mapping plus validation and logout."""
 
     target: Target
-
-    def login_url(self, web_url: str) -> str:
-        """Return the login URL for the product's web UI."""
-        ...
 
     def extract(self, cookies: dict[str, str]) -> dict[str, str]:
         """Map browser cookies to the product's API session values."""
@@ -53,10 +48,6 @@ class SIEMAdapter:
     """Splunk Enterprise SIEM adapter."""
 
     target: Target = "siem"
-
-    def login_url(self, web_url: str) -> str:
-        """Return the Splunk Web login URL."""
-        return siem_login_url(web_url)
 
     def extract(self, cookies: dict[str, str]) -> dict[str, str]:
         """Extract the Splunk session key from the ``splunkd_*`` cookie."""
@@ -105,10 +96,6 @@ class SOARAdapter:
     """Splunk SOAR adapter."""
 
     target: Target = "soar"
-
-    def login_url(self, web_url: str) -> str:
-        """Return the SOAR Django login URL."""
-        return soar_login_url(web_url)
 
     def extract(self, cookies: dict[str, str]) -> dict[str, str]:
         """Extract the Django ``sessionid`` and ``csrftoken`` cookies."""

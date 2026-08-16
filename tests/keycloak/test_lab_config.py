@@ -20,8 +20,8 @@ def test_env_example_exposes_defaults(tmp_path: Path) -> None:
         "100.65.1.1",
         "8080",
         "splunklab",
-        "http://100.65.1.10:8000/en-US/app/launcher/home",
-        "https://100.65.1.11:8443",
+        "http://100.65.1.10:8000/saml/acs",
+        "https://100.65.1.11:8443/saml2/callback/login",
     ]
 
 
@@ -52,7 +52,9 @@ def test_realm_template_renders_to_valid_json(tmp_path: Path) -> None:
     client_ids = {c["clientId"] for c in realm["clients"]}
     assert client_ids == {"splunk-siem", "splunk-soar"}
     users = {u["username"]: u for u in realm["users"]}
-    assert "CONFIGURE_TOTP" in users["bob"]["requiredActions"]
+    assert users["bob"]["realmRoles"] == ["splunk-admin", "soar-admin"]
+    siem = next(c for c in realm["clients"] if c["clientId"] == "splunk-siem")
+    assert siem["attributes"]["saml.authnstatement"] == "true"
 
 
 def test_compose_declares_keycloak_and_postgres() -> None:

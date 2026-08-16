@@ -59,6 +59,12 @@ def config_group() -> None:
     "for browser SAML login on SIEM.",
 )
 @click.option(
+    "--sso-url",
+    default=None,
+    help="SOAR SAML login URL (e.g. https://soar:8443/saml2/login?idp=...&next=/). "
+    "Use with --soar; SOAR's /login route is local-only.",
+)
+@click.option(
     "--auth-mode",
     "auth_mode",
     type=click.Choice(["auto", "token", "password", "browser"]),
@@ -78,6 +84,7 @@ def init(
     profile_name: str | None,
     path: str | None,
     web_url: str | None,
+    sso_url: str | None,
     auth_mode: str | None,
 ) -> None:
     """Interactive setup — create or overwrite config.
@@ -96,7 +103,7 @@ def init(
     """
     dest = Path(path) if path else None
     if soar_mode:
-        _init_soar(profile_name, dest, web_url, auth_mode, verify)
+        _init_soar(profile_name, dest, web_url, sso_url, auth_mode, verify)
         return
 
     # Prompt for SIEM fields not supplied via flags.
@@ -146,6 +153,7 @@ def _init_soar(
     profile_name: str | None,
     dest: Path | None,
     web_url: str | None,
+    sso_url: str | None,
     auth_mode: str | None,
     verify: bool | None,
 ) -> None:
@@ -172,12 +180,13 @@ def _init_soar(
         soar_cfg["username"] = soar_user
     if soar_pass:
         soar_cfg["password"] = soar_pass
+    if sso_url:
+        soar_cfg["sso_url"] = sso_url
     if web_url:
         soar_cfg["web_url"] = web_url
         if auth_mode == "auto":
-            auth_mode = detector.probe(
-                detector.soar_login_url(web_url), verify=soar_verify, timeout=30
-            )
+            probe_url = sso_url if sso_url else detector.soar_login_url(web_url)
+            auth_mode = detector.probe(probe_url, verify=soar_verify, timeout=30)
     elif auth_mode == "auto":
         auth_mode = None
     if auth_mode in ("browser", "password", "token"):

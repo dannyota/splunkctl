@@ -24,12 +24,12 @@ def test_login_creates_session(
         target="siem",
         profile="default",
         web_url="http://siem:8000",
+        login_url="http://siem:8000/en-US/account/login",
         api_base="https://siem:8089",
         verify=True,
         timeout=30,
     )
     adapter = mock_adapter.return_value
-    adapter.login_url.return_value = "http://siem:8000/en-US/account/login"
     adapter.extract.return_value = {"session_key": "k", "cookie": "splunkd_8000"}
     adapter.validate.return_value = "valid"
     mock_run.return_value = {"splunkd_8000": "k"}
@@ -37,6 +37,12 @@ def test_login_creates_session(
     result = CliRunner().invoke(cli, ["auth", "login", "--target", "siem"])
     assert result.exit_code == 0, result.output
     assert mock_save.call_count == 1
+    mock_run.assert_called_once_with(
+        login_url="http://siem:8000/en-US/account/login",
+        expected_origin="http://siem:8000",
+        verify=True,
+        timeout=30,
+    )
     record = mock_save.call_args.args[1]
     assert record.values["session_key"] == "k"
 

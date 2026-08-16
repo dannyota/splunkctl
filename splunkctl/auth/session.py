@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from splunkctl import config as cfg_mod
+from splunkctl.auth.detector import siem_login_url, soar_login_url
 
 type Target = Literal["siem", "soar"]
 
@@ -72,6 +73,7 @@ class TargetAuth:
     target: Target
     profile: str
     web_url: str
+    login_url: str
     api_base: str
     verify: bool
     timeout: int
@@ -113,6 +115,7 @@ def resolve_target(
             target="siem",
             profile=name,
             web_url=str(web_url),
+            login_url=siem_login_url(str(web_url)),
             api_base=_origin(scheme, host, port),
             verify=bool(cfg.get("verify", True)),
             timeout=timeout,
@@ -128,10 +131,13 @@ def resolve_target(
         )
     port = int(cfg.get("port", 8443))
     web_url = str(cfg.get("web_url") or _origin("https", host, port))
+    sso_url = cfg.get("sso_url")
+    login_url = str(sso_url) if sso_url else soar_login_url(web_url)
     return TargetAuth(
         target="soar",
         profile=name,
         web_url=web_url,
+        login_url=login_url,
         api_base=web_url,
         verify=bool(cfg.get("verify", True)),
         timeout=timeout,

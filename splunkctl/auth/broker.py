@@ -76,14 +76,28 @@ def run_login(
         deadline = time.monotonic() + timeout
         try:
             page.goto(login_url)
-            # Wait for the IdP to bounce the browser back to the product origin.
-            while True:
+            expected = _origin_of(expected_origin)
+            # The login route is often on the product origin and only bounces to
+            # the IdP after a JS auto-submit or server redirect. Wait for the
+            # browser to leave the product origin first, then wait for it to
+            # return once the user completes the identity-provider flow.
+            while _origin_of(page.url) == expected:
                 if page.is_closed():
                     raise BrokerError(
                         "The browser was closed before login finished.", kind="auth"
                     )
-                if _origin_of(page.url) == _origin_of(expected_origin):
-                    break
+                if time.monotonic() > deadline:
+                    raise BrokerError(
+                        f"Timed out waiting for the identity provider to take over "
+                        f"from {login_url}.",
+                        kind="timeout",
+                    )
+                page.wait_for_timeout(500)
+            while _origin_of(page.url) != expected:
+                if page.is_closed():
+                    raise BrokerError(
+                        "The browser was closed before login finished.", kind="auth"
+                    )
                 if time.monotonic() > deadline:
                     raise BrokerError(
                         f"Timed out waiting for login to reach the expected origin "

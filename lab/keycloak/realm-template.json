@@ -23,7 +23,8 @@
         "saml.force.post.binding": "true",
         "saml_name_id_format": "email",
         "saml_assertion_consumer_url_post": "@@SIEM_ACS@@",
-        "saml.client.signature": "false"
+        "saml.client.signature": "false",
+        "saml.authnstatement": "true"
       }
     },
     {
@@ -36,7 +37,8 @@
         "saml.force.post.binding": "true",
         "saml_name_id_format": "email",
         "saml_assertion_consumer_url_post": "@@SOAR_ACS@@",
-        "saml.client.signature": "false"
+        "saml.client.signature": "false",
+        "saml.authnstatement": "true"
       }
     }
   ],

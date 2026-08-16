@@ -45,8 +45,22 @@ All other defaults are in `.env.example`; export any setting to override it.
 - two SAML clients, `splunk-siem` and `splunk-soar`, with product-specific
   assertion consumer URLs;
 - realm roles `splunk-admin` and `soar-admin`;
-- a test user `samluser` with a `CONFIGURE_TOTP` required action (the user
-  enrolls a TOTP QR code on first login and types codes manually).
+- a test user `samluser` with a plain password (no second factor — the lab
+  exercises the browser SAML flow without MFA).
+
+## Point the products at Keycloak
+
+SOAR's SAML config is scripted; SIEM's is manual (edit `authentication.conf`
+on the VM).
+
+```bash
+./soar-configure.sh    # writes SOAR's SystemSettings SAML config over SSH
+```
+
+`soar-configure.sh` builds SOAR's `SystemSettings.auth` JSON (with the Keycloak
+IdP metadata inlined) and writes it to the SOAR VM. Idempotent. It SSHes as
+`labadmin` with `~/vmware/.vmlab_key` (override with `SSH_KEY`), and maps the
+SAML `splunk-admin`/`soar-admin` roles to SOAR `Administrator` (role id 1).
 
 ## Daily use
 
@@ -57,10 +71,10 @@ All other defaults are in `.env.example`; export any setting to override it.
 
 ## Verify the SAML flow by hand
 
-1. `./labctl.sh start && ./labctl.sh configure`.
-2. Run `splunkctl auth login --target siem` (see the auth guide). Chromium
-   opens, redirects to Keycloak, asks for `samluser`'s password, then a TOTP
-   code.
+1. `./labctl.sh start && ./labctl.sh configure && ./soar-configure.sh`.
+2. Run `splunkctl auth login --target siem` or `--target soar` (see the auth
+   guide). Chromium opens, redirects to Keycloak, asks for `samluser`'s
+   password.
 3. Confirm `splunkctl auth status --target siem` reports `valid`.
 
 ## Reset and recovery
