@@ -99,44 +99,7 @@ class SplunkClient:
                 "scheme": cfg.get("scheme", "https"),
             }
 
-            if cfg.get("auth_mode") == "browser":
-                from splunkctl.auth import adapters
-                from splunkctl.auth import session as sess_mod
-
-                ta = sess_mod.resolve_target(
-                    self._config_path, self._profile, "siem", timeout=self._timeout
-                )
-                rec = sess_mod.load(ta.profile, "siem", expected_origin=ta.web_url)
-                if rec is None:
-                    raise WebSessionError(
-                        "SIEM browser session is missing. Run "
-                        "`splunkctl auth login --target siem`.",
-                        kind="auth",
-                    )
-                status = adapters.get_adapter("siem").validate(
-                    rec.values,
-                    api_base=ta.api_base,
-                    verify=ta.verify,
-                    timeout=ta.timeout,
-                )
-                if status == "expired":
-                    sess_mod.delete(ta.profile, "siem")
-                    raise WebSessionError(
-                        "SIEM browser session expired. Run "
-                        "`splunkctl auth login --target siem`.",
-                        kind="auth",
-                    )
-                if status == "unreachable":
-                    raise WebSessionError(
-                        "SIEM is unreachable while checking the browser session.",
-                        kind="connection",
-                    )
-                connect_args["splunkToken"] = rec.values["session_key"]
-            elif cfg.get("token"):
-                connect_args["splunkToken"] = cfg["token"]
-            else:
-                connect_args["username"] = cfg.get("username", "")
-                connect_args["password"] = cfg.get("password", "")
+            self._siem_auth(cfg, connect_args)
 
             if cfg.get("app"):
                 connect_args["app"] = cfg["app"]
@@ -153,6 +116,67 @@ class SplunkClient:
             self._service = splunk_client.connect(**connect_args)
 
         return self._service
+
+    def _siem_auth(self, cfg: dict[str, Any], connect_args: dict[str, Any]) -> None:
+        """Populate SIEM auth into ``connect_args``.
+
+        Preference order: browser session, then token, then username/password.
+        When browser mode is configured but the session is missing or expired,
+        re-probe the login route and fall back to token/password when SAML has
+        since been removed, instead of telling the user to run a doomed login.
+        """
+        if cfg.get("auth_mode") != "browser":
+            if cfg.get("token"):
+                connect_args["splunkToken"] = cfg["token"]
+            else:
+                connect_args["username"] = cfg.get("username", "")
+                connect_args["password"] = cfg.get("password", "")
+            return
+
+        from splunkctl.auth import adapters, detector
+        from splunkctl.auth import session as sess_mod
+
+        ta = sess_mod.resolve_target(
+            self._config_path, self._profile, "siem", timeout=self._timeout
+        )
+        rec = sess_mod.load(ta.profile, "siem", expected_origin=ta.web_url)
+        if rec is not None:
+            status = adapters.get_adapter("siem").validate(
+                rec.values,
+                api_base=ta.api_base,
+                verify=ta.verify,
+                timeout=ta.timeout,
+            )
+            if status == "valid":
+                connect_args["splunkToken"] = rec.values["session_key"]
+                return
+            if status == "unreachable":
+                raise WebSessionError(
+                    "SIEM is unreachable while checking the browser session.",
+                    kind="connection",
+                )
+            sess_mod.delete(ta.profile, "siem")
+
+        # Session is missing or expired. Only direct the user to log in when
+        # the SIEM is still SAML-configured; otherwise fall back to creds.
+        if detector.probe(ta.login_url, verify=ta.verify, timeout=ta.timeout) == (
+            "browser"
+        ):
+            raise WebSessionError(
+                "SIEM browser session is missing. Run "
+                "`splunkctl auth login --target siem`.",
+                kind="auth",
+            )
+        click.echo(
+            "Warning: SIEM is no longer SAML-authenticated; using "
+            "token/password auth. Run `splunkctl config init` to record it.",
+            err=True,
+        )
+        if cfg.get("token"):
+            connect_args["splunkToken"] = cfg["token"]
+        else:
+            connect_args["username"] = cfg.get("username", "")
+            connect_args["password"] = cfg.get("password", "")
 
     def _ensure_web_session(self) -> _WebSession:
         if self._web_session is None:

@@ -63,11 +63,29 @@ def test_expired_browser_session_is_deleted_and_raises(
     monkeypatch.setattr(cfg_mod, "DEFAULT_DIR", tmp_path / ".splunkctl")
     path = _write_browser_profile(tmp_path)
     sess_mod.save("default", _record())
-    with patch("splunkctl.auth.adapters.requests.get") as mock_get:
+    with (
+        patch("splunkctl.auth.adapters.requests.get") as mock_get,
+        patch("splunkctl.auth.detector.probe", return_value="browser"),
+    ):
         mock_get.return_value.status_code = 401
         with pytest.raises(WebSessionError):
             _ = SplunkClient(config_path=path).service
     assert not sess_mod.session_path("default", "siem").exists()
+
+
+@patch("splunkctl.client.splunk_client.connect")
+@patch("splunkctl.auth.detector.probe", return_value="password")
+def test_missing_browser_session_falls_back_when_saml_gone(
+    mock_probe, mock_connect, tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setattr(cfg_mod, "DEFAULT_DIR", tmp_path / ".splunkctl")
+    path = _write_browser_profile(tmp_path)
+    # No session saved: the login route no longer being SAML must fall back
+    # to username/password instead of demanding a doomed browser login.
+    _ = SplunkClient(config_path=path).service
+    _, kwargs = mock_connect.call_args
+    assert kwargs["username"] == "admin"
+    assert "splunkToken" not in kwargs
 
 
 @patch("splunkctl.client.splunk_client.connect")
