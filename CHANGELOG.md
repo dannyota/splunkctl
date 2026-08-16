@@ -1,22 +1,32 @@
 # Changelog
 
-## Unreleased
+## 0.13.0
 
-Browser SAML authentication and a reusable Keycloak lab.
+Browser SAML single sign-on for SIEM and SOAR, plus a reusable Keycloak lab.
 
 ### Added
 
-- **`auth` command group** — complete Splunk SAML single sign-on (including a
-  second factor) in a headed Chromium window and reuse the product session
-  until it expires. `auth login --target <siem|soar>` runs the browser flow,
-  `auth status` reports `missing`/`valid`/`expired`/`unreachable`, and
-  `auth logout` clears the cached session.
+- **`auth` command group** — complete Splunk SAML single sign-on in a headed
+  Chromium window and reuse the product session until it expires.
+  `auth login --target <siem|soar>` runs the browser flow, `auth status`
+  reports `missing`/`valid`/`expired`/`unreachable`, and `auth logout` clears
+  the cached session.
 - **Automatic SAML detection** — `config init` probes the public login route
   and records `auth_mode: browser` when it sees a redirect to an external
   identity provider.
+- **SOAR SAML SSO** — `config init --soar --sso-url <url>` sets SOAR's SAML
+  login URL, or `--soar` derives it from a browser-authenticated SIEM that
+  shares the same IdP. `config init --soar` also accepts `--no-verify`.
 - **Keycloak lab** — rootless Podman Keycloak (`lab/keycloak`) as an external
-  IdP for the SIEM and SOAR VMs, with `labctl.sh start/configure/verify` to
-  exercise the browser SAML flow end to end.
+  IdP for the SIEM and SOAR VMs, with `labctl.sh` to run it and
+  `soar-configure.sh` to script SOAR's SAML config.
+
+### Fixed
+
+- The browser broker now waits for the identity-provider round trip instead
+  of returning early on a same-origin login page.
+- SIEM falls back to token/password auth when SAML is removed, rather than
+  demanding a doomed browser login.
 
 ## 0.12.0
 
