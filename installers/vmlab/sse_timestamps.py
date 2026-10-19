@@ -86,7 +86,22 @@ def _fraction_microseconds(fraction: str | None) -> int:
 
 
 def parse_timestamp(value: str) -> ParsedTimestamp | None:
-    """Parse a complete SSE timestamp value, returning ``None`` for other data."""
+    """Parse a complete SSE timestamp value, returning ``None`` for other data.
+
+    A value can match a timestamp's *shape* and still be impossible to
+    represent — an out-of-range date (``2026-02-30T10:00:00``), an
+    out-of-range UTC offset (``+9999``), a 13 o'clock ``PM`` hour. Those
+    are unparseable data, exactly like a value that is not a timestamp
+    at all, so they are reported as ``None`` rather than raised.
+    """
+    try:
+        return _parse_timestamp(value)
+    except ValueError:
+        return None
+
+
+def _parse_timestamp(value: str) -> ParsedTimestamp | None:
+    """Parse one timestamp value; raise ``ValueError`` for impossible ones."""
     value = value.strip()
     epoch_match = _EPOCH_RE.fullmatch(value)
     if epoch_match:
