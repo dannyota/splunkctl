@@ -28,8 +28,6 @@
   <url><loc>https://splunkctl.danny.vn/#/guides/state</loc><priority>0.8</priority></url>
   <url><loc>https://splunkctl.danny.vn/#/guides/conf</loc><priority>0.8</priority></url>
   <url><loc>https://splunkctl.danny.vn/#/guides/mcp</loc><priority>0.8</priority></url>
-  <url><loc>https://splunkctl.danny.vn/#/guides/install</loc><priority>0.8</priority></url>
-  <url><loc>https://splunkctl.danny.vn/#/guides/configure</loc><priority>0.8</priority></url>
   <url><loc>https://splunkctl.danny.vn/#/guides/auth</loc><priority>0.8</priority></url>
   <url><loc>https://splunkctl.danny.vn/#/guides/doctor</loc><priority>0.8</priority></url>
   <url><loc>https://splunkctl.danny.vn/#/guides/indexes</loc><priority>0.8</priority></url>

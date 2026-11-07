@@ -343,7 +343,12 @@
       var stored = null;
       try { stored = localStorage.getItem('theme'); } catch (e) {}
       if (stored === 'light' || stored === 'dark' || !window.matchMedia) return;
-      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function (e) { setTheme(e.matches ? 'dark' : 'light'); rerenderMermaid(); });
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function (e) {
+        var chosen = null;
+        try { chosen = localStorage.getItem('theme'); } catch (err) {}
+        if (chosen === 'light' || chosen === 'dark') return;
+        setTheme(e.matches ? 'dark' : 'light'); rerenderMermaid();
+      });
     })();
 
     mermaid.initialize({ startOnLoad: false, theme: isDark() ? 'dark' : 'default' });

@@ -27,6 +27,8 @@ def _title_from_md(text: str) -> str:
     for line in text.splitlines():
         if line.startswith("# "):
             return line[2:].strip()
+        if line.lstrip().startswith("<!--"):
+            continue
         if line.strip():
             break
     return ""

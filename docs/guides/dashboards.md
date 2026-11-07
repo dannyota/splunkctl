@@ -76,7 +76,7 @@ Export first so you can restore the previous version if needed.
 
 ### Change sharing
 
-> **Safety:** Target is the Splunk host and app in the active profile. Impact: who can see the dashboard changes; `global` makes it visible from every app. Preview with `splunkctl dashboards share soc_overview --sharing app`, apply by adding `--yes`, and verify with `splunkctl dashboards get soc_overview --json` (check `sharing`).
+> **Safety:** Target is the Splunk host and app in the active profile. Impact: who can see the dashboard changes; `global` makes it visible from every app. Preview with `splunkctl dashboards share soc_overview --sharing app`, apply by adding `--yes`, and verify with `splunkctl dashboards list --filter soc_overview --json` (check `sharing`).
 
 ```bash
 splunkctl dashboards share soc_overview --sharing app --yes

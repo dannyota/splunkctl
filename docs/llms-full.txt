@@ -28,7 +28,7 @@ splunkctl doctor
 
 ### Safety
 
-Every command that changes a remote Splunk or SOAR instance previews by default and exits without making a request. The preview names the active profile and host. Add `--yes` to apply. `state push --report FILE` writes a change report you can attach to a change ticket. Local configuration writes (`config init`, `config use`, `auth login`, `mcp install`) are not guarded.
+Every command that changes a remote Splunk or SOAR instance previews by default and exits without changing anything; some previews read the current state first to show a diff. The preview names the target host, and the active profile for Splunk Enterprise. Add `--yes` to apply. `state push --report FILE` writes a change report you can attach to a change ticket. Local configuration writes (`config init`, `config use`, `auth login`, `mcp install`) are not guarded.
 
 ### Investigate
 
@@ -775,7 +775,7 @@ Export first so you can restore the previous version if needed.
 
 #### Change sharing
 
-> **Safety:** Target is the Splunk host and app in the active profile. Impact: who can see the dashboard changes; `global` makes it visible from every app. Preview with `splunkctl dashboards share soc_overview --sharing app`, apply by adding `--yes`, and verify with `splunkctl dashboards get soc_overview --json` (check `sharing`).
+> **Safety:** Target is the Splunk host and app in the active profile. Impact: who can see the dashboard changes; `global` makes it visible from every app. Preview with `splunkctl dashboards share soc_overview --sharing app`, apply by adding `--yes`, and verify with `splunkctl dashboards list --filter soc_overview --json` (check `sharing`).
 
 ```bash
 splunkctl dashboards share soc_overview --sharing app --yes
@@ -1590,7 +1590,7 @@ When to use: you are connecting splunkctl to a Splunk SOAR instance for the firs
 ### Prerequisites
 
 - A Splunk SOAR instance (on-premises or cloud) reachable on its REST port (default 8443).
-- An automation token, or a username and password. Username and password are required for any `delete` command, because SOAR refuses automation tokens on DELETE.
+- An automation token, or a username and password. Username and password are required for `delete` commands, because SOAR refuses automation tokens on DELETE; custom lists are the exception and accept a token.
 - splunkctl installed (see [Install](https://splunkctl.danny.vn/guides/install.md)).
 
 ### Synopsis
@@ -1866,7 +1866,7 @@ Use the attachment id (the `id` column of `vault list`), not the vault id hash. 
 
 #### Record notes and comments
 
-> **Safety:** Target is the SOAR host in the active profile. Impact: a note is added to the container; comments are immutable once posted and cannot be deleted through the API. Preview with `splunkctl soar notes add --container 42 --title "Summary" "Findings"`, apply by adding `--yes`, and verify with `splunkctl soar notes list --container 42`.
+> **Safety:** Target is the SOAR host in the active profile. Impact: a note or comment is added to the container. `notes delete` and `notes comment-delete` remove one permanently and need username and password credentials; preview them the same way before adding `--yes`. Preview with `splunkctl soar notes add --container 42 --title "Summary" "Findings"`, apply by adding `--yes`, and verify with `splunkctl soar notes list --container 42`.
 
 ```bash
 splunkctl soar notes list --container 42
@@ -2024,7 +2024,7 @@ splunkctl soar assets create --name my_dns --app-id 5 \
 splunkctl soar assets create --name enrichment --app-id 10 --file config.json --yes
 ```
 
-Configuration comes from `--set key=value` (repeatable) and/or `--file` (a JSON object). When both are given, `--set` wins. Values whose schema type is `password` are shown as `****` in the preview; the real value is sent on `--yes`.
+Configuration comes from `--set key=value` (repeatable) and/or `--file` (a JSON object). When both are given, `--set` wins. Values whose key contains `password`, `secret`, `token`, or `api_key` are shown as `****` in the preview; the real value is sent on `--yes`.
 
 #### Update an asset
 
@@ -2071,7 +2071,7 @@ Each row is a poller record from `/rest/ingestion_status` (asset, app, status, m
 ### Troubleshooting
 
 - `kind: auth` on delete: add username and password to the SOAR profile with `splunkctl config init --soar`.
-- Test reports a timeout: raise `--timeout`, then check the asset page in the SOAR UI for the final result.
+- Test reports a timeout: the command polls at most 12 times, about 30 seconds in total, even with a higher `--timeout`. Check the asset page in the SOAR UI for the final result.
 - Keys you set are rejected: compare them with `splunkctl soar apps get <APP_ID>`; names and types must match the app schema.
 - A poller shows an error in `ingest-status`: fix the asset configuration with `soar assets update`, rerun `soar assets test`, then check `ingest-status` again.
 

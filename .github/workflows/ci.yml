@@ -67,9 +67,10 @@ jobs:
       - name: Check MCP guides in a relocated user install
         run: |
           userbase="$(mktemp -d)"
+          repo_root="$PWD"
           PYTHONUSERBASE="$userbase" python -m pip install --user --no-deps --force-reinstall dist/*.whl
           cd "$(mktemp -d)"
-          PYTHONUSERBASE="$userbase" python - <<'PY'
+          REPO_ROOT="$repo_root" PYTHONUSERBASE="$userbase" python - <<'PY'
           import os
           from pathlib import Path
 
@@ -80,7 +81,7 @@ jobs:
           package = Path(splunkctl.__file__).resolve()
           assert package.is_relative_to(userbase), (package, userbase)
           guides = load_guides()
-          expected = sorted(p.stem for p in Path("docs/guides").glob("*.md"))
+          expected = sorted(p.stem for p in (Path(os.environ["REPO_ROOT"]) / "docs" / "guides").glob("*.md"))
           found = sorted(g["slug"] for g in guides)
           assert found == expected, f"packaged guides differ from docs/guides: {sorted(set(expected) ^ set(found))}"
           PY

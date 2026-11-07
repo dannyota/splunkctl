@@ -7,7 +7,7 @@ When to use: you are connecting splunkctl to a Splunk SOAR instance for the firs
 ## Prerequisites
 
 - A Splunk SOAR instance (on-premises or cloud) reachable on its REST port (default 8443).
-- An automation token, or a username and password. Username and password are required for any `delete` command, because SOAR refuses automation tokens on DELETE.
+- An automation token, or a username and password. Username and password are required for `delete` commands, because SOAR refuses automation tokens on DELETE; custom lists are the exception and accept a token.
 - splunkctl installed (see [Install](install.md)).
 
 ## Synopsis

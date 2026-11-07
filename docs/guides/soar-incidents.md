@@ -153,7 +153,7 @@ Use the attachment id (the `id` column of `vault list`), not the vault id hash. 
 
 ### Record notes and comments
 
-> **Safety:** Target is the SOAR host in the active profile. Impact: a note is added to the container; comments are immutable once posted and cannot be deleted through the API. Preview with `splunkctl soar notes add --container 42 --title "Summary" "Findings"`, apply by adding `--yes`, and verify with `splunkctl soar notes list --container 42`.
+> **Safety:** Target is the SOAR host in the active profile. Impact: a note or comment is added to the container. `notes delete` and `notes comment-delete` remove one permanently and need username and password credentials; preview them the same way before adding `--yes`. Preview with `splunkctl soar notes add --container 42 --title "Summary" "Findings"`, apply by adding `--yes`, and verify with `splunkctl soar notes list --container 42`.
 
 ```bash
 splunkctl soar notes list --container 42

@@ -367,3 +367,11 @@ def test_usage_resolves_nested_soar_path() -> None:
     assert entry is not None, f"Failed to resolve: {command}"
     assert entry.name == "soar_playbooks_run"
     assert entry.guarded is True
+
+
+def test_guide_title_skips_leading_summary_comment() -> None:
+    from splunkctl.mcp.resources import _title_from_md
+
+    text = "<!-- summary: One sentence. -->\n\n# Run searches\n\nBody."
+    assert _title_from_md(text) == "Run searches"
+    assert _title_from_md("Intro paragraph\n\n# Later") == ""

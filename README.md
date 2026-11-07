@@ -25,7 +25,7 @@ splunkctl doctor
 
 ## Safety
 
-Every command that changes a remote Splunk or SOAR instance is guarded. Without `--yes` it prints a preview and exits without making a request. The preview names the active profile and host, so a change aimed at production is visible before it happens:
+Every command that changes a remote Splunk or SOAR instance is guarded. Without `--yes` it prints a preview and exits without changing anything; some previews read the current state first to show a diff. The preview names the target host, and the active profile for Splunk Enterprise, so a change aimed at production is visible before it happens:
 
 ```text
 $ splunkctl --profile uat rules delete 'My Rule'

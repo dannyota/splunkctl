@@ -40,8 +40,6 @@
   - [Set up the MCP server](guides/mcp.md)
 
 - **Operate and audit**
-  - [Install](guides/install.md)
-  - [Configure](guides/configure.md)
   - [Log in through browser SAML](guides/auth.md)
   - [Diagnose a connection](guides/doctor.md)
   - [Manage indexes](guides/indexes.md)

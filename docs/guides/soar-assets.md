@@ -45,7 +45,7 @@ splunkctl soar assets create --name my_dns --app-id 5 \
 splunkctl soar assets create --name enrichment --app-id 10 --file config.json --yes
 ```
 
-Configuration comes from `--set key=value` (repeatable) and/or `--file` (a JSON object). When both are given, `--set` wins. Values whose schema type is `password` are shown as `****` in the preview; the real value is sent on `--yes`.
+Configuration comes from `--set key=value` (repeatable) and/or `--file` (a JSON object). When both are given, `--set` wins. Values whose key contains `password`, `secret`, `token`, or `api_key` are shown as `****` in the preview; the real value is sent on `--yes`.
 
 ### Update an asset
 
@@ -92,7 +92,7 @@ Each row is a poller record from `/rest/ingestion_status` (asset, app, status, m
 ## Troubleshooting
 
 - `kind: auth` on delete: add username and password to the SOAR profile with `splunkctl config init --soar`.
-- Test reports a timeout: raise `--timeout`, then check the asset page in the SOAR UI for the final result.
+- Test reports a timeout: the command polls at most 12 times, about 30 seconds in total, even with a higher `--timeout`. Check the asset page in the SOAR UI for the final result.
 - Keys you set are rejected: compare them with `splunkctl soar apps get <APP_ID>`; names and types must match the app schema.
 - A poller shows an error in `ingest-status`: fix the asset configuration with `soar assets update`, rerun `soar assets test`, then check `ingest-status` again.
 

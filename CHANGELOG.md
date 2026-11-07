@@ -43,6 +43,8 @@ name and config path, plus a green typecheck on current MCP releases.
   place, writing through symlinks; the config directory is created with
   mode `0700`.
 - The SOAR token prompt in `config init --soar` no longer echoes input.
+- `soar assets create` and `update` previews mask configuration values
+  whose key contains `password`, `secret`, `token`, or `api_key`.
 - SOAR asset and artifact `KEY=VALUE` options reject a missing `=`.
 - Lab scripts: Keycloak realm files are rendered under `umask 077`, and VM
   provisioning refuses the placeholder lab password.
@@ -69,6 +71,7 @@ name and config path, plus a green typecheck on current MCP releases.
 
 ### Changed
 
+- MCP guide resources read their title past the leading summary comment.
 - The publish workflow fails when the release tag does not match the
   package version. CI tests run on Ubuntu and macOS.
 - `config init` now honors the global `--config` flag as its destination

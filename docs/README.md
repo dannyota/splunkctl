@@ -18,7 +18,7 @@ splunkctl doctor
 
 ## Safety
 
-Every command that changes a remote Splunk or SOAR instance previews by default and exits without making a request. The preview names the active profile and host. Add `--yes` to apply. `state push --report FILE` writes a change report you can attach to a change ticket. Local configuration writes (`config init`, `config use`, `auth login`, `mcp install`) are not guarded.
+Every command that changes a remote Splunk or SOAR instance previews by default and exits without changing anything; some previews read the current state first to show a diff. The preview names the target host, and the active profile for Splunk Enterprise. Add `--yes` to apply. `state push --report FILE` writes a change report you can attach to a change ticket. Local configuration writes (`config init`, `config use`, `auth login`, `mcp install`) are not guarded.
 
 ## Investigate
 
