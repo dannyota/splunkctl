@@ -2,258 +2,158 @@
 
 # Check server health and topology
 
-System health, license, KV store status, and topology health reads.
+When to use: a detection returned nothing and you need to know whether the search ran against a healthy platform, or you are auditing license usage, KV store state, authentication providers, auth tokens, deployment server classes, or workload management on a Splunk instance.
 
-## Messages
+## Prerequisites
 
-```bash
-splunkctl server messages                              # list system messages
-splunkctl server messages --dismiss warn_disk --yes    # dismiss a message
+- A profile that passes `splunkctl doctor` (see [Configure](configure.md)).
+- A role that can read `server/` and `cluster/` endpoints; most reads work with `admin`, and the health, license, and KV store views need no cluster membership.
+- `tokens` needs Splunk 7.3 or later; `workloads` needs Splunk 8.1 or later with workload management enabled; `serverclasses` and `deployment` need the deployment server enabled.
+
+## Synopsis
+
+```text
+splunkctl server health
+splunkctl server messages [--dismiss NAME] [--yes]
+splunkctl server license [--usage]
+splunkctl server kvstore
+splunkctl server cluster
+splunkctl server shcluster
+splunkctl server deployment
+splunkctl server search-peers
+splunkctl server serverclasses list
+splunkctl server serverclasses get <NAME>
+splunkctl server serverclasses reload <NAME> [--yes]
+splunkctl server tokens list [--user USER]
+splunkctl server tokens create --user <USER> [--audience TEXT] [--expires-in DAYS] [--yes]
+splunkctl server tokens revoke <TOKEN_ID> [--yes]
+splunkctl server auth show
+splunkctl server auth ldap
+splunkctl server auth saml
+splunkctl server auth role-mapping
+splunkctl server workloads pools
+splunkctl server workloads rules
+splunkctl server workloads status
 ```
 
-## License
+Every command accepts the global `--json` flag for machine-readable output.
+
+## Workflow
+
+### Read the splunkd health report
 
 ```bash
-splunkctl server license             # license pool usage (used vs quota per pool)
-splunkctl server license --usage     # today's indexed volume vs quota + expiry
-```
-
-`--usage` reports one row: `used`, `quota`, `pct_used` (today's indexed
-volume against the licensed daily quota), `licenses_valid`, and
-`soonest_expiry` (earliest expiring non-perpetual license, or `never`).
-
-## KV Store
-
-```bash
-splunkctl server kvstore     # status, port, version, storage engine
-```
-
-Reports an explicit status word (`ready`, `failed`, `starting`,
-`unknown`) so a down KV store is never mistaken for a healthy result.
-
-## Auth Tokens
-
-Manage Splunk authentication tokens (Splunk 7.3+). Tokens are an
-alternative to password-based auth for service accounts and automation.
-
-```bash
-splunkctl server tokens list                      # list all tokens
-splunkctl server tokens list --user admin          # filter by user
-splunkctl server tokens create --user admin --yes  # create a token
-splunkctl server tokens create --user svc \
-    --audience my-app --expires-in 30 --yes        # with audience + expiry
-splunkctl server tokens revoke <token-id> --yes    # revoke a token
-```
-
-`list` shows: `id`, `user`, `audience`, `status`, `last_used`, `expires`.
-Tokens that never expire show `never`; unused tokens show `last_used: never`.
-
-`create` returns the token value **once** -- save it immediately. The
-token cannot be retrieved after creation. Requires `--yes` (guarded).
-
-`revoke` permanently deletes a token by its ID. Requires `--yes` (guarded).
-
-## Serverclasses
-
-Manage deployment-server serverclasses -- the mapping of apps to
-forwarder groups. Requires the deployment server to be enabled; reports
-a clean disabled status (exit 0) when it is not.
-
-```bash
-splunkctl server serverclasses list                     # list all serverclasses
-splunkctl server serverclasses get linux_forwarders      # detail + apps
-splunkctl server serverclasses reload linux_forwarders --yes  # push updated apps
-```
-
-`list` shows: `name`, `restartSplunkd`, `stateOnClient`, `whitelist`,
-`blacklist`.
-
-`get <name>` adds `repositoryLocation`, `targetRepositoryLocation`,
-`endpoint`, `filterType`, and an `apps` list (each with `app`,
-`restartSplunkd`, `stateOnClient`).
-
-`reload <name>` triggers a serverclass reload to push updated app
-configurations to matching clients. Guarded: requires `--yes`.
-
-## Workload Management
-
-Read-only view of Splunk's workload management configuration and
-current load. Requires Splunk 8.1+ with workload management enabled;
-reports a clean not-available status (exit 0) on older or unconfigured
-instances.
-
-### Pools
-
-```bash
-splunkctl server workloads pools          # list workload pools
-splunkctl server workloads pools --json   # machine-readable
-```
-
-Output: one row per pool (`name`, `cpu_weight`, `mem_weight`,
-`default_category`, `category`).
-
-### Admission Rules
-
-```bash
-splunkctl server workloads rules          # list admission rules
-splunkctl server workloads rules --json
-```
-
-Output: one row per rule (`name`, `predicate`, `workload_pool`,
-`action`, `order`, `schedule`).
-
-### Status
-
-```bash
-splunkctl server workloads status         # current workload status/load
-splunkctl server workloads status --json
-```
-
-Reports `status` (enabled/disabled) and `admission_rules_enabled`. When
-pool-level utilisation data is available, includes a nested `pools` list
-with `cpu_usage`, `mem_usage`, and `search_count` per pool.
-
-## Authentication
-
-Inspect the active authentication provider and its configuration
-(read-only -- no writes).
-
-### Show Provider
-
-```bash
-splunkctl server auth show             # current auth method (Splunk/LDAP/SAML)
-splunkctl server auth show --json
-```
-
-Output: one row per provider-services entry with `name`, `auth_type`
-(detected: `Splunk`, `LDAP`, or `SAML`), and `active_authmodule`.
-
-### LDAP
-
-```bash
-splunkctl server auth ldap             # LDAP servers, base DNs
-splunkctl server auth ldap --json
-```
-
-Feature-detects the active auth type first. When LDAP is not configured,
-returns `{"status": "not_configured", "active_auth": "..."}` and exits 0.
-
-When configured, shows: `name`, `host`, `port`, `SSLEnabled`,
-`userBaseDN`, `groupBaseDN`, `bindDN`, `userNameAttribute`,
-`groupMemberAttribute`.
-
-### SAML
-
-```bash
-splunkctl server auth saml             # SAML IdP group mappings
-splunkctl server auth saml --json
-```
-
-Feature-detects the active auth type first. When SAML is not configured,
-returns `{"status": "not_configured", "active_auth": "..."}` and exits 0.
-
-When configured, shows: `name` (group name) and `roles` (mapped Splunk
-roles, comma-separated).
-
-### Role Mapping
-
-```bash
-splunkctl server auth role-mapping     # roles with auth mapping info
-splunkctl server auth role-mapping --json
-```
-
-Shows all roles with: `name`, `imported_roles`, `srchFilter`,
-`srchIndexesAllowed`, `defaultApp`. Useful for auditing which external
-groups map to which Splunk roles.
-
-## Health Report
-
-```bash
-splunkctl server health            # component-level splunkd health
+splunkctl server health
 splunkctl server health --json
 ```
 
-Flattens Splunk's health-report tree (search scheduler, disk space, KV
-store, ingestion latency...) into one row per component, nested feature
-names join with `/`, and unhealthy components carry their reason text in
-a `reasons` column. The command reports, it does not gate: red
-components still exit 0. Complements `doctor` (connectivity-oriented)
-with splunkd's own self-diagnosis.
+Expected result: Splunk's health-report tree (search scheduler, disk space, KV store, ingestion latency, and more) flattened to one row per component. Nested feature names join with `/`, and unhealthy components carry their reason text in a `reasons` column. The command reports, it does not gate: red components still exit 0. It complements `doctor` (connectivity-oriented) with splunkd's own self-diagnosis.
 
-## Topology Health
-
-Three read-only commands for triage-critical infrastructure health. On a
-non-clustered instance, each reports a clean disabled/no-clients state
-and exits 0 -- not an error.
-
-### Indexer Cluster
+### Triage an empty detection result
 
 ```bash
-splunkctl server cluster           # mode, peers, SF/RF met
-splunkctl server cluster --json    # machine-readable for agent triage
-```
-
-Output (when enabled): cluster overview row (mode, label,
-replication_factor_met, search_factor_met, rolling_restart,
-maintenance_mode) followed by one row per peer (label, status, site,
-search_state, replication_count, bucket_count).
-
-When disabled: single row with `mode: disabled`.
-
-Prefers `cluster/manager` (Splunk 9+); falls back to `cluster/master`
-on older instances.
-
-### Search Head Cluster
-
-```bash
-splunkctl server shcluster         # captain, members, replication
+splunkctl server cluster --json
 splunkctl server shcluster --json
-```
-
-Output (when enabled): captain row (captain label, captain_id,
-dynamic_captain, elected_captain) followed by one row per member (label,
-status, site, out_of_sync).
-
-When disabled: single row with `mode: disabled`.
-
-### Deployment Server
-
-```bash
-splunkctl server deployment        # clients + last check-in
 splunkctl server deployment --json
+splunkctl server search-peers
 ```
 
-Output (when clients exist): one row per client (client name, hostname,
-ip, last_phone_home, phone_home_interval).
+Expected result: enough to tell "no threat" (the search ran correctly and nothing matched) from "infrastructure degraded" (an indexer peer is down, the cluster bundle failed to replicate, a forwarder stopped checking in). On a non-clustered instance each command reports a clean disabled or no-clients state and exits 0; that is not an error.
 
-When no clients: single row with `status: no_clients, total: 0`.
+- `cluster`: an overview row (`mode`, `label`, `replication_factor_met`, `search_factor_met`, `rolling_restart`, `maintenance_mode`) followed by one row per peer (`label`, `status`, `site`, `search_state`, `replication_count`, `bucket_count`). When disabled, a single row with `mode: disabled`. Prefers `cluster/manager` (Splunk 9+) and falls back to `cluster/master` on older instances.
+- `shcluster`: a captain row (`captain`, `captain_id`, `dynamic_captain`, `elected_captain`) followed by one row per member (`label`, `status`, `site`, `out_of_sync`). When disabled, `mode: disabled`.
+- `deployment`: one row per client (`client`, `hostname`, `ip`, `last_phone_home`, `phone_home_interval`), or `status: no_clients, total: 0`.
+- `search-peers`: one row per distributed-search peer (`peer`, `status`, `replication_status`, `version`). Empty on a standalone instance.
 
-### Search Peers
+Genuine REST errors (401, or 503 for reasons other than "not enabled") exit 1 with a classified error envelope.
+
+### Check license and KV store
 
 ```bash
-splunkctl server search-peers      # distributed-search peers
-splunkctl server search-peers --json
+splunkctl server license
+splunkctl server license --usage
+splunkctl server kvstore
 ```
 
-Output: one row per peer (peer, status, replication_status, version).
-Empty on a standalone instance (exit 0).
+Expected result: `license` lists pool usage (used versus quota per pool). `--usage` reports one row with `used`, `quota`, `pct_used` (today's indexed volume against the licensed daily quota), `licenses_valid`, and `soonest_expiry` (earliest expiring non-perpetual license, or `never`). `kvstore` shows status, port, version, and storage engine, with an explicit status word (`ready`, `failed`, `starting`, `unknown`) so a down KV store is never mistaken for a healthy result.
 
-## Empty Result vs Infrastructure Down
+### Read and dismiss system messages
 
-When a detection search returns nothing, an agent must distinguish:
-
-- **No threat** -- the search ran correctly, nothing matched.
-- **Infra degraded** -- an indexer peer is down, the cluster bundle
-  failed to replicate, a forwarder stopped checking in.
-
-Use the topology commands to triage:
+> **Safety:** Target is the Splunk host in the active profile. Impact: the message disappears from Splunk Web for every user. Preview with `splunkctl server messages --dismiss warn_disk`, apply by adding `--yes`, and verify with `splunkctl server messages`.
 
 ```bash
-splunkctl server cluster --json    # any peers Down? SF/RF not met?
-splunkctl server shcluster --json  # any members out of sync?
-splunkctl server deployment --json # any forwarders missing check-in?
+splunkctl server messages
+splunkctl server messages --dismiss warn_disk --yes
 ```
 
-Genuine REST errors (401, 503 for reasons other than "not enabled")
-propagate to the central error classifier (F1) and exit 1 with a
-classified error envelope.
+Expected result: the list of system messages, then the list without `warn_disk`.
+
+### Inspect the authentication provider
+
+```bash
+splunkctl server auth show
+splunkctl server auth ldap
+splunkctl server auth saml
+splunkctl server auth role-mapping
+```
+
+Expected result (all read-only):
+
+- `show`: one row per provider-services entry with `name`, `auth_type` (detected: `Splunk`, `LDAP`, or `SAML`), and `active_authmodule`.
+- `ldap`: feature-detects the active auth type first. When LDAP is not configured it returns `{"status": "not_configured", "active_auth": "..."}` and exits 0. When configured it shows `name`, `host`, `port`, `SSLEnabled`, `userBaseDN`, `groupBaseDN`, `bindDN`, `userNameAttribute`, `groupMemberAttribute`.
+- `saml`: same detection; when configured it shows `name` (group name) and `roles` (mapped Splunk roles, comma-separated).
+- `role-mapping`: every role with `name`, `imported_roles`, `srchFilter`, `srchIndexesAllowed`, `defaultApp`, for auditing which external groups map to which Splunk roles.
+
+### Manage auth tokens
+
+> **Safety:** Target is the Splunk host in the active profile. Impact: `create` issues a bearer token that authenticates as `--user` until it expires; `revoke` permanently deletes a token and breaks any automation using it. Preview with `splunkctl server tokens create --user svc --audience my-app --expires-in 30`, apply by adding `--yes`, and verify with `splunkctl server tokens list --user svc`.
+
+```bash
+splunkctl server tokens list
+splunkctl server tokens list --user admin
+splunkctl server tokens create --user admin --yes
+splunkctl server tokens create --user svc --audience my-app --expires-in 30 --yes
+splunkctl server tokens revoke <TOKEN_ID> --yes
+```
+
+Expected result: `list` shows `id`, `user`, `audience`, `status`, `last_used`, `expires`; tokens that never expire show `never`, unused tokens show `last_used: never`. `create` prints the token value once; save it immediately, it cannot be retrieved later. Omit `--expires-in` for a non-expiring token. Tokens are an alternative to password auth for service accounts and automation.
+
+### Push apps with deployment server classes
+
+> **Safety:** Target is the deployment server in the active profile. Impact: `reload` pushes the serverclass's current app configuration to every matching forwarder, which may restart splunkd on them when `restartSplunkd` is set. Preview with `splunkctl server serverclasses reload linux_forwarders`, apply by adding `--yes`, and verify with `splunkctl server deployment` (check `last_phone_home`).
+
+```bash
+splunkctl server serverclasses list
+splunkctl server serverclasses get linux_forwarders
+splunkctl server serverclasses reload linux_forwarders --yes
+```
+
+Expected result: `list` shows `name`, `restartSplunkd`, `stateOnClient`, `whitelist`, `blacklist`. `get` adds `repositoryLocation`, `targetRepositoryLocation`, `endpoint`, `filterType`, and an `apps` list (each with `app`, `restartSplunkd`, `stateOnClient`). When the deployment server is not enabled, `list` reports a clean disabled status and exits 0.
+
+### Review workload management
+
+```bash
+splunkctl server workloads pools
+splunkctl server workloads rules
+splunkctl server workloads status
+```
+
+Expected result (read-only): `pools` gives one row per pool (`name`, `cpu_weight`, `mem_weight`, `default_category`, `category`); `rules` one row per admission rule (`name`, `predicate`, `workload_pool`, `action`, `order`, `schedule`); `status` reports `status` (enabled or disabled) and `admission_rules_enabled`, plus a nested `pools` list with `cpu_usage`, `mem_usage`, and `search_count` when pool-level utilisation is available. On older or unconfigured instances each reports a clean not-available status and exits 0.
+
+## Troubleshooting
+
+- `auth` error on every command: credentials are wrong or expired; run `splunkctl doctor`.
+- `permission` on `cluster`, `tokens`, or `serverclasses`: the role cannot read that endpoint; use `admin` or add the matching capability.
+- `http` 503 on `cluster` or `shcluster` with a reason other than "not enabled": the cluster manager or captain is down; treat detection results from that window as unreliable.
+- `not_found` on `tokens revoke`: use the `id` column from `tokens list`, not the token value.
+- `not_found` on `messages --dismiss`: the message name is the `name` column from `splunkctl server messages`, not its text.
+- `connection` or `timeout`: the management port is unreachable; raise the global `--timeout` or check the network path.
+
+## See also
+
+- [Diagnose a connection](doctor.md)
+- [Run searches](search.md)
+- [Manage users and roles](users.md)
+- [Log in through browser SAML](auth.md)
+- [Manage KV store collections](kvstore.md)
+- [Command reference: server](../commands/server.md)

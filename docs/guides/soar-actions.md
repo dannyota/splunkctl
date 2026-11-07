@@ -2,40 +2,47 @@
 
 # Run actions
 
-Run, monitor, and inspect action runs on Splunk SOAR assets.
+When to use: you want to run one app action (for example `lookup domain` or `block ip`) on one or more SOAR assets inside a container, wait for the result, read the per-asset output of a past run, or cancel a run that is stuck.
 
-## Commands
+## Prerequisites
 
-```bash
-splunkctl soar actions list                         # list all action runs
-splunkctl soar actions list --container 42           # scoped to a container
-splunkctl soar actions status 999                    # poll one action run
-splunkctl soar actions results 999                   # per-asset app_runs detail
-splunkctl soar actions cancel 999 --yes              # cancel a running action
+- SOAR credentials in the active profile and a passing `splunkctl soar test` (see [Set up and check SOAR](soar.md)).
+- A configured asset for the app whose action you want to run (`splunkctl soar assets list`, see [Configure assets and monitor ingestion](soar-assets.md)).
+- A container id to attach the run to (`splunkctl soar containers list`).
+- A community license caps action runs at 100 per day; check `splunkctl soar license` (`max_allowed_actions_per_day`) before a bulk run.
 
-splunkctl soar actions run \
-    --action "lookup domain" \
-    --asset google_dns \
-    --container 42 \
-    --param domain=example.com \
-    --wait --yes                                     # run and wait for result
+## Synopsis
+
+```text
+splunkctl soar actions list [--container CONTAINER_ID] [--limit N] [--offset N]
+splunkctl soar actions status <ACTION_RUN_ID>
+splunkctl soar actions results <ACTION_RUN_ID>
+splunkctl soar actions run --action <NAME> --asset <ASSET>... --container <CONTAINER_ID> [--param KEY=VALUE]... [--app APP_ID] [--type TYPE] [--name TEXT] [--wait] [--timeout SECONDS] [--yes]
+splunkctl soar actions cancel <ACTION_RUN_ID> [--yes]
 ```
 
-## Running actions
+## Workflow
 
-`run` is a guarded mutation (dry-run by default). It builds the
-`/rest/action_run` payload, resolves each asset's `app_id` from the
-asset record (or accepts `--app` to skip the lookup), and POSTs it.
+### List past action runs
 
 ```bash
-# Dry-run preview: shows the exact JSON payload
+splunkctl soar actions list
+splunkctl soar actions list --container 42
+splunkctl soar actions list --limit 20 --offset 20
+```
+
+Expected result: one row per action run, newest first. `--offset` requires `--limit` and must be a multiple of it.
+
+### Run an action
+
+> **Safety:** Target is the SOAR host in the active profile. Impact: the app contacts the external system behind the asset (a DNS resolver, a firewall, an EDR) and the result lands on the container; a containment action changes that system. Preview with `splunkctl soar actions run --action "lookup domain" --asset google_dns --container 42 --param domain=example.com` and read the exact `/rest/action_run` JSON payload, apply by adding `--yes`, and verify with `splunkctl soar actions status <ACTION_RUN_ID>`.
+
+```bash
 splunkctl soar actions run \
     --action "lookup domain" \
     --asset google_dns \
     --container 42 \
     --param domain=example.com
-
-# Apply
 splunkctl soar actions run \
     --action "lookup domain" \
     --asset google_dns \
@@ -43,10 +50,11 @@ splunkctl soar actions run \
     --param domain=example.com --yes
 ```
 
-### Multiple assets and parameters
+Expected result: the dry run prints the payload; with `--yes` the run is created and its id printed. The CLI resolves each asset's `app_id` from the asset record and groups assets that share an `app_id` into one target entry. `--type` defaults to `investigate`; `--name` defaults to the action name.
 
-Repeat `--asset` and `--param` as needed. Assets sharing an `app_id`
-are grouped into a single target entry.
+### Target several assets or pass several parameters
+
+> **Safety:** Target is the SOAR host in the active profile. Impact: the action runs on every asset listed, so a containment action reaches several systems at once. Preview by dropping `--yes`, apply by adding it back, and verify with `splunkctl soar actions results <ACTION_RUN_ID>`.
 
 ```bash
 splunkctl soar actions run \
@@ -56,9 +64,11 @@ splunkctl soar actions run \
     --param domain=example.com --param type=A --yes
 ```
 
-### Explicit app id
+Expected result: one action run with both assets. Repeat `--asset` and `--param` as needed.
 
-Skip the asset lookup when you already know the app id:
+### Skip the asset lookup with an explicit app id
+
+> **Safety:** Target is the SOAR host in the active profile. Impact: the action runs under the app id you pass with no check that it matches the asset. Preview by dropping `--yes`, apply by adding it back, and verify with `splunkctl soar actions status <ACTION_RUN_ID>`.
 
 ```bash
 splunkctl soar actions run \
@@ -68,11 +78,11 @@ splunkctl soar actions run \
     --param domain=example.com --yes
 ```
 
+Expected result: the same run without the `/rest/asset` lookup; use it when you already know the app id.
+
 ### Wait for completion
 
-`--wait` polls `GET /rest/action_run/<id>` until the status reaches
-`success` or `failed`, then fetches per-asset results (`app_runs`).
-Default timeout is 300 seconds; override with `--timeout`.
+> **Safety:** Target is the SOAR host in the active profile. Impact: the same action run as above; `--wait` only changes when the command returns. Preview by dropping `--yes`, apply by adding it back, and verify from the rendered `app_runs` detail or `splunkctl soar actions results <ACTION_RUN_ID>`.
 
 ```bash
 splunkctl soar actions run \
@@ -83,50 +93,41 @@ splunkctl soar actions run \
     --wait --timeout 120 --yes
 ```
 
-On success (exit 0) the app_runs detail is rendered. On failure or
-timeout, exit 1 with diagnostics.
+Expected result: `--wait` polls `GET /rest/action_run/<id>` until the status reaches `success`, `failed`, or `cancelled`, then fetches the per-asset results (`app_runs`). The default timeout is 300 seconds. On success the command exits 0 and renders the `app_runs` detail; on failure or timeout it exits 1 with diagnostics.
 
-## Inspecting results
+### Inspect a run
 
 ```bash
-# Status of a specific action run
 splunkctl soar actions status 999
-
-# Per-asset detail (app_runs): contains result_data with outputs
 splunkctl soar actions results 999
-
-# Pipe to jq for scripted extraction
-splunkctl soar actions results 999 --json \
-    | jq '.[].result_data[].data'
+splunkctl soar actions results 999 --json | jq '.[].result_data[].data'
 ```
 
-## Cancelling
+Expected result: `status` shows the run's state; `results` shows the `app_runs` detail, whose `result_data` holds the action output per asset, ready for `jq`.
 
-Cancel is a guarded mutation:
+### Cancel a run
+
+> **Safety:** Target is the SOAR host in the active profile. Impact: the running action is stopped and its result never lands. Preview with `splunkctl soar actions cancel 999`, apply with `splunkctl soar actions cancel 999 --yes`, and verify with `splunkctl soar actions status 999` (expect `cancelled`).
 
 ```bash
-splunkctl soar actions cancel 999        # dry-run
-splunkctl soar actions cancel 999 --yes  # apply
+splunkctl soar actions cancel 999
+splunkctl soar actions cancel 999 --yes
 ```
 
-## Options
+## Troubleshooting
 
-| Flag | Applies to | Description |
-|---|---|---|
-| `--action` | `run` | Action name (e.g. "lookup domain") |
-| `--asset` | `run` | Asset name (repeatable) |
-| `--app` | `run` | Explicit app id (skips asset lookup) |
-| `--container` | `run`, `list` | Container id |
-| `--param` | `run` | Action parameter key=value (repeatable) |
-| `--type` | `run` | Action type (default: investigate) |
-| `--name` | `run` | Run name (defaults to action name) |
-| `--wait` | `run` | Poll until completion |
-| `--timeout` | `run` | Wait timeout in seconds (default: 300) |
-| `--limit` | `list` | Max results |
-| `--offset` | `list` | Paging offset |
-| `--yes` | `run`, `cancel` | Apply mutation (skip dry-run) |
+- `not_found` for an asset name on `run`: the name must match `splunkctl soar assets list` exactly, or pass `--app <APP_ID>` to skip the lookup.
+- `not_found` on `status` or `results`: the action run id does not exist; find it with `splunkctl soar actions list --container <ID>`.
+- Exit 1 after `--wait`: the run finished `failed` or the timeout elapsed; read `splunkctl soar actions results <ID>` for the app's message, or raise `--timeout`.
+- `run` is rejected after many runs in one day: the community license limit of 100 action runs per day may be spent; check `splunkctl soar license`.
+- `--offset` rejected on `list`: it must be a multiple of `--limit`.
+- `auth` or `permission` on `run` while `list` works: the credential's role cannot run actions; check its roles with `splunkctl soar users get <USER_ID>`.
 
-## Budget note
+## See also
 
-The community license allows 100 action runs per day. Budget live
-tests accordingly.
+- [Set up and check SOAR](soar.md)
+- [Configure assets and monitor ingestion](soar-assets.md)
+- [Work SOAR incidents](soar-incidents.md)
+- [Run playbooks](soar-playbooks.md)
+- [Look up indicators and evidence](soar-indicators.md)
+- [Command reference: soar](../commands/soar.md)

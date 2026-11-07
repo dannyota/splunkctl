@@ -2,126 +2,91 @@
 
 # Audit changes and attest RBAC
 
-Regulator-facing evidence for bank SOC operations: who changed what
-(`audit changes`) and who can do what (`audit rbac`). Both commands are
-**read-only**, no `guard`, no `--yes` needed.
+When to use: a regulator or reviewer asks who changed a saved search, role, or index and when (`audit changes`), or who holds which capabilities and index access for periodic access recertification (`audit rbac`). Both commands are read-only: no guard, no `--yes`.
 
-## Why this matters
+## Prerequisites
 
-Banks carry regulator obligations for change-management evidence ("who
-changed this saved search / role / index, and when") and periodic access
-recertification ("who has which capabilities, and why"). Today an agent
-would have to hand-write `index=_audit` SPL and know that Splunk mixes
-**two incompatible event shapes** in that one index, this group
-normalizes both into one schema and joins the RBAC graph so neither
-requires bespoke SPL per engagement.
+- A profile that passes `splunkctl doctor` (see [Configure](configure.md)).
+- For `changes`: search access to `index=_audit` (the `admin` role has it by default).
+- For `rbac`: read access to users and roles (`edit_user` and `edit_roles`, or an `admin` account).
 
-## Commands
+## Synopsis
 
-```bash
-splunkctl audit changes                                   # last 24h, up to 500
-splunkctl audit changes --since -7d --until -1d            # explicit window
-splunkctl audit changes --user jdoe                        # exact-match user
-splunkctl audit changes --action edit                      # substring-match action
-splunkctl audit changes --object-type saved_search          # exact-match object type
-splunkctl audit changes --limit 2000 --json                # raise the display cap
-
-splunkctl audit rbac                                        # one row per user
-splunkctl audit rbac --format csv --out recert-2026-07.csv  # recertification export
-splunkctl audit rbac --roles-only                            # one row per role
+```text
+splunkctl audit changes [--since TIME] [--until TIME] [--user USER] [--action SUBSTRING] [--object-type TYPE] [--limit N]
+splunkctl audit rbac [--roles-only] [--format csv] [--out FILE]
 ```
 
-## `audit changes`: normalized schema
+## Workflow
 
-Every row has exactly six keys, in this order: `time`, `user`, `action`,
-`object`, `object_type`, `app`. Splunk's `_audit` index mixes two
-sourcetypes and this command normalizes both:
+### Pull the change log for a window
+
+```bash
+splunkctl audit changes
+splunkctl audit changes --since -7d --until -1d
+splunkctl audit changes --limit 2000 --json
+```
+
+Expected result: one row per `_audit` event, newest first, with exactly six keys in this order: `time`, `user`, `action`, `object`, `object_type`, `app`. The default window is the last 24 hours (`--since -24h`, `--until now`) and the display cap is 500 rows. Splunk mixes two incompatible event shapes in `_audit`; this command normalizes both:
 
 | Sourcetype | Shape | Mapping |
 |---|---|---|
-| `audittrail` (legacy) | `Audit:[timestamp=..., user=..., action=..., <tail>]` plain text | `user`/`action` parsed directly; `object` only when the line carries a literal `object="..."` marker (common on capability checks like `edit_user`/`edit_roles`); `object_type` is always empty, the legacy format has no per-action type field; `app` from `app="..."` or unquoted `app=...`, when present |
+| `audittrail` (legacy) | `Audit:[timestamp=..., user=..., action=..., <tail>]` plain text | `user` and `action` parsed directly; `object` only when the line carries a literal `object="..."` marker (common on capability checks like `edit_user` and `edit_roles`); `object_type` always empty, the legacy format has no per-action type field; `app` from `app="..."` or unquoted `app=...` when present |
 | `audittrailv2` (structured) | one JSON object per line | `user` = `actor.name`; `action` = top-level `action`; `object` = `data.name`; `object_type` = `data.type`; `app` = `data.ownership.app` or `data.attributes.app` |
 
-`time` always comes from Splunk's own indexed `_time` (not a re-parse of
-either embedded timestamp format), it's present on every event
-regardless of shape and gives one consistent, sortable value.
+`time` always comes from Splunk's indexed `_time`, not a re-parse of either embedded timestamp, so every row has one consistent, sortable value. Real `audittrailv2` events have no `data.object` or `data.object_type` key; `data.name` and `data.type` are the nearest equivalents and are present on object and system category events (config changes). Action, authn, and check category events (ad-hoc searches, logins, capability grants) carry `data.type` sometimes but rarely `data.name`, so `object` stays empty for them, which is correct: they are not changes to a named object. An event matching neither shape is never dropped; it comes back as `action: "unparsed"` with the full raw line in `object`, so evidence stays complete for formats the parser does not know yet.
 
-There is no literal `data.object`/`data.object_type` key on real
-`audittrailv2` events; `data.name`/`data.type` are the nearest
-equivalents and confirmed present for object/system-category events
-(config changes). Action/authn/check-category events (ad-hoc searches,
-logins, capability grants) carry `data.type` sometimes but rarely
-`data.name`, `object` stays empty for those, which is correct: they
-aren't changes to a named object.
-
-An event matching neither shape is **never dropped**, it comes back as
-`action: "unparsed"` with the full raw line in `object`, so evidence
-stays complete even for audit-log formats this parser doesn't yet know.
-
-## `audit changes`: SPL safety
-
-The dispatched search is always the constant `search index=_audit`,
-nothing else, ever. `--since`/`--until` go through the oneshot job's
-`earliest_time`/`latest_time` kwargs (not string-composed), and
-`--user`/`--action`/`--object-type` filter the already-normalized rows
-**client-side**, after the fetch. No flag value, however adversarial,
-reaches the SPL string. Verified live with `--debug`:
+### Filter by user, action, or object type
 
 ```bash
-$ splunkctl --debug audit changes --user 'x" | delete' --action 'y | outputlookup evil.csv'
-...
-POST .../search/v2/jobs/ (body: {'search': 'search index=_audit', ...})
+splunkctl audit changes --user jdoe
+splunkctl audit changes --action edit
+splunkctl audit changes --object-type saved_search
+splunkctl audit changes --since -30d --user svc_deploy --action edit --format csv --out changes.csv
 ```
 
-`--limit` (default 500) applies **after** filtering, not to the raw
-fetch, the raw fetch itself is unbounded (`count=0`) within the
-`--since`/`--until` window, so a `--user`/`--action` filter never misses
-a match just because it fell outside an arbitrary raw-fetch cutoff.
-A very wide `--since` over a large `_audit` index may fetch all events in that range before limiting, which can be slow; narrow `--since` when possible.
-`--user`/`--object-type` are case-insensitive exact match; `--action` is case-insensitive substring match.
+Expected result: only matching rows. `--user` and `--object-type` are case-insensitive exact matches; `--action` is a case-insensitive substring match. Filters run client side on the normalized rows after the fetch, and `--limit` applies after filtering. The raw fetch is unbounded (`count=0`) within the `--since` and `--until` window, so a filter never misses a match because of an arbitrary raw-fetch cutoff. A very wide `--since` over a large `_audit` index fetches every event in that range before limiting, which can be slow; narrow `--since` when you can.
 
-## `audit rbac`: aggregation
+### Confirm no flag value reaches the SPL
 
-One row per user by default: `user`, `email`, `roles` (direct roles,
-semicolon-joined), `capabilities`, `srch_indexes_allowed`. The last two
-are aggregated across the user's direct roles **and the full transitive
-closure of their imported roles**, deduplicated, sorted, and
-semicolon-joined. `--roles-only` flips to one row per role instead:
-`role`, `imported_roles` (direct only), `capabilities`,
-`srch_indexes_allowed` (both aggregated the same transitive way, rooted
-at that role).
+```bash
+splunkctl --debug audit changes --user 'x" | delete' --action 'y | outputlookup evil.csv'
+```
 
-Example: role `soc_analyst` imports `power`, which imports `user`. A
-`soc_analyst` user's effective `capabilities` is the union of all three
-roles' own capabilities, this is what a role with zero capabilities of
-its own (e.g. Splunk's built-in `splunk-system-role`, which only imports
-`admin`) needs to show its real effective grant, not an empty cell.
+Expected result: the debug log shows `POST .../search/v2/jobs/ (body: {'search': 'search index=_audit', ...})`. The dispatched search is always the constant `search index=_audit`; `--since` and `--until` go through the job's `earliest_time` and `latest_time` arguments, and the other flags filter rows client side. No flag value, however adversarial, is composed into the SPL string.
 
-## CSV round-trip safety
+### Export an RBAC recertification report
 
-Multi-value fields (`roles`, `capabilities`, `srch_indexes_allowed`,
-`imported_roles`) join with `;`, never `\n`, Splunk role/capability/index
-names can't contain a semicolon, so this is a safe, lossless join that
-never produces an embedded newline inside a CSV cell. `--format csv`
-output round-trips cleanly through Python's `csv` module.
+```bash
+splunkctl audit rbac
+splunkctl audit rbac --format csv --out recert-2026-07.csv
+```
 
-## Options
+Expected result: one row per user with `user`, `email`, `roles` (direct roles, semicolon-joined), `capabilities`, and `srch_indexes_allowed`. The last two are aggregated across the user's direct roles and the full transitive closure of their imported roles, deduplicated, sorted, and semicolon-joined. Example: role `soc_analyst` imports `power`, which imports `user`; a `soc_analyst` user's effective `capabilities` is the union of all three roles' own capabilities. This is what a role with zero capabilities of its own needs (Splunk's built-in `splunk-system-role` only imports `admin`) to show its real effective grant instead of an empty cell. `rbac` reads roles and users through the SDK only; it dispatches no search.
 
-| Flag | Applies to | Description |
-|------|-----------|--------------|
-| `--since` | `changes` | Earliest time (default `-24h`) |
-| `--until` | `changes` | Latest time (default `now`) |
-| `--user` | `changes` | Filter by user, case-insensitive exact match |
-| `--action` | `changes` | Filter by action, case-insensitive substring match |
-| `--object-type` | `changes` | Filter by object type, case-insensitive exact match |
-| `--limit` | `changes` | Max results after client-side filtering (default 500) |
-| `--roles-only` | `rbac` | One row per role instead of per user |
+### Attest per role instead of per user
 
-## Implementation notes
+```bash
+splunkctl audit rbac --roles-only
+splunkctl audit rbac --roles-only --format csv --out roles-2026-07.csv
+```
 
-`changes` runs over the existing oneshot-search infrastructure
-(`svc.jobs.oneshot`); the event-shape parsers live in a sibling module,
-`splunkctl/commands/audit_parse.py`, kept separate from the click
-commands since they're pure functions with their own fixture-driven test
-suite. `rbac` is SDK reads only (`svc.roles`, `svc.users`), no oneshot
-search involved.
+Expected result: one row per role with `role`, `imported_roles` (direct only), `capabilities`, and `srch_indexes_allowed`, the last two aggregated the same transitive way, rooted at that role.
+
+Multi-value fields (`roles`, `capabilities`, `srch_indexes_allowed`, `imported_roles`) join with `;`, never a newline. Splunk role, capability, and index names cannot contain a semicolon, so the join is lossless and never produces an embedded newline inside a CSV cell; `--format csv` output round-trips through Python's `csv` module.
+
+## Troubleshooting
+
+- `permission` or an empty result from `changes`: your role cannot search `index=_audit`; use an `admin` account or add `_audit` to the role's allowed indexes.
+- `timeout` on `changes`: the window is too wide; narrow `--since` or raise the global `--timeout`.
+- Rows show `action: "unparsed"`: the event matched neither audit shape; the raw line is in `object`, so the evidence is still complete.
+- `object_type` is empty on every row: the instance writes only the legacy `audittrail` shape, which has no type field; filter on `--action` instead.
+- `permission` from `rbac`: the account cannot list users or roles; it needs `edit_user` and `edit_roles` or an `admin` role.
+- Fewer rows than expected: `--limit` defaults to 500 after filtering; raise it.
+
+## See also
+
+- [Manage users and roles](users.md)
+- [Run searches](search.md)
+- [Exit codes](exit-codes.md)
+- [Command reference: audit](../commands/audit.md)

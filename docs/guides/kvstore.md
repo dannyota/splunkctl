@@ -2,126 +2,138 @@
 
 # Manage KV store collections
 
-Splunk's KV store backs allowlists, threat-intel feeds, and Enterprise
-Security's asset/identity tables, schema-less JSON document storage
-scoped per app. This group manages collections (`storage/collections/
-config`) and their documents (`storage/collections/data`) directly over
-the REST API, no SDK entity class exists for KV store, so every command
-here is a thin, typed wrapper around raw `GET`/`POST`/`DELETE` calls.
+When to use: an allowlist, a threat-intel feed, or an enrichment table lives in Splunk's KV store (schema-less JSON documents scoped per app, the same storage behind Enterprise Security's asset and identity tables) and you need to create the collection, load or query documents, back it up, or remove it.
 
-**Live-verified status**: the local dev instance's KV store is down
-(`server kvstore` reports `status: failed`), round-trip CRUD is
-unit-tested against a mocked REST layer only; live verification covers
-the negative path (a down KV store fails cleanly, never blank/traceback).
-Full live round-trip is **pending a healthy KV store**.
+## Prerequisites
 
-## Commands
+- A profile that passes `splunkctl doctor` with the `KV Store` check at `ready`; `splunkctl server kvstore` shows the status on its own.
+- Write access to the target app (`--app`, default `search`); collection ownership is always `nobody`, the KV store convention, so every command addresses `servicesNS/nobody/<app>/storage/collections/{config|data}/...`.
+- No SDK fork is needed: every command is a thin, typed wrapper around raw `GET`, `POST`, and `DELETE` calls.
+
+## Synopsis
+
+```text
+splunkctl kvstore collections [--app APP]
+splunkctl kvstore create <NAME> [--app APP] [--yes]
+splunkctl kvstore delete <NAME> [--app APP] [--yes]
+splunkctl kvstore query <COLLECTION> [--query JSON] [--limit N] [--skip N] [--sort SPEC] [--app APP]
+splunkctl kvstore insert <COLLECTION> (--data JSON | --file DOC.json) [--app APP] [--yes]
+splunkctl kvstore update <COLLECTION> <KEY> (--data JSON | --file DOC.json) [--app APP] [--yes]
+splunkctl kvstore remove <COLLECTION> [KEY] [--query JSON] [--app APP] [--yes]
+splunkctl kvstore export <COLLECTION> [--app APP] [--out FILE.jsonl]
+splunkctl kvstore import <COLLECTION> --file <FILE.jsonl> [--app APP] [--yes]
+```
+
+## Workflow
+
+### List collections
 
 ```bash
-splunkctl kvstore collections                       # list collection names (app: search)
+splunkctl kvstore collections
 splunkctl kvstore collections --app Splunk_Security_Essentials
-splunkctl kvstore create my_allowlist --yes          # create an empty collection
-splunkctl kvstore delete my_allowlist --yes          # delete collection + ALL its data
-
-splunkctl kvstore query my_allowlist                 # all documents
-splunkctl kvstore query my_allowlist --query '{"host": "evil.example"}'
-splunkctl kvstore query my_allowlist --limit 50 --skip 100 --sort '-_key'
-
-splunkctl kvstore insert my_allowlist --data '{"host": "evil.example"}' --yes
-splunkctl kvstore insert my_allowlist --file doc.json --yes
-splunkctl kvstore update my_allowlist <key> --data '{"host": "new.example"}' --yes
-splunkctl kvstore remove my_allowlist <key> --yes            # by _key
-splunkctl kvstore remove my_allowlist --query '{"host": "evil.example"}' --yes  # by query
-
-splunkctl kvstore export my_allowlist                # JSONL to stdout, one doc per line
-splunkctl kvstore export my_allowlist --out backup.jsonl
-splunkctl kvstore import my_allowlist --file backup.jsonl --yes   # upserts by _key
 ```
 
-## Namespace
+Expected result: the collection names in the app (default `search`).
 
-Every command addresses `servicesNS/nobody/<app>/storage/collections/
-{config|data}/...`, collection ownership is always `nobody` (the KV
-store convention), scoped by app with `--app` (default `search`).
+### Create a collection
 
-## `query`: server-side only
-
-`--query` is raw JSON, passed through unmodified to the API's own
-`query` param; `--limit`/`--skip`/`--sort` map straight to the matching
-API params. There is no client-side re-filtering or re-paging, what the
-server returns is exactly what's rendered.
-
-## `insert`/`update`: exactly one document source
-
-Both take exactly one of `--data '<json>'` (inline) or `--file f.json`
-(a file holding a single JSON object), passing both, or neither, is a
-usage error (exit 2), same as invalid JSON in either. Documents pass
-through unmodified: no field is added, renamed, or stripped.
-
-## `remove`: exactly one target
-
-`remove <collection> <key>` deletes by `_key`; `remove <collection>
---query '<json>'` deletes every document matching the query. Exactly
-one of `KEY`/`--query` is required, supplying both, or neither, is a
-usage error (exit 2).
-
-## `export`/`import`: JSONL round-trip
-
-`export` writes one JSON document per line, `_key` is preserved on
-every line, so `import` can upsert straight back onto the same keys.
-`import --file f.jsonl` reads the same shape and POSTs via `batch_save`
-in chunks of up to 500 documents; a document whose `_key` already exists
-in the collection is upserted (overwritten), that's `batch_save`'s own
-semantics, not something the CLI special-cases. Blank lines in the JSONL
-file are skipped; any non-blank line that isn't a single valid JSON
-object is a usage error (exit 2), the whole import is rejected before
-any request is sent, not partially applied.
-
-## Worked example: allowlist from bulk intel
+> **Safety:** Target is the Splunk host and app in the active profile. Impact: an empty collection is created in that app. Preview with `splunkctl kvstore create ip_allowlist`, apply by adding `--yes`, and verify with `splunkctl kvstore collections`.
 
 ```bash
-# 1. Create the collection
+splunkctl kvstore create ip_allowlist
 splunkctl kvstore create ip_allowlist --yes
-
-# 2. Bulk-load a threat-intel export (one JSON doc per line)
-splunkctl kvstore import ip_allowlist --file ip_allowlist.jsonl --yes
-
-# 3. Query it back
-splunkctl kvstore query ip_allowlist --query '{"source": "internal"}'
-
-# 4. Use it from SPL: requires a lookup DEFINITION binding the
-#    collection to a lookup name first (transforms.conf), which
-#    'kvstore' doesn't manage; H4 (lookup definitions & automatic
-#    lookups) wires that up. Once defined:
-#    | inputlookup ip_allowlist
 ```
 
-A raw collection name is **not** automatically usable via `|
-inputlookup`, Splunk's lookup command resolves a *lookup definition*
-(a `transforms.conf` stanza with `external_type = kvstore` pointing at
-the collection), not the collection name itself. Until H4 ships that
-wiring, define it manually via Splunk Web
-(**Settings → Lookups → Lookup definitions**) or `parsers`/conf editing.
+### Add or replace single documents
 
-## Errors
-
-KV-store-down and other HTTP failures are never caught locally, they
-flow straight through the CLI's F1 error-envelope classification
-(`splunkctl.errors.classify`), so a down KV store always surfaces a
-clean `kind: "http"`, the real HTTP status (`503` observed live), and
-the server's message, never a blank result or a raw traceback:
+> **Safety:** Target is the Splunk host and app in the active profile. Impact: `insert` adds one document; `update` replaces the whole document stored under `KEY`, not just the fields you pass. Preview with `splunkctl kvstore insert ip_allowlist --data '{"host": "evil.example"}'`, apply by adding `--yes`, and verify with `splunkctl kvstore query ip_allowlist --query '{"host": "evil.example"}'`.
 
 ```bash
-$ splunkctl --json kvstore query my_allowlist
-{"error": {"kind": "http", "http_status": 503, "message": "... KV Store initialization failed ..."}}
+splunkctl kvstore insert ip_allowlist --data '{"host": "evil.example"}'
+splunkctl kvstore insert ip_allowlist --data '{"host": "evil.example"}' --yes
+splunkctl kvstore insert ip_allowlist --file doc.json --yes
+splunkctl kvstore update ip_allowlist 64f1c0a2b3d4e5f601234567 --data '{"host": "new.example"}' --yes
 ```
 
-## Implementation notes
+Expected result: the document is stored unmodified; no field is added, renamed, or stripped. Both commands take exactly one of `--data '<json>'` (inline) or `--file f.json` (a file holding a single JSON object); passing both or neither, or invalid JSON, is a usage error (exit 2).
 
-No SDK entity class, `storage/collections/config` (collection CRUD,
-form-encoded like most Splunk config endpoints) and `storage/
-collections/data` (document CRUD, JSON body + `Content-Type:
-application/json`) are both reached through small typed JSON helpers in
-`client.py` (`rest_get_json`/`rest_post_json`) layered on the SDK's own
-authenticated `service.get`/`service.post`/`service.delete`, no new
-HTTP stack.
+### Query documents
+
+```bash
+splunkctl kvstore query ip_allowlist
+splunkctl kvstore query ip_allowlist --query '{"host": "evil.example"}'
+splunkctl kvstore query ip_allowlist --limit 50 --skip 100 --sort '-_key'
+```
+
+Expected result: the matching documents, each with its `_key`. `--query` is raw JSON passed unmodified to the API's `query` parameter; `--limit`, `--skip`, and `--sort` map straight to the matching API parameters. There is no client-side re-filtering or re-paging: what the server returns is exactly what is rendered.
+
+### Remove documents
+
+> **Safety:** Target is the Splunk host and app in the active profile. Impact: `remove KEY` deletes one document; `remove --query` deletes every document matching the query, with no undo. Preview with `splunkctl kvstore remove ip_allowlist --query '{"host": "evil.example"}'`, apply by adding `--yes`, and verify with `splunkctl kvstore query ip_allowlist --query '{"host": "evil.example"}'`.
+
+```bash
+splunkctl kvstore remove ip_allowlist 64f1c0a2b3d4e5f601234567 --yes
+splunkctl kvstore remove ip_allowlist --query '{"host": "evil.example"}'
+splunkctl kvstore remove ip_allowlist --query '{"host": "evil.example"}' --yes
+```
+
+Exactly one of `KEY` or `--query` is required; supplying both or neither is a usage error (exit 2).
+
+### Back up and restore with JSONL
+
+```bash
+splunkctl kvstore export ip_allowlist
+splunkctl kvstore export ip_allowlist --out backup.jsonl
+```
+
+Expected result: one JSON document per line on standard output or in the global `--out` file, with `_key` preserved on every line so `import` can upsert straight back onto the same keys.
+
+> **Safety:** Target is the Splunk host and app in the active profile. Impact: every document in the file is upserted; a document whose `_key` already exists is overwritten. Preview with `splunkctl kvstore import ip_allowlist --file backup.jsonl`, apply by adding `--yes`, and verify with `splunkctl kvstore query ip_allowlist --limit 5`.
+
+```bash
+splunkctl kvstore import ip_allowlist --file ip_allowlist.jsonl
+splunkctl kvstore import ip_allowlist --file ip_allowlist.jsonl --yes
+```
+
+Expected result: the documents are POSTed through `batch_save` in chunks of up to 500. Overwriting on a matching `_key` is `batch_save`'s own semantics, not something the CLI adds. Blank lines are skipped; any non-blank line that is not a single JSON object is a usage error (exit 2) and the whole import is rejected before any request is sent, never partially applied.
+
+### Use the collection from SPL
+
+A raw collection name is not usable through `| inputlookup` or `| lookup`: Splunk resolves a lookup definition (a `transforms.conf` stanza with `external_type = kvstore` pointing at the collection), not the collection itself.
+
+> **Safety:** Target is the Splunk host in the active profile and `transforms.conf` in the current app namespace. Impact: a lookup definition named `ip_allowlist` is created or updated. Preview with `splunkctl lookups define ip_allowlist --collection ip_allowlist`, apply by adding `--yes`, and verify with `splunkctl search oneshot '| inputlookup ip_allowlist | head 5'`.
+
+```bash
+splunkctl lookups define ip_allowlist --collection ip_allowlist --yes
+splunkctl search oneshot '| inputlookup ip_allowlist | head 5'
+```
+
+See [Manage lookups](lookups.md) for automatic lookups onto a sourcetype.
+
+### Delete a collection
+
+> **Safety:** Target is the Splunk host and app in the active profile. Impact: the collection and all of its documents are removed. Preview with `splunkctl kvstore delete ip_allowlist`, apply by adding `--yes`, and verify with `splunkctl kvstore collections`.
+
+```bash
+splunkctl kvstore export ip_allowlist --out ip_allowlist.jsonl
+splunkctl kvstore delete ip_allowlist
+splunkctl kvstore delete ip_allowlist --yes
+```
+
+Export first so the data can be re-imported.
+
+## Troubleshooting
+
+- `http` with status 503 and `KV Store initialization failed`: the KV store is down; `splunkctl doctor` reports it as `KV Store: failed`. Ask the Splunk admin to restart Splunk or check `mongod.log`. REST failures flow through the error envelope (`kind`, `http_status`, `message`), never a blank result or traceback.
+- Exit 2 `exactly one of --data or --file is required` or `exactly one of KEY or --query is required`: pass one source or one target, not both.
+- Exit 2 on `import`: a line in the JSONL file is not a single JSON object; fix the file, nothing was sent.
+- `not_found` or an empty `query`: the collection is in another app; pass `--app`.
+- `| inputlookup NAME` fails in SPL: define the lookup with `splunkctl lookups define NAME --collection NAME --yes`.
+- `permission` on `create`, `insert`, or `delete`: the account cannot write to that app.
+
+## See also
+
+- [Manage lookups](lookups.md)
+- [Check server health and topology](server.md)
+- [Diagnose a connection](doctor.md)
+- [Command reference: kvstore](../commands/kvstore.md)

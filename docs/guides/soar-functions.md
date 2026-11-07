@@ -2,95 +2,95 @@
 
 # Manage custom functions
 
-Manage SOAR custom functions: list, inspect, import, export, update, and
-delete. Custom functions are reusable Python snippets called from playbook
-blocks. Each function is a paired `<name>.json` (metadata) + `<name>.py`
-(source) stored in the SOAR SCM repository.
+When to use: your playbooks call a SOAR custom function (a reusable Python snippet) and you want to back it up, deploy it from a repository, replace its source with a reviewed change, or remove it.
 
-## List custom functions
+## Prerequisites
+
+- SOAR credentials in the active profile and a passing `splunkctl soar test` (see [Set up and check SOAR](soar.md)).
+- At least one SCM repository on the instance (`splunkctl soar playbooks repos`); the lab ships a `local` repo. `update` needs it to resolve the repo id through `GET /rest/scm`.
+- Username and password credentials for `delete`; SOAR refuses automation tokens on DELETE endpoints.
+- For `import`: a `.tgz` in SOAR's export format, or a directory holding the paired `<name>.json` (metadata: name, module, description, parameters, outputs, python_version) and `<name>.py` (the function body). This is the same pair shape playbooks use under `custom_functions/`.
+
+## Synopsis
+
+```text
+splunkctl soar functions list [--limit N] [--offset N]
+splunkctl soar functions get <FUNCTION_ID>
+splunkctl soar functions export <FUNCTION_ID> [--out FILE.tgz]
+splunkctl soar functions import <PATH.tgz | DIR/> [--yes]
+splunkctl soar functions update <FUNCTION_ID> --python <FILE.py> --message <TEXT> [--yes]
+splunkctl soar functions delete <FUNCTION_ID> [--yes]
+```
+
+## Workflow
+
+### List and inspect functions
 
 ```bash
 splunkctl soar functions list
 splunkctl soar functions list --limit 10 --offset 0
+splunkctl soar functions get 42
+splunkctl soar functions get 42 --json
 ```
 
-## Get a custom function
+Expected result: one row per custom function; `get --json` includes the Python source.
 
-```bash
-splunkctl soar functions get 42          # by numeric id
-splunkctl soar functions get 42 --json   # includes python source
-```
-
-## Import a custom function
-
-Accept a `.tgz` archive (same format as SOAR export) or a directory
-containing the paired `.json` + `.py` files. Directories are packed
-into a tgz automatically.
-
-```bash
-# From a tgz archive
-splunkctl soar functions import ./my_function.tgz
-splunkctl --yes soar functions import ./my_function.tgz
-
-# From a directory
-splunkctl --yes soar functions import ./my_function/
-```
-
-The archive is base64-encoded and posted to `/rest/import_custom_function`
-with `scm: "local"` and `force: true`. Imported functions that fail
-validation are saved as drafts.
-
-## Export a custom function
+### Back up a function
 
 ```bash
 splunkctl soar functions export 42 --out function.tgz
 splunkctl soar functions export 42 > function.tgz
 ```
 
-Exports via `GET /rest/custom_function/<id>/export` (returns
-`application/x-gzip`). The archive contains the paired `.json` +
-`.py` files.
+Expected result: a tgz (`GET /rest/custom_function/<id>/export`, served as `application/x-gzip`) containing the paired `.json` and `.py` files. Export before `update` or `delete` so you can import the previous version.
 
-## Update a custom function
+### Import a function
 
-Replace the Python source of an existing function. Requires `--python`
-(path to the new source file) and `--message` (SCM commit message).
-The command resolves the SCM repo id automatically via `GET /rest/scm`,
-fetches the existing record, and posts only the changed fields.
+> **Safety:** Target is the SOAR host in the active profile. Impact: the function is created, or overwritten when one with the same name exists, because the import posts with `force: true`; playbooks pick up the new code on their next run. Preview with `splunkctl soar functions import ./my_function.tgz`, apply by adding `--yes`, and verify with `splunkctl soar functions list`.
 
 ```bash
-splunkctl --yes soar functions update 42 \
+splunkctl soar functions import ./my_function.tgz
+splunkctl soar functions import ./my_function.tgz --yes
+splunkctl soar functions import ./my_function/ --yes
+```
+
+Expected result: a directory is packed into a tgz automatically; the archive is base64-encoded and posted to `/rest/import_custom_function` with `scm: "local"` and `force: true`. Functions that fail validation are saved as drafts.
+
+### Replace the Python source
+
+> **Safety:** Target is the SOAR host in the active profile. Impact: the function body changes for every playbook that calls it; there is no server-side rollback except your export. Preview with `splunkctl soar functions update 42 --python ./updated_logic.py --message "Fix edge case in IP formatting"`, apply by adding `--yes`, and verify with `splunkctl soar functions get 42 --json`.
+
+```bash
+splunkctl soar functions export 42 --out before.tgz
+splunkctl soar functions update 42 \
     --python ./updated_logic.py \
-    --message "Fix edge case in IP formatting"
+    --message "Fix edge case in IP formatting" --yes
 ```
 
-Quirks:
+Expected result: the CLI resolves the SCM repo id through `GET /rest/scm`, fetches the existing record, and posts only the changed fields (`python`, `commit_message`, `scm_id`). Functions imported as Python 2.7 are upgraded to Python 3 on update, because SOAR 8.x refuses to edit Python 2.7 functions. A function saved as a draft on import may leave draft mode once the new source passes validation, depending on its signature.
 
-- **SCM required**: the SOAR instance must have at least one SCM
-  repository configured (the lab has a `local` repo by default).
-- **Python version upgrade**: functions imported as Python 2.7 are
-  automatically upgraded to Python 3 on update (SOAR 8.x refuses to
-  edit Python 2.7 functions).
-- **Draft mode**: functions that fail validation on import are saved as
-  drafts; updating the source may resolve validation and clear draft
-  mode, depending on the function signature.
+### Delete a function
 
-## Delete a custom function
+> **Safety:** Target is the SOAR host in the active profile. Impact: the function is removed and playbooks that call it fail on their next run. Preview with `splunkctl soar functions delete 42`, apply by adding `--yes`, and verify with `splunkctl soar functions list`.
 
 ```bash
-splunkctl --yes soar functions delete 42
+splunkctl soar functions export 42 --out before.tgz
+splunkctl soar functions delete 42 --yes
 ```
 
-DELETE requires Basic auth credentials (SOAR refuses automation tokens
-on DELETE endpoints).
+Expected result: a DELETE that succeeds only with username and password credentials in the profile.
 
-## Pair anatomy
+## Troubleshooting
 
-A custom function is stored as two files in the SCM repo:
+- `not_found` on `get`, `export`, `update`, or `delete`: commands take the numeric id from `splunkctl soar functions list`, not the name.
+- `update` exits 1 before posting with a message about SCM: the instance has no SCM repository; add one in the SOAR UI or check `splunkctl soar playbooks repos`.
+- `auth` on `delete` while reads work: the profile is token-only; add a username and password with `splunkctl config init --soar`.
+- `import` reports the function as a draft: validation failed; fix the `.json` metadata or the source and import again with `--yes`.
+- `http` error on `import` about the archive: check that the directory or tgz holds the paired `<name>.json` and `<name>.py` with matching names.
 
-- `<name>.json` -- metadata (name, module, description, parameters,
-  outputs, python_version)
-- `<name>.py` -- Python source (the function body)
+## See also
 
-This is the same pair shape used by playbooks under
-`custom_functions/`. The export bundle is a tgz of this pair.
+- [Run playbooks](soar-playbooks.md)
+- [Maintain custom lists](soar-lists.md)
+- [Set up and check SOAR](soar.md)
+- [Command reference: soar](../commands/soar.md)

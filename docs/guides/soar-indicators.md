@@ -2,27 +2,37 @@
 
 # Look up indicators and evidence
 
-IOC indicator lookups and evidence management on Splunk SOAR.
+When to use: you have an IP, domain, hash, or URL and want to know where SOAR has seen it before, or you are building a case and need to tag artifacts, notes, or action runs on a container as formal evidence.
 
 ## Prerequisites
 
-SOAR credentials configured (see `splunkctl config init --soar`).
+- SOAR credentials in the active profile and a passing `splunkctl soar test` (see [Set up and check SOAR](soar.md)).
+- For the `indicators` commands (`list`, `get`, `pivot`, `stats`): the `use_indicators` feature flag enabled on the instance. It is off by default on new installs; enable it in Administration > Product Settings > Feature Toggles, or `POST /rest/feature_flag` with `name='use_indicators'` and `value=true`.
+- Username and password credentials for `evidence remove`; SOAR refuses automation tokens on DELETE.
+- The `evidence` commands work regardless of the indicators flag.
 
-Indicator commands (`list`, `get`, `pivot`, `stats`) require the
-`use_indicators` feature flag to be enabled on the SOAR instance. When
-the flag is off (the default on new installs), commands exit 1 with an
-actionable message explaining how to enable it.
+## Synopsis
 
-Evidence commands (`list`, `add`, `remove`) work regardless of the
-indicators flag.
+```text
+splunkctl soar indicators list [--type ip|domain|hash|url|email|file|process|vault_id] [--limit N]
+splunkctl soar indicators get <VALUE>
+splunkctl soar indicators pivot <VALUE>
+splunkctl soar indicators stats
 
-## Indicators
+splunkctl soar evidence list --container <CONTAINER_ID>
+splunkctl soar evidence add <CONTAINER_ID> --object <artifact|note|action_run> --id <OBJECT_ID> [--yes]
+splunkctl soar evidence remove <EVIDENCE_ID> [--yes]
+```
 
-### Feature flag detection
+## Workflow
 
-Every indicator command checks `/rest/feature_flag` for
-`use_indicators=true` before proceeding. If the flag is off or the
-endpoint is unreachable, you get:
+### Confirm the indicators feature is on
+
+```bash
+splunkctl soar indicators stats
+```
+
+Expected result: aggregated breakdowns by type and severity (`indicator_stats_type` and `indicator_stats_severity`). Every indicator command first checks `/rest/feature_flag` for `use_indicators=true`; if the flag is off or the endpoint is unreachable the command exits 1 with:
 
 ```text
 Error: Indicators feature is disabled on this SOAR instance.
@@ -33,93 +43,77 @@ or POST /rest/feature_flag with name='use_indicators' and value=true.
 ### List indicators
 
 ```bash
-splunkctl soar indicators list                  # all indicators
-splunkctl soar indicators list --type ip        # filter by type
-splunkctl soar indicators list --limit 20       # page size
-splunkctl soar indicators list --json           # machine-readable
+splunkctl soar indicators list
+splunkctl soar indicators list --type ip
+splunkctl soar indicators list --limit 20
+splunkctl soar indicators list --json
 ```
 
-Supported `--type` values: `ip`, `domain`, `hash`, `url`, `email`,
-`file`, `process`, `vault_id`.
+Expected result: one row per indicator from `GET /rest/indicator`, optionally filtered to one `--type` (`ip`, `domain`, `hash`, `url`, `email`, `file`, `process`, `vault_id`).
 
-### Get indicator by value
+### Look up one value
 
 ```bash
 splunkctl soar indicators get 8.8.8.8
 splunkctl soar indicators get evil.com --json
 ```
 
-Looks up an indicator by its exact value via `indicator_by_value`.
+Expected result: the indicator record for that exact value, through `GET /rest/indicator_by_value`.
 
-### Pivot: common containers
+### Pivot to every container that saw it
 
 ```bash
 splunkctl soar indicators pivot evil.com
 splunkctl soar indicators pivot 8.8.8.8 --json
 ```
 
-Shows every container where the IOC has appeared
-(`indicator_common_container`). Useful for cross-case correlation:
-"where else have we seen this IP?"
+Expected result: every container where the IOC has appeared (`GET /rest/indicator_common_container`), answering "where else have we seen this IP?" for cross-case correlation.
 
-### Indicator stats
-
-```bash
-splunkctl soar indicators stats
-splunkctl soar indicators stats --json
-```
-
-Aggregated breakdowns from `indicator_stats_type` and
-`indicator_stats_severity`.
-
-## Evidence
-
-Evidence links artifacts, notes, or action runs to a container as
-formally tagged proof items.
-
-### List evidence
+### List evidence on a container
 
 ```bash
 splunkctl soar evidence list --container 100
 splunkctl soar evidence list --container 100 --json
 ```
 
-`--container` is required.
+Expected result: the evidence items (`GET /rest/evidence`) linking artifacts, notes, or action runs to the container as formally tagged proof. `--container` is required.
 
-### Add evidence (guarded)
+### Add evidence
+
+> **Safety:** Target is the SOAR host in the active profile; the dry-run banner shows the host and the payload. Impact: the object is tagged as evidence on the container and appears in case reports. Preview with `splunkctl soar evidence add 100 --object artifact --id 42`, apply by adding `--yes`, and verify with `splunkctl soar evidence list --container 100`.
 
 ```bash
-# Dry-run preview (default):
 splunkctl soar evidence add 100 --object artifact --id 42
-
-# Apply:
 splunkctl soar evidence add 100 --object artifact --id 42 --yes
+splunkctl soar evidence add 100 --object note --id 7 --yes
+splunkctl soar evidence add 100 --object action_run --id 999 --yes
 ```
 
-Supported `--object` types: `artifact`, `note`, `action_run`.
+Expected result: a `POST /rest/evidence` and a new evidence id. `--object` accepts `artifact`, `note`, or `action_run`; `--id` is that object's id, not the container id.
 
-The guard banner shows the SOAR host and previews the payload before
-any mutation. Pass `--yes` to apply.
+### Remove evidence
 
-### Remove evidence (guarded)
+> **Safety:** Target is the SOAR host in the active profile. Impact: the evidence tag is removed; the underlying artifact, note, or action run stays. Preview with `splunkctl soar evidence remove 5`, apply by adding `--yes`, and verify with `splunkctl soar evidence list --container 100`.
 
 ```bash
-splunkctl soar evidence remove 5              # dry-run
-splunkctl soar evidence remove 5 --yes        # apply (Basic auth)
+splunkctl soar evidence remove 5
+splunkctl soar evidence remove 5 --yes
 ```
 
-DELETE requires Basic auth credentials (SOAR refuses automation tokens
-on DELETE). If your profile only has a token, the CLI will error with a
-clear auth message.
+Expected result: a `DELETE /rest/evidence/<id>`, which needs username and password credentials; a token-only profile gets a clear `auth` error.
 
-## API endpoints
+## Troubleshooting
 
-| Command | REST endpoint |
-|---|---|
-| `indicators list` | `GET /rest/indicator` |
-| `indicators get` | `GET /rest/indicator_by_value` |
-| `indicators pivot` | `GET /rest/indicator_common_container` |
-| `indicators stats` | `GET /rest/indicator_stats_type`, `indicator_stats_severity` |
-| `evidence list` | `GET /rest/evidence` |
-| `evidence add` | `POST /rest/evidence` |
-| `evidence remove` | `DELETE /rest/evidence/<id>` |
+- "Indicators feature is disabled" (exit 1): enable `use_indicators` as shown above, then rerun; the check runs before every indicators command.
+- `not_found` on `indicators get`: the value must match exactly (no wildcards, no trailing dot on domains); list with `--type` to find the stored form.
+- `auth` on `evidence remove` while `add` works: the profile is token-only; add a username and password with `splunkctl config init --soar`.
+- `not_found` on `evidence add`: `--id` must be an existing artifact, note, or action run id, and it must belong to the container you name.
+- `evidence remove` needs the evidence id, not the artifact id: take it from the `id` column of `evidence list`.
+
+## See also
+
+- [Work SOAR incidents](soar-incidents.md)
+- [Manage cases and workbooks](soar-cases.md)
+- [Run actions](soar-actions.md)
+- [Set up and check SOAR](soar.md)
+- [Command reference: soar](../commands/soar.md)

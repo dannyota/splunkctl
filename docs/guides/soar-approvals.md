@@ -2,100 +2,81 @@
 
 # Handle approvals
 
-Manage approval requests from SOAR playbook prompt blocks. A playbook
-pauses at a prompt action and waits for an external approve/deny response
-before continuing. This command group lets an operator review and respond
-to those prompts from the terminal, unblocking automation without opening
-the SOAR UI.
+When to use: a playbook has paused at a prompt block and is waiting for a human decision, and you want to review and approve or deny it from the terminal instead of the SOAR UI, so automation can continue.
 
-## How approvals arise
+## Prerequisites
 
-1. A playbook author adds a **prompt** block (manual or automated prompt
-   action) to a playbook.
-2. When the playbook runs and reaches that block, it creates an approval
-   request tied to the container and pauses execution.
-3. The approval stays in `pending` status until someone responds via the
-   UI or the REST API (`/rest/external_prompt/<id>`).
-4. Once approved or denied, the playbook resumes along the corresponding
-   branch.
+- SOAR credentials in the active profile and a passing `splunkctl soar test` (see [Set up and check SOAR](soar.md)).
+- A playbook that contains a prompt block (a manual or automated prompt action). When such a playbook runs and reaches that block it creates an approval request tied to the container and pauses; the approval stays `pending` until someone responds through the UI or the REST API (`/rest/external_prompt/<id>`), then the playbook resumes along the approve or deny branch.
+- Without active playbooks that contain prompt blocks the approval list is empty; that is normal on a fresh or lab instance.
 
-Without active playbooks that contain prompt blocks, the approval list
-will be empty -- this is normal on a fresh or lab instance.
+## Synopsis
 
-## List
+```text
+splunkctl soar approvals list [--pending] [--container CONTAINER_ID]
+splunkctl soar approvals get <APPROVAL_ID>
+splunkctl soar approvals respond <APPROVAL_ID> <approve|deny> [--message TEXT] [--yes]
+```
+
+## Workflow
+
+### Find pending approvals
 
 ```bash
-splunkctl soar approvals list                          # all approvals
-splunkctl soar approvals list --pending                # only unanswered
-splunkctl soar approvals list --container 42           # by container
-splunkctl soar approvals list --container 42 --pending # combined
+splunkctl soar approvals list
+splunkctl soar approvals list --pending
+splunkctl soar approvals list --container 42
+splunkctl soar approvals list --container 42 --pending
 splunkctl soar approvals list --json
 ```
 
-`--pending` adds a `_filter_status="pending"` filter so only unanswered
-approvals are returned. `--container` queries the per-container
-pseudo-field endpoint (`/rest/container/<id>/approvals`) instead of the
-global collection. Both flags compose.
+Expected result: one row per approval. `--pending` adds a `_filter_status="pending"` filter so only unanswered approvals return. `--container` queries the per-container endpoint (`/rest/container/<id>/approvals`) instead of the global collection. Both flags compose. An empty result exits 0 with clean output (`[]` in JSON mode, `No approvals found.` in table mode).
 
-An empty result exits 0 with clean output (`[]` in JSON mode, a human
-message in table mode).
-
-## Get
+### Read one approval
 
 ```bash
 splunkctl soar approvals get 5
 splunkctl soar approvals get 5 --json
 ```
 
-Fetches the detail summary view for a single approval
-(`/rest/approval/<id>?_detail=detail_summary_view`). Returns the full
-approval object including message, status, and response history.
+Expected result: the detail summary view (`/rest/approval/<id>?_detail=detail_summary_view`): the full approval object including message, status, and response history.
 
-## Respond
+### Approve or deny
+
+> **Safety:** Target is the SOAR host in the active profile; the dry-run banner names it so you never answer a prompt on the wrong instance. Impact: the paused playbook resumes along the chosen branch, which may run containment actions. Preview with `splunkctl soar approvals respond 5 approve --message "Verified IOC"` (the preview shows the approval id, action, and message), apply by adding `--yes`, and verify with `splunkctl soar containers get 42 --playbook-runs`.
 
 ```bash
-splunkctl soar approvals respond 5 approve             # dry-run preview
-splunkctl --yes soar approvals respond 5 approve       # apply
-splunkctl --yes soar approvals respond 5 deny --message "Insufficient evidence"
+splunkctl soar approvals respond 5 approve
+splunkctl soar approvals respond 5 approve --message "Verified IOC" --yes
+splunkctl soar approvals respond 5 deny --message "Insufficient evidence" --yes
 ```
 
-Posts to `/rest/external_prompt/<id>` with `{status: "approve"|"deny"}`.
-`--message` attaches a freeform response message to the decision.
+Expected result: a POST to `/rest/external_prompt/<id>` with `{status: "approve"|"deny"}` and the optional message, and the playbook run moves past the prompt. The action argument accepts only `approve` or `deny` (case-insensitive); any other value is a usage error before any API call.
 
-**Guarded**: dry-run by default. The preview shows the approval ID,
-action, and message. Pass `--yes` to apply. The guard banner includes the
-SOAR host so you never accidentally respond on the wrong instance.
+### Run the full cycle
 
-The action argument accepts only `approve` or `deny` (case-insensitive).
-Any other value is rejected as a usage error before any API call.
-
-## Workflow example
-
-A typical prompt-response cycle from the terminal:
+> **Safety:** Target is the SOAR host in the active profile. Impact: step 3 resumes the paused playbook. Preview with `splunkctl soar approvals respond 5 approve --message "Verified IOC"`, apply by adding `--yes`, and verify with step 4.
 
 ```bash
-# 1. Check for pending approvals
 splunkctl soar approvals list --pending
-
-# 2. Inspect a specific approval
 splunkctl soar approvals get 5
-
-# 3. Approve it (or deny)
-splunkctl --yes soar approvals respond 5 approve --message "Verified IOC"
-
-# 4. Confirm the playbook resumed
+splunkctl soar approvals respond 5 approve --message "Verified IOC" --yes
 splunkctl soar containers get 42 --playbook-runs
 ```
 
-## Error handling
+Expected result: the approval leaves the pending list and the container's playbook run shows progress past the prompt block.
 
-All commands produce typed error envelopes on failure:
+## Troubleshooting
 
-```bash
-splunkctl soar approvals get 999 --json
-# stderr: {"error": {"kind": "not_found", "http_status": 404, ...}}
-# exit 1
-```
+- `not_found` on `get` or `respond` (`{"error": {"kind": "not_found", "http_status": 404, ...}}`, exit 1): the approval id is wrong or was deleted with its container; list again with `--pending`.
+- `conflict` on `respond`: the approval was already answered in the UI or by someone else; `get` shows the recorded decision.
+- Usage error (exit 2) on `respond`: the action must be `approve` or `deny`.
+- `permission` on `respond` while `list` works: the account's role cannot answer prompts; respond with a user whose role may.
+- The playbook did not resume after approval: check `splunkctl soar playbooks runs list --container 42 --status failed`; a failure in the next block looks like a stuck approval from the queue.
 
-Responding to an already-answered approval typically returns a conflict
-error from the server.
+## See also
+
+- [Run playbooks](soar-playbooks.md)
+- [Work SOAR incidents](soar-incidents.md)
+- [Set up and check SOAR](soar.md)
+- [Command reference: soar](../commands/soar.md)
