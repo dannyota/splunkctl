@@ -1,4 +1,6 @@
-# Users and roles
+<!-- summary: Create, update, and delete Splunk users and roles with a preview before every change. -->
+
+# Manage users and roles
 
 Manage Splunk users and roles via the REST API.
 

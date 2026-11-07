@@ -1,4 +1,6 @@
-# soar cases -- case management, workbook phases & tasks
+<!-- summary: Promote Splunk SOAR containers to cases, apply workbook templates, and work phases and tasks. -->
+
+# Manage cases and workbooks
 
 Promote containers to cases with workbook templates, view phase/task
 structure, and manage individual phases and tasks. Cases are containers
@@ -68,7 +70,7 @@ splunkctl --yes soar cases task update 100 --status complete
 splunkctl --yes soar cases task update 100 --status incomplete
 
 # Mark in_progress (requires a closing note; only allowed FROM
-# complete — the server rejects 0 -> 1, so complete the task first)
+# complete: the server rejects 0 -> 1, so complete the task first)
 splunkctl --yes soar cases task update 100 --status in_progress \
     --note "Reopening for active investigation"
 

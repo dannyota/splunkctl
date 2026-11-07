@@ -1,60 +1,108 @@
+<!-- summary: Install splunkctl from PyPI on Python 3.13 or newer, add the optional SDK fork and browser extra when you need them, and verify the install with doctor. -->
+
 # Install
 
-## From GitHub
+When to use: you are putting splunkctl on a workstation, a jump host, or a CI runner for the first time, or adding an optional component to an existing install.
 
-```bash
-pip install git+https://github.com/dannyota/splunkctl
+## Prerequisites
+
+- Python 3.13 or newer with `pip`.
+- Network access from this machine to the Splunk REST API (port 8089 by default) and, for SOAR, to the SOAR REST port (8443 by default).
+- A Splunk account. `splunkctl doctor` reports which permissions it has; each command needs the capabilities its action requires.
+
+## Synopsis
+
+```text
+python -m pip install splunkctl
+python -m pip install 'splunkctl[browser]'
+python -m pip install git+https://github.com/dannyota/splunk-sdk-python@splunkctl
+splunkctl --version
+splunkctl config init [--profile NAME] [--soar]
+splunkctl doctor [--strict]
+splunkctl completion <bash|zsh|fish>
 ```
 
-Core commands work with the upstream Splunk SDK installed from PyPI.
-Dashboard, lookup-file, and HTTP Event Collector (HEC) token commands
-need the optional SDK fork, installed separately:
+## Workflow
+
+### Install from PyPI
+
+```bash
+python -m pip install splunkctl
+splunkctl --version
+```
+
+Expected result: `splunkctl, version X.Y.Z`. If the output looks different, Splunk's own `splunkctl` binary is ahead of this package on your `PATH`; run `splunkctl-py` instead (see [Relationship to Splunk's splunkctl](splunk-cli.md)).
+
+Core commands work with the upstream Splunk SDK that `pip` installs as a dependency.
+
+### Add optional components
+
+Dashboard, lookup-file, and HTTP Event Collector (HEC) token commands use entity classes from a fork of the Splunk SDK. Install it only if you need those groups:
 
 ```bash
 python -m pip install git+https://github.com/dannyota/splunk-sdk-python@splunkctl
 ```
 
-## From source
+Browser SAML login (`splunkctl auth login`) needs Playwright:
+
+```bash
+python -m pip install 'splunkctl[browser]'
+```
+
+See [Log in through browser SAML](auth.md) for the browser setup that follows.
+
+### Install from source
 
 ```bash
 git clone https://github.com/dannyota/splunkctl.git
 cd splunkctl
-pip install -e .
+python -m pip install -e .
 ```
 
-## Verify
+For a development install with test tooling, see [CONTRIBUTING.md](https://github.com/dannyota/splunkctl/blob/master/CONTRIBUTING.md).
+
+### Configure and verify
 
 ```bash
-splunkctl --version
-splunkctl doctor           # check connection + auth + permissions
+splunkctl config init
+splunkctl doctor
 ```
 
-## Shell completion
+`config init` prompts for host, port, username, and password and writes `~/.splunkctl/config.yaml` on this machine (not guarded). `doctor` checks the connection, authentication, server health, and your permissions. Expected result: every check passes; `--strict` turns warnings into exit 1 for CI. Add SOAR afterwards with `splunkctl config init --soar` and `splunkctl soar test`. Profiles and environment variables are covered in [Configure](configure.md).
 
-Tab completion for commands, options, and arguments. Add the eval line to
-your shell profile:
+### Enable shell completion
 
-**Bash** (`~/.bashrc`):
+Add the matching line to your shell profile, then restart the shell or source the file.
+
+Bash (`~/.bashrc`):
 
 ```bash
 eval "$(splunkctl completion bash)"
 ```
 
-**Zsh** (`~/.zshrc`):
+Zsh (`~/.zshrc`):
 
 ```bash
 eval "$(splunkctl completion zsh)"
 ```
 
-**Fish** (`~/.config/fish/config.fish`):
+Fish (`~/.config/fish/config.fish`):
 
-```fish
+```bash
 splunkctl completion fish | source
 ```
 
-Restart your shell (or `source` the profile) to activate.
+## Troubleshooting
 
-## Requirements
+- `pip` reports no matching distribution: your Python is older than 3.13. Check with `python --version` and install a newer interpreter.
+- `splunkctl --version` prints something other than `splunkctl, version X.Y.Z`: another `splunkctl` is first on `PATH`; use `splunkctl-py`.
+- `ImportError` mentioning `Dashboard`, `LookupTableFile`, or `HECToken`: install the SDK fork.
+- `doctor` fails on connection: confirm host and port, and that the REST port is reachable from this machine (`curl -k https://HOST:8089/services/server/info`).
+- `doctor` reports a Splunk-format config file: `~/.splunkctl/config.yaml` belongs to Splunk's CLI; run `splunkctl config init --path ~/.splunkctl/profiles.yaml` or see [Relationship to Splunk's splunkctl](splunk-cli.md).
 
-- Python 3.13+
-- A running Splunk Enterprise instance with the REST API enabled (port 8089)
+## See also
+
+- [Configure](configure.md)
+- [Diagnose a connection](doctor.md)
+- [Set up the MCP server](mcp.md)
+- [Relationship to Splunk's splunkctl](splunk-cli.md)

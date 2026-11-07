@@ -1,4 +1,6 @@
-# Parsers
+<!-- summary: Manage source types, props, and transforms, and keep field extractions in YAML for review and deployment. -->
+
+# Manage source types and extractions
 
 Manage source types (`props.conf`) and field extractions
 (`transforms.conf`) via the REST API.

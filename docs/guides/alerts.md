@@ -1,4 +1,6 @@
-# Alerts
+<!-- summary: Review fired alerts, inspect alert actions, and manage alert suppression on a Splunk instance from the terminal. -->
+
+# Review fired alerts
 
 Fired alerts are the SOC's incoming work queue. During an incident, you
 need to see what triggered, when, and at what severity. During planned

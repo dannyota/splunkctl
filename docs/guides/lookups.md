@@ -1,4 +1,6 @@
-# Lookups
+<!-- summary: Upload, download, define, and wire lookup tables so detections can enrich events from files you control. -->
+
+# Manage lookups
 
 Lookups turn raw events into actionable intelligence. SecOps teams use
 them for threat intel enrichment (IoC feeds correlated at search time),

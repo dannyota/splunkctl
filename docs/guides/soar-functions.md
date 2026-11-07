@@ -1,4 +1,6 @@
-# soar functions -- custom function management
+<!-- summary: List, inspect, import, export, and update Splunk SOAR custom functions. -->
+
+# Manage custom functions
 
 Manage SOAR custom functions: list, inspect, import, export, update, and
 delete. Custom functions are reusable Python snippets called from playbook

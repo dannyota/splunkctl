@@ -1,6 +1,8 @@
-# Conf
+<!-- summary: Read and edit any Splunk configuration file and stanza over the REST confs API when no dedicated command group covers it. -->
 
-Generic conf file/stanza editor over the REST `confs` API — the escape
+# Edit any conf file
+
+Generic conf file/stanza editor over the REST `confs` API, the escape
 hatch for any Splunk conf file that doesn't have a dedicated command
 group yet: `macros`, `eventtypes`, `tags`, `limits`, `authorize`,
 `server`, `web`, and everything else under `$SPLUNK_HOME/etc/*/local`.
@@ -14,7 +16,7 @@ and calculated fields live in `props.conf` alongside sourcetypes.
 every other conf file the same way, so nothing detection-relevant is
 locked out of code review or CI.
 
-There is **no blocklist** — `conf` can edit `authorize.conf`,
+There is **no blocklist**, `conf` can edit `authorize.conf`,
 `server.conf`, and `web.conf` just as readily as `macros.conf`. The
 dry-run guard and `--yes` are the only safety net: every `set`/`unset`/
 `reload` preview names the exact file and stanza before it touches
@@ -54,7 +56,7 @@ splunkctl conf get eventtypes authentication --json | jq .
 
 ### Review a stanza change before applying
 
-`conf set` always previews a field-level diff — old value on the left,
+`conf set` always previews a field-level diff, old value on the left,
 new value on the right, `add` for a brand-new key:
 
 ```bash
@@ -71,7 +73,7 @@ splunkctl conf files --filter tag
 
 ## Tips
 
-- `conf set` creates the stanza if it doesn't exist yet — there's no
+- `conf set` creates the stanza if it doesn't exist yet, there's no
   separate create step.
 - The REST API has no true per-key delete; `conf unset` sets keys to
   the empty string (same mechanism `parsers unset` uses). To fully

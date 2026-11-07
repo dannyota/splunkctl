@@ -16,6 +16,22 @@ from splunkctl.soar.client import SOARError
 # Max polls for async test_connectivity result.
 _TEST_MAX_POLLS = 12
 _TEST_POLL_INTERVAL = 2.5
+_SECRET_KEY_HINTS = ("password", "secret", "token", "api_key", "apikey")
+
+
+def _redact_secrets(body: dict[str, Any]) -> dict[str, Any]:
+    """Return a copy of a request body with secret-looking config values masked.
+
+    Only the dry-run preview is redacted; the real value is sent on --yes.
+    """
+    config = body.get("configuration")
+    if not isinstance(config, dict):
+        return body
+    masked = {
+        key: "****" if any(hint in key.lower() for hint in _SECRET_KEY_HINTS) else value
+        for key, value in config.items()
+    }
+    return {**body, "configuration": masked}
 
 
 def _parse_set_pairs(raw: tuple[str, ...]) -> dict[str, str]:
@@ -174,7 +190,7 @@ def create_cmd(
     if description is not None:
         body["description"] = description
 
-    details = json.dumps(body, indent=2)
+    details = json.dumps(_redact_secrets(body), indent=2)
     if not guard.soar_check(ctx, f"Create asset '{name}'", details=details):
         return
 
@@ -300,7 +316,7 @@ def update_cmd(
     if secret_keys:
         preview_body["configuration"] = _mask_secrets(merged_config, secret_keys)
 
-    details = json.dumps(preview_body, indent=2)
+    details = json.dumps(_redact_secrets(preview_body), indent=2)
     if not guard.soar_check(ctx, f"Update asset {asset_id}", details=details):
         return
 

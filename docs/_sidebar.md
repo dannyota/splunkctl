@@ -1,50 +1,61 @@
 - [Home](/)
 
-- **Getting started**
-  - [MCP server](guides/mcp.md)
+- **Get started**
   - [Install](guides/install.md)
   - [Configure](guides/configure.md)
-  - [Browser SAML auth](guides/auth.md)
-  - [Keycloak lab](guides/keycloak-lab.md)
-  - [Doctor](guides/doctor.md)
+
+- **Investigate**
+  - [Run searches](guides/search.md)
+  - [Review fired alerts](guides/alerts.md)
+  - [Triage ES notables](guides/es.md)
+  - [Manage dashboards](guides/dashboards.md)
+
+- **Detect**
+  - [Manage detection rules](guides/rules.md)
+  - [Manage ES correlations and threat intel](guides/es-detections.md)
+  - [Manage macros, eventtypes, tags](guides/knowledge.md)
+  - [Check data model acceleration](guides/datamodels.md)
+  - [Manage lookups](guides/lookups.md)
+  - [Manage source types and extractions](guides/parsers.md)
+
+- **Respond with SOAR**
+  - [Set up and check SOAR](guides/soar.md)
+  - [Work SOAR incidents](guides/soar-incidents.md)
+  - [Install SOAR apps](guides/soar-apps.md)
+  - [Configure assets and monitor ingestion](guides/soar-assets.md)
+  - [Run playbooks](guides/soar-playbooks.md)
+  - [Run actions](guides/soar-actions.md)
+  - [Manage custom functions](guides/soar-functions.md)
+  - [Manage cases and workbooks](guides/soar-cases.md)
+  - [Handle approvals](guides/soar-approvals.md)
+  - [Maintain custom lists](guides/soar-lists.md)
+  - [Look up indicators and evidence](guides/soar-indicators.md)
+  - [Ingest SIEM results into SOAR](guides/soar-ingest.md)
+
+- **Change safely**
+  - [Manage configuration as code](guides/state.md)
+  - [Edit any conf file](guides/conf.md)
+
+- **Give it to an agent**
+  - [Set up the MCP server](guides/mcp.md)
+
+- **Operate and audit**
+  - [Log in through browser SAML](guides/auth.md)
+  - [Diagnose a connection](guides/doctor.md)
+  - [Manage indexes](guides/indexes.md)
+  - [Manage data inputs](guides/inputs.md)
+  - [Manage HEC tokens](guides/hec.md)
+  - [Manage apps](guides/apps.md)
+  - [Manage users and roles](guides/users.md)
+  - [Check server health and topology](guides/server.md)
+  - [Manage KV store collections](guides/kvstore.md)
+  - [Audit changes and attest RBAC](guides/audit.md)
+  - [Administer SOAR users and roles](guides/soar-admin.md)
+
+- **Reference**
   - [Exit codes](guides/exit-codes.md)
-
-- **Commands**
-  - [Search](guides/search.md)
-  - [Detection rules](guides/rules.md)
-  - [Alerts](guides/alerts.md)
-  - [Dashboards](guides/dashboards.md)
-  - [Indexes](guides/indexes.md)
-  - [Inputs](guides/inputs.md)
-  - [Lookups](guides/lookups.md)
-  - [HEC tokens](guides/hec.md)
-  - [Parsers](guides/parsers.md)
-  - [Macros, eventtypes, tags](guides/knowledge.md)
-  - [Conf editor](guides/conf.md)
-  - [Apps](guides/apps.md)
-  - [Users & roles](guides/users.md)
-
-- **Operations**
-  - [State (config-as-code)](guides/state.md)
-  - [ES notables](guides/es.md)
-  - [KV store](guides/kvstore.md)
-  - [Data models](guides/datamodels.md)
-  - [Audit & RBAC](guides/audit.md)
-  - [Server health](guides/server.md)
-
-- **SOAR**
-  - [Overview](guides/soar.md)
-  - [App management](guides/soar-apps.md)
-  - [Apps, assets & ingest](guides/soar-automation.md)
-  - [Playbooks](guides/soar-playbooks.md)
-  - [Actions](guides/soar-actions.md)
-  - [Functions](guides/soar-functions.md)
-  - [Cases & workbooks](guides/soar-cases.md)
-  - [Approvals](guides/soar-approvals.md)
-  - [Custom lists](guides/soar-lists.md)
-  - [Indicators & evidence](guides/soar-indicators.md)
-  - [Users, roles & audit](guides/soar-admin.md)
-  - [Ingest (SIEM to SOAR)](guides/soar-ingest.md)
+  - [Relationship to Splunk's splunkctl](guides/splunk-cli.md)
+  - [Contributor lab: Keycloak SAML](guides/keycloak-lab.md)
 
 <!-- commands:start -->
 - **Command reference**

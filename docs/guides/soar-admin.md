@@ -1,4 +1,6 @@
-# SOAR Admin — Users, Roles, Audit
+<!-- summary: Manage Splunk SOAR users, inspect role permissions, and query the platform audit trail. -->
+
+# Administer SOAR users and roles
 
 Manage SOAR platform users, inspect role permissions, and query the
 audit trail. User mutations are guarded (dry-run by default, `--yes` to

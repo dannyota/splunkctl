@@ -1,4 +1,6 @@
-# Indexes
+<!-- summary: Create, configure, and delete Splunk indexes with a preview before every change. -->
+
+# Manage indexes
 
 Create, configure, and manage Splunk indexes.
 

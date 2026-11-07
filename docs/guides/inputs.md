@@ -1,4 +1,6 @@
-# Data inputs
+<!-- summary: Manage monitor, TCP, UDP, scripted, and HTTP data inputs on a Splunk instance. -->
+
+# Manage data inputs
 
 Manage monitor, TCP, UDP, script, and HTTP data inputs.
 

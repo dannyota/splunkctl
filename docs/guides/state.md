@@ -1,4 +1,6 @@
-# State (config-as-code, change evidence)
+<!-- summary: Pull live Splunk and SOAR configuration, diff it against version control, and push approved changes with a change report. -->
+
+# Manage configuration as code
 
 `state` is the bank change-management workflow: pull a versioned
 snapshot of an instance's detection content, edit it like code, diff
@@ -127,7 +129,7 @@ drifted dashboards as apply-unsupported and skips them without
 erroring:
 
 ```text
-note: dashboards: 1 drifted object(s) — apply not supported (export-only, no import path)
+note: dashboards: 1 drifted object(s), apply not supported (export-only, no import path)
 ```
 
 If `dashboards` is the only `--types` value and nothing else drifted,

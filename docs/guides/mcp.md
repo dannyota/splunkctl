@@ -1,11 +1,13 @@
-# MCP server
+<!-- summary: Register splunkctl as an MCP server so Claude Code, Claude Desktop, Cursor, or any MCP client can run its commands with the same guard. -->
+
+# Set up the MCP server
 
 Use splunkctl as a [Model Context Protocol](https://modelcontextprotocol.io)
-server to give AI agents — Claude Code, Claude Desktop, Cursor, Windsurf, or
-any MCP client — direct access to your Splunk Enterprise SIEM and Splunk SOAR
+server to give AI agents, Claude Code, Claude Desktop, Cursor, Windsurf, or
+any MCP client, direct access to your Splunk Enterprise SIEM and Splunk SOAR
 instances.
 
-The server uses **dynamic tool loading**: instead of exposing all 262 tools
+The server uses **dynamic tool loading**: instead of exposing every tool
 upfront, it starts with 5 meta-tools and loads group-specific typed tools on
 demand. This keeps the agent's context window small while covering every
 command. Version 0.12 uses MCP Python SDK 2 and publishes tool-list changes
@@ -36,7 +38,7 @@ export SPLUNK_PASS=your-password
 ```
 
 Or run `splunkctl config init` to write `~/.splunkctl/config.yaml`. See
-[Configure](guides/configure.md) for details.
+[Configure](configure.md) for details.
 
 For SOAR, add SOAR credentials:
 
@@ -100,9 +102,9 @@ environment variables, or ensure `~/.splunkctl/config.yaml` exists.
 
 The server exposes:
 
-- **Meta-tools** — `help`, `run`, `focus`, `unfocus`, `usage` (always loaded)
-- **Group tools** — loaded on demand via `focus` (e.g. `focus group="rules"`)
-- **Resources** — one per guide (`guide://{name}`)
+- **Meta-tools**, `help`, `run`, `focus`, `unfocus`, `usage` (always loaded)
+- **Group tools**, loaded on demand via `focus` (e.g. `focus group="rules"`)
+- **Resources**, one per guide (`guide://{name}`)
 
 ### Workflow
 
@@ -130,7 +132,7 @@ The server exposes:
 > The agent calls `focus group="soar containers"`, then
 > `soar_containers_list` with the appropriate filters.
 
-All tool output is JSON. Mutations are dry-run by default — the agent must
+All tool output is JSON. Mutations are dry-run by default, the agent must
 pass `yes=true` to apply, same as the CLI's `--yes`.
 
 ## HTTP transport (local mode)
@@ -165,7 +167,7 @@ has no authentication and cannot bind to a non-loopback address.
 
 - The MCP server inherits the permissions of your Splunk credentials. Use a
   least-privilege account scoped to what the agent needs.
-- All mutations require `yes=true` — the agent cannot accidentally modify your
+- All mutations require `yes=true`, the agent cannot accidentally modify your
   environment without explicit confirmation.
 - **stdio mode** runs locally with no network listener.
 - **HTTP mode** listens only on a loopback address and has no authentication.

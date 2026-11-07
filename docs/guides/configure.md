@@ -1,3 +1,5 @@
+<!-- summary: Set up splunkctl profiles for development, UAT, and production, and override them with environment variables or flags. -->
+
 # Configure
 
 ## Interactive setup
@@ -29,7 +31,7 @@ owner: "nobody"         # default owner context
 
 **TLS verification is on by default.** Production instances with valid
 certificates work out of the box. For lab/dev instances with self-signed
-certs, set `verify: false` explicitly in the profile — `config init` asks
+certs, set `verify: false` explicitly in the profile, `config init` asks
 during setup (default: yes).
 
 ## Profiles (dev/UAT/prod)
@@ -64,8 +66,8 @@ splunkctl --profile prod rules list       # override for a single invocation
 pointer > `default`.
 
 **Legacy files keep working.** A plain flat file (no `profiles:` key) is
-treated as an implicit profile named `default` — nothing to migrate. Bare
-`config init` writes that flat shape — unless the destination file already
+treated as an implicit profile named `default`, nothing to migrate. Bare
+`config init` writes that flat shape, unless the destination file already
 has a `profiles:` key, in which case it folds the new values into
 `profiles.default` instead, leaving sibling profiles and `current`
 untouched (bare `config init` never clobbers an existing multi-profile
@@ -75,8 +77,8 @@ keys move under `profiles.default`, the new named profile is added
 alongside it, and file permissions stay `0600`.
 
 **Guard banner.** Every dry-run preview and `--yes` confirmation prints
-which instance is about to be mutated —
-`[DRY RUN] ... (profile: uat @ uat.splunk.internal:8089)` — so switching
+which instance is about to be mutated,
+`[DRY RUN] ... (profile: uat @ uat.splunk.internal:8089)`, so switching
 between dev/UAT/prod never happens silently. The banner is built from local
 config only; it never opens a connection.
 

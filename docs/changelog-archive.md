@@ -161,7 +161,7 @@ and a live SIEM audit (2026-07-11).
 
 ### Docs
 - SOAR REST API discovery reference
-  ([docs/design/soar-api.md](docs/design/soar-api.md)) — live-verified
+  ([docs/design/soar-api.md](design/soar-api.md)) — live-verified
   endpoint inventory, auth model, query semantics, and recipes for the
   upcoming `splunkctl soar` arc (waves 30–34).
 - Catalog refresh: `rules test` row, new server subcommands,

@@ -1,4 +1,6 @@
-# HEC tokens
+<!-- summary: Create, enable, disable, and remove HTTP Event Collector tokens, adjust HEC settings, and send test events. -->
+
+# Manage HEC tokens
 
 HEC (HTTP Event Collector) is Splunk's HTTP/JSON ingestion endpoint.
 SecOps teams use it to push data into Splunk from sources that do not
