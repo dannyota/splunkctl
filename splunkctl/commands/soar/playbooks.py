@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import io
 import json
+import sys
 import tarfile
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -321,7 +322,7 @@ def export_cmd(
         output.info(f"Exported to {out_path}")
     else:
         # Raw tgz to stdout.
-        click.get_binary_stream("stdout").write(tgz_bytes)
+        sys.stdout.buffer.write(tgz_bytes)
 
 
 def _unpack_tgz(tgz_bytes: bytes, out_dir: str | None, ctx: click.Context) -> None:

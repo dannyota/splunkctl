@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import sys
 import tarfile
 from io import BytesIO
 from pathlib import Path
@@ -167,7 +168,7 @@ def export_cmd(ctx: click.Context, *, function_id: int, out: str | None) -> None
         Path(out).write_bytes(raw)
         output.info(f"Written {len(raw):,} bytes to {out}")
     else:
-        click.get_binary_stream("stdout").write(raw)
+        sys.stdout.buffer.write(raw)
 
 
 @functions_group.command("update")

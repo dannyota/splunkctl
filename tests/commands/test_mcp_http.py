@@ -159,6 +159,25 @@ def test_created_server_rejects_direct_non_loopback_http() -> None:
     parent_run.assert_not_awaited()
 
 
+def test_created_server_forwards_http_session_limits() -> None:
+    """MCP 2.3 session limits reach the underlying HTTP server."""
+    from splunkctl.mcp.dynamic_server import SplunkMCPServer
+
+    server = SplunkMCPServer("test")
+    with patch.object(
+        MCPServer, "run_streamable_http_async", new_callable=AsyncMock
+    ) as parent_run:
+        asyncio.run(
+            server.run_streamable_http_async(
+                host="localhost", session_idle_timeout=30.0, max_sessions=10
+            )
+        )
+    assert parent_run.await_args is not None
+    assert parent_run.await_args.kwargs["host"] == "localhost"
+    assert parent_run.await_args.kwargs["session_idle_timeout"] == 30.0
+    assert parent_run.await_args.kwargs["max_sessions"] == 10
+
+
 def test_mcp_install_stdio_default(tmp_path: Path) -> None:
     """Default install writes stdio (command+args) config."""
     runner = CliRunner()

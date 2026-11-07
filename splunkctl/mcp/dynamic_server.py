@@ -9,7 +9,11 @@ import anyio
 from mcp.server import MCPServer
 from mcp.server.mcpserver import Context
 from mcp.server.streamable_http import EventStore
-from mcp.server.streamable_http_manager import DEFAULT_MAX_REQUEST_BODY_SIZE
+from mcp.server.streamable_http_manager import (
+    DEFAULT_MAX_REQUEST_BODY_SIZE,
+    DEFAULT_MAX_SESSIONS,
+    DEFAULT_SESSION_IDLE_TIMEOUT,
+)
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import (
     CallToolResult,
@@ -115,6 +119,8 @@ class SplunkMCPServer(MCPServer[None]):
         event_store: EventStore | None = None,
         retry_interval: int | None = None,
         max_request_body_size: int = DEFAULT_MAX_REQUEST_BODY_SIZE,
+        session_idle_timeout: float | None = DEFAULT_SESSION_IDLE_TIMEOUT,
+        max_sessions: int | None = DEFAULT_MAX_SESSIONS,
         transport_security: TransportSecuritySettings | None = None,
     ) -> None:
         """Run Streamable HTTP only on an allowed loopback host."""
@@ -128,5 +134,7 @@ class SplunkMCPServer(MCPServer[None]):
             event_store=event_store,
             retry_interval=retry_interval,
             max_request_body_size=max_request_body_size,
+            session_idle_timeout=session_idle_timeout,
+            max_sessions=max_sessions,
             transport_security=transport_security,
         )
