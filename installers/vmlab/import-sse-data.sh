@@ -50,7 +50,7 @@ ensure_hec_token() {
     chmod 600 "$SSE_HEC_TOKEN_FILE"
     log "created the lab HEC token file"
   fi
-  [[ "$(stat -c '%a' "$SSE_HEC_TOKEN_FILE")" == 600 ]] ||
+  [[ "$(file_mode "$SSE_HEC_TOKEN_FILE")" == 600 ]] ||
     chmod 600 "$SSE_HEC_TOKEN_FILE"
 }
 

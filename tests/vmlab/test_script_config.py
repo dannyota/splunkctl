@@ -1,4 +1,5 @@
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -140,10 +141,58 @@ def test_install_sse_skips_an_existing_matching_app(tmp_path: Path) -> None:
     assert "SSE 3.8.3 is already installed" in result.stdout
 
 
+def _sandboxed_vmlab(tmp_path: Path) -> Path:
+    """Copy installers/vmlab with every stage script stubbed to fail loudly.
+
+    A guard regression must fail the test, never provision a real VM.
+    """
+    lab = tmp_path / "vmlab"
+    shutil.copytree(VMLAB, lab, ignore=shutil.ignore_patterns("config.local.env"))
+    for name in (
+        "check-lab.sh",
+        "build-rhel-vm.sh",
+        "install-splunk.sh",
+        "install-soar.sh",
+        "install-sse.sh",
+        "import-sse-data.sh",
+    ):
+        (lab / name).write_text("#!/usr/bin/env bash\necho STAGE-RAN >&2\nexit 99\n")
+    stubs = tmp_path / "bin"
+    stubs.mkdir()
+    for tool in ("vmrun", "vmware", "ssh", "ssh-keygen", "scp"):
+        stub = stubs / tool
+        stub.write_text("#!/usr/bin/env bash\necho TOOL-RAN >&2\nexit 99\n")
+        stub.chmod(0o755)
+    return lab
+
+
 def test_provision_rejects_placeholder_password(tmp_path: Path) -> None:
+    lab = _sandboxed_vmlab(tmp_path)
     result = run_bash(
-        f"{VMLAB / 'provision-lab.sh'}",
-        env={"LAB_PASSWORD": "changeme", "HOME": str(tmp_path)},
+        f"{lab / 'provision-lab.sh'}",
+        env={
+            "LAB_PASSWORD": "changeme",
+            "HOME": str(tmp_path),
+            "PATH": f"{tmp_path / 'bin'}:{os.environ.get('PATH', '')}",
+        },
     )
-    assert result.returncode != 0
+    assert result.returncode == 1, result.stderr
+    assert "set LAB_PASSWORD in config.env before provisioning" in result.stderr
+    assert "STAGE-RAN" not in result.stderr
+    assert "TOOL-RAN" not in result.stderr
+    assert not (tmp_path / "vmware").exists()
+
+
+def test_provision_guard_ignores_local_env_overrides(tmp_path: Path) -> None:
+    lab = _sandboxed_vmlab(tmp_path)
+    (lab / "config.local.env").write_text("LAB_PASSWORD=real-secret\n")
+    result = run_bash(
+        f"{lab / 'provision-lab.sh'}",
+        env={
+            "LAB_PASSWORD": "changeme",
+            "HOME": str(tmp_path),
+            "PATH": f"{tmp_path / 'bin'}:{os.environ.get('PATH', '')}",
+        },
+    )
+    assert result.returncode == 1, result.stderr
     assert "set LAB_PASSWORD in config.env before provisioning" in result.stderr

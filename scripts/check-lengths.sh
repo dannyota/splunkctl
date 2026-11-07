@@ -23,7 +23,7 @@ violations=0
 while IFS= read -r f; do
   [[ "$f" == "splunkctl/skill/SKILL.md" ]] && continue
   [[ "$f" == "PLAN.md" ]] && continue
-  n=$(wc -l <"$f")
+  n=$(wc -l <"$f" | tr -d " ")
   if (( n > MD_MAX )); then
     echo "DOC TOO LONG  $f: $n lines (max $MD_MAX): split or trim"
     violations=$((violations + 1))
@@ -32,7 +32,7 @@ done < <(find . -name '*.md' -not -path './.git/*' -not -path './.claude/*' -not
 
 # --- Python source ---
 while IFS= read -r f; do
-  n=$(wc -l <"$f")
+  n=$(wc -l <"$f" | tr -d " ")
   if (( n > PY_MAX )); then
     echo "PY FILE TOO LONG  $f: $n lines (max $PY_MAX): split by topic"
     violations=$((violations + 1))
