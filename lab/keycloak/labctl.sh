@@ -69,8 +69,11 @@ admin_token() {
 do_configure() {
   require_podman
   [ -n "${KEYCLOAK_ADMIN_PASSWORD:-}" ] || die "missing KEYCLOAK_ADMIN_PASSWORD (copy .env.example to .env and fill secrets)"
+  umask 077
   mkdir -p "$LAB_DIR/.runtime"
+  chmod 700 "$LAB_DIR/.runtime"
   local out="$LAB_DIR/.runtime/${REALM}-realm.json" token
+  rm -f "$out"
   render "$LAB_DIR/realm-template.json" \
     "REALM=$REALM" \
     "SIEM_ACS=$SIEM_ACS" "SOAR_ACS=$SOAR_ACS" \

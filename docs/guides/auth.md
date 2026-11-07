@@ -7,7 +7,7 @@ stores TOTP secrets or codes.
 
 ## How it works
 
-1. `splunkctl config init` probes the public login route. When it sees a
+1. `splunkctl config init --web-url https://splunk.example.com` probes the public login route. When it sees a
    redirect to an external identity provider, it records `auth_mode: browser`
    and stores the product `web_url`.
 2. `splunkctl auth login --target <siem|soar>` opens Chromium at the product

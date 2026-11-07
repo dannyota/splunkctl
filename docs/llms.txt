@@ -7,11 +7,12 @@
 ## Getting started
 
 - [MCP server](https://splunkctl.danny.vn/#/guides/mcp): Use splunkctl as a Model Context Protocol server to give AI agents — Claude Code, Claude Desktop, Cursor, Windsurf, or any MCP client — direct access
-- [Install](https://splunkctl.danny.vn/#/guides/install): This pulls the forked SDK (splunkctl branch) automatically as a dependency.
-- [Configure](https://splunkctl.danny.vn/#/guides/configure): Prompts for host, port, auth method (token or username/password), tests the connection, and writes ~/.splunkctl/config.yaml with 0600 permissions.
+- [Install](https://splunkctl.danny.vn/#/guides/install): Core commands work with the upstream Splunk SDK installed from PyPI. Dashboard, lookup-file, and HTTP Event Collector (HEC) token commands need the
+- [Configure](https://splunkctl.danny.vn/#/guides/configure): Prompts for host, port, username, password, and TLS verification, then writes when --web-url URL is supplied. Run splunkctl config test to check
 - [Browser SAML auth](https://splunkctl.danny.vn/#/guides/auth): splunkctl can complete Splunk SAML single sign-on (including a second factor) in a headed Chromium window and then reuse the resulting product
 - [Keycloak lab](https://splunkctl.danny.vn/#/guides/keycloak-lab): The lab runs Keycloak in rootless Podman as an external identity provider for the Splunk SIEM and SOAR VMs. It lets you exercise the browser SAML
 - [Doctor](https://splunkctl.danny.vn/#/guides/doctor): Diagnose connection, authentication, server health, and user permissions in a single command.
+- [Exit codes](https://splunkctl.danny.vn/#/guides/exit-codes): splunkctl uses three exit codes. Scripts and CI pipelines can branch on
 
 ## Commands
 
@@ -41,6 +42,7 @@
 ## SOAR
 
 - [Overview](https://splunkctl.danny.vn/#/guides/soar): Platform reads, containers, artifacts, playbooks, and actions on Splunk SOAR (on-premises or cloud) via the REST API.
+- [App management](https://splunkctl.danny.vn/#/guides/soar-apps): Manage SOAR apps -- list installed and staged apps, view config schemas, install from tgz packages, and uninstall.
 - [Apps, assets & ingest](https://splunkctl.danny.vn/#/guides/soar-automation): Apps, assets, connectivity testing, and ingestion monitoring on Splunk SOAR. Companion to soar.md (platform reads, containers, artifacts, vault,
 - [Playbooks](https://splunkctl.danny.vn/#/guides/soar-playbooks): Playbook lifecycle and playbooks-as-code workflow on Splunk SOAR via the REST API. Export, edit in git, import back -- the first programmatic
 - [Actions](https://splunkctl.danny.vn/#/guides/soar-actions): Run, monitor, and inspect action runs on Splunk SOAR assets.

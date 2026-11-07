@@ -138,3 +138,12 @@ def test_install_sse_skips_an_existing_matching_app(tmp_path: Path) -> None:
 
     assert result.returncode == 0, result.stderr
     assert "SSE 3.8.3 is already installed" in result.stdout
+
+
+def test_provision_rejects_placeholder_password(tmp_path: Path) -> None:
+    result = run_bash(
+        f"{VMLAB / 'provision-lab.sh'}",
+        env={"LAB_PASSWORD": "changeme", "HOME": str(tmp_path)},
+    )
+    assert result.returncode != 0
+    assert "set LAB_PASSWORD in config.env before provisioning" in result.stderr

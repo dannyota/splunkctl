@@ -18,8 +18,37 @@ name and config path, plus a green typecheck on current MCP releases.
 - README section comparing this project with `splunk/splunkctl`, and a
   ROADMAP note recording the decision to keep the name.
 
+### Security
+
+- **TLS verification was silently off for Splunk Enterprise.** `verify: true`
+  profiles never passed `verify` to the SDK, whose default is off. The
+  client now always passes the profile's value; the default is on.
+- **Argument values could become global flags.** A positional or option
+  value such as `--yes` was hoisted into the global flags, which let an MCP
+  tool call apply a mutation without `yes=true`. The parser now stops at
+  `--` and never inspects option values, and the MCP runner separates
+  positionals with `--`.
+- **SPL that writes is a mutation.** `search run`, `search export`,
+  `search oneshot`, and `soar ingest` refuse SPL containing `outputlookup`,
+  `collect`, `mcollect`, `meventcollect`, `sendalert`, `delete`,
+  `outputcsv`, `outputtext`, `sendemail`, `runshellscript`, or `script`
+  unless `--yes` is passed. MCP search tools have no `yes` parameter, so
+  such SPL is refused there.
+- Config files are written through a `0600` temporary file and renamed into
+  place; the config directory is created with mode `0700`.
+- The SOAR token prompt in `config init --soar` no longer echoes input.
+- SOAR asset and artifact `KEY=VALUE` options reject a missing `=`.
+- Lab scripts: Keycloak realm files are rendered under `umask 077`, and VM
+  provisioning refuses the placeholder lab password.
+- Docs site: CDN assets are pinned to exact versions that match their
+  integrity hashes; a dead stylesheet link was removed.
+- Added SECURITY.md with private vulnerability reporting, and
+  CONTRIBUTING.md with the release procedure.
+
 ### Changed
 
+- The publish workflow fails when the release tag does not match the
+  package version. CI tests run on Ubuntu and macOS.
 - `config init` now honors the global `--config` flag as its destination
   when `--path` is not given.
 - Require `mcp>=2.3` to match the `MCPServer` Streamable HTTP signature the

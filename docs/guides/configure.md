@@ -6,8 +6,10 @@
 splunkctl config init
 ```
 
-Prompts for host, port, auth method (token or username/password), tests the
-connection, and writes `~/.splunkctl/config.yaml` with `0600` permissions.
+Prompts for host, port, username, password, and TLS verification, then writes
+`~/.splunkctl/config.yaml` with `0600` permissions. SAML detection runs only
+when `--web-url URL` is supplied. Run `splunkctl config test` to check
+connectivity and authentication after setup.
 
 ## Config file
 
@@ -88,14 +90,15 @@ config only; it never opens a connection.
 | `SPLUNK_USER` | `username` |
 | `SPLUNK_PASS` | `password` |
 
-Env vars override fields of whichever profile is selected — same as they
-override the flat config today.
+Environment variables override fields in the selected profile.
 
 ## Resolution priority
 
-1. CLI flags (`--host`, `--port`, `--token`)
-2. Environment variables
-3. Profile (config file)
+1. Environment variables
+2. Selected profile
+3. Built-in defaults
+
+`--profile` and `--config` are the only root options that select configuration.
 
 ## Coexistence with Splunk's splunkctl
 

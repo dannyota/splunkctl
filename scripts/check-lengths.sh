@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# check-lengths.sh — enforce the doc/code file-length budget (CLAUDE.md §2).
+# Enforce file-length limits so authored docs and Python modules stay focused.
 #
 # Python source: 500 lines max. Markdown docs: 450 lines max.
 # splunkctl/skill/SKILL.md is exempt (detailed agent reference, completeness
@@ -25,7 +25,7 @@ while IFS= read -r f; do
   [[ "$f" == "PLAN.md" ]] && continue
   n=$(wc -l <"$f")
   if (( n > MD_MAX )); then
-    echo "DOC TOO LONG  $f: $n lines (max $MD_MAX) — split or trim"
+    echo "DOC TOO LONG  $f: $n lines (max $MD_MAX): split or trim"
     violations=$((violations + 1))
   fi
 done < <(find . -name '*.md' -not -path './.git/*' -not -path './.claude/*' -not -path './.worktrees/*' -not -path './docs/commands/*' -not -path './docs/plans/*' | sed 's#^\./##' | sort)
@@ -34,7 +34,7 @@ done < <(find . -name '*.md' -not -path './.git/*' -not -path './.claude/*' -not
 while IFS= read -r f; do
   n=$(wc -l <"$f")
   if (( n > PY_MAX )); then
-    echo "PY FILE TOO LONG  $f: $n lines (max $PY_MAX) — split by topic"
+    echo "PY FILE TOO LONG  $f: $n lines (max $PY_MAX): split by topic"
     violations=$((violations + 1))
   fi
 done < <(find . -name '*.py' -not -path './.git/*' -not -path './.claude/*' -not -path './.worktrees/*' | sed 's#^\./##' | sort)

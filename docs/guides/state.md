@@ -32,7 +32,7 @@ splunkctl state push --dir ./snapshot --yes \
 
 ## The pulled tree
 
-```
+```text
 snapshot/
   manifest.json       # tool version, host, per-type object counts
   rules.yml           # saved searches (rules_io's YAML shape)
@@ -126,7 +126,7 @@ pull`/`state diff` work normally for dashboards; `state push` reports
 drifted dashboards as apply-unsupported and skips them without
 erroring:
 
-```
+```text
 note: dashboards: 1 drifted object(s) — apply not supported (export-only, no import path)
 ```
 
@@ -217,7 +217,7 @@ splunkctl state push --dir ./snap --types soar-assets --yes
 
 ### The pulled tree (SOAR types)
 
-```
+```text
 snapshot/
   soar-playbooks/
     index.json                  # id/name/filename map for diff/push

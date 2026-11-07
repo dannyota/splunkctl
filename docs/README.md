@@ -79,6 +79,13 @@ pass `--yes`.
 | `kvstore` | KV store collection + document CRUD |
 | `state` | Config-as-code pull/diff/push with change-evidence reports |
 | `soar` | SOAR: containers, artifacts, vault, playbooks, actions, cases, ingest |
+| `auth` | Browser SAML login, session status, and logout |
+| `datamodels` | Inspect definitions and acceleration health |
+| `commands` | Emit the machine-readable command tree |
+| `completion` | Generate shell completion for Bash, Zsh, or Fish |
+| `mcp` | Install and run the MCP server |
+| `eventtypes` | Manage search event types |
+| `tags` | Manage search tags |
 
 ## Key features
 
@@ -124,7 +131,7 @@ Complete Splunk SAML SSO and MFA in a headed browser and reuse the product
 session from every command:
 
 ```bash
-splunkctl config init                          # probes for SAML automatically
+splunkctl config init --web-url https://splunk.example.com  # probe for SAML
 splunkctl auth login --target siem
 splunkctl auth status
 ```

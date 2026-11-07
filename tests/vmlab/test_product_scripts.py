@@ -210,6 +210,7 @@ def test_provision_reuses_existing_vms_and_orders_stages(tmp_path: Path) -> None
         [str(scripts / "provision-lab.sh"), "--only", "both", "--skip-data"],
         env={
             **os.environ,
+            "LAB_PASSWORD": "test-lab-password",
             "FAKE_SIEM_VMX": str(vmxs[0]),
             "FAKE_SOAR_VMX": str(vmxs[1]),
             "FAKE_STAGE_LOG": str(stage_log),

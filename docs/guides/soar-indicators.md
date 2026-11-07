@@ -22,7 +22,7 @@ Every indicator command checks `/rest/feature_flag` for
 `use_indicators=true` before proceeding. If the flag is off or the
 endpoint is unreachable, you get:
 
-```
+```text
 Error: Indicators feature is disabled on this SOAR instance.
 Enable it in Administration > Product Settings > Feature Toggles,
 or POST /rest/feature_flag with name='use_indicators' and value=true.

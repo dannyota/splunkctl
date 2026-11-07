@@ -9,7 +9,7 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/dannyota/splunkctl/ci.yml?branch=master&label=CI)](https://github.com/dannyota/splunkctl/actions/workflows/ci.yml)
 [![License](https://img.shields.io/pypi/l/splunkctl)](https://github.com/dannyota/splunkctl/blob/master/LICENSE)
 
-**Operate Splunk Enterprise and Splunk SOAR as code with a safety-first CLI and MCP server for humans and AI agents.**
+**Operate Splunk Enterprise and Splunk SOAR as code with a CLI and MCP server.**
 
 [Documentation](https://splunkctl.danny.vn) · [Command catalog](https://github.com/dannyota/splunkctl/blob/master/docs/design/catalog.md) · [Releases](https://github.com/dannyota/splunkctl/releases)
 
@@ -23,15 +23,15 @@ remote Splunk Enterprise and Splunk SOAR instances. Use it interactively,
 script its stable JSON output, or give an MCP client access to the same command
 surface.
 
-- **Manage Splunk Enterprise** — searches, detection rules, alerts, indexes,
+- **Manage Splunk Enterprise**: searches, detection rules, alerts, indexes,
   inputs, lookups, parsers, dashboards, apps, users, topology, audit, and
   Enterprise Security workflows.
-- **Operate Splunk SOAR** — containers, artifacts, playbooks, actions, cases,
+- **Operate Splunk SOAR**: containers, artifacts, playbooks, actions, cases,
   approvals, assets, vault files, custom lists, administration, and SIEM-to-SOAR
   ingest.
-- **Keep configuration as code** — pull live state, review structured drift,
+- **Keep configuration as code**: pull live state, review structured drift,
   and push approved changes with change-evidence reports.
-- **Automate safely** — mutations preview by default, machine output is
+- **Automate safely**: mutations preview by default, machine output is
   structured, errors are typed, and every target profile and host is shown.
 
 > **Every mutation is a dry run by default.** Nothing changes until you pass

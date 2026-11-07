@@ -7,6 +7,7 @@
   - [Browser SAML auth](guides/auth.md)
   - [Keycloak lab](guides/keycloak-lab.md)
   - [Doctor](guides/doctor.md)
+  - [Exit codes](guides/exit-codes.md)
 
 - **Commands**
   - [Search](guides/search.md)
@@ -33,6 +34,7 @@
 
 - **SOAR**
   - [Overview](guides/soar.md)
+  - [App management](guides/soar-apps.md)
   - [Apps, assets & ingest](guides/soar-automation.md)
   - [Playbooks](guides/soar-playbooks.md)
   - [Actions](guides/soar-actions.md)

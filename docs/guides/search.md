@@ -6,7 +6,7 @@ and ad-hoc log analysis without opening Splunk Web.
 
 ## Commands
 
-```
+```bash
 splunkctl search run '<SPL>'              # sync search, wait for results
 splunkctl search export '<SPL>'           # streaming export (large result sets)
 splunkctl search oneshot '<SPL>'          # fire-and-forget, small queries
