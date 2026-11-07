@@ -32,7 +32,7 @@ def test_dashboards_export_local_out_untouched(
     d = MagicMock()
     d.name = "dash"
     d.export.return_value = "<dashboard/>"
-    mock_gc.return_value.service.dashboards.list.return_value = [d]
+    mock_gc.return_value.dashboards.list.return_value = [d]
     out = tmp_path / "dash.xml"
     result = CliRunner().invoke(
         cli, ["dashboards", "export", "dash", "--out", str(out)]

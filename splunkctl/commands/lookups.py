@@ -1,7 +1,7 @@
 """Lookup table commands via SDK, plus transforms.conf/props.conf wiring.
 
 Table-file CRUD (list/get/upload/update/download/delete) goes straight
-through the SDK's ``LookupTableFile``/``LookupTableFiles`` entity classes.
+through local ``LookupTableFile``/``LookupTableFiles`` REST adapters.
 `define`/`auto` wire a table (or a KV store collection) into a usable
 search-time lookup — a transforms.conf *definition* stanza and a
 props.conf ``LOOKUP-*`` *automatic lookup* — over the shared ``conf_ops``
@@ -46,7 +46,7 @@ def list_lookups(
     """List lookup table files."""
     client = get_client(ctx)
     items = fetch_page(
-        lambda **pg: client.service.lookup_table_files.list(app=app, owner="-", **pg),
+        lambda **pg: client.lookup_table_files.list(app=app, owner="-", **pg),
         limit=limit,
         offset=offset,
         name_filter=name_filter,
@@ -72,7 +72,7 @@ def get_lookup(ctx: click.Context, name: str, *, app: str) -> None:
     """Get metadata for a lookup file."""
     client = get_client(ctx)
     try:
-        matches = client.service.lookup_table_files.list(
+        matches = client.lookup_table_files.list(
             search=f"name={name}",
             app=app,
             owner="-",
@@ -136,7 +136,7 @@ def download_lookup(
     """Download a lookup table as CSV."""
     client = get_client(ctx)
     try:
-        matches = client.service.lookup_table_files.list(
+        matches = client.lookup_table_files.list(
             search=f"name={name}",
             app=app,
             owner="-",
@@ -212,7 +212,7 @@ def delete_lookup(ctx: click.Context, name: str, *, app: str) -> None:
 
     client = get_client(ctx)
     try:
-        matches = client.service.lookup_table_files.list(
+        matches = client.lookup_table_files.list(
             search=f"name={name}",
             app=app,
             owner="-",
@@ -242,7 +242,7 @@ def _warn_if_file_missing(client: Any, file_name: str, app: str | None) -> None:
     uploaded moments after this runs in a scripted define+upload flow).
     """
     try:
-        matches = client.service.lookup_table_files.list(
+        matches = client.lookup_table_files.list(
             search=f"name={file_name}", count=1, **app_scope(app)
         )
     except Exception:

@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import re
 import urllib.parse
+from functools import cached_property
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +20,7 @@ import urllib3
 
 from splunkctl import config as cfg_mod
 from splunkctl.errors import WebSessionError
+from splunkctl.rest_adapters import Dashboards, HECTokens, LookupTableFiles
 
 _tls_warned: bool = False
 
@@ -116,6 +118,21 @@ class SplunkClient:
             self._service = splunk_client.connect(**connect_args)
 
         return self._service
+
+    @cached_property
+    def dashboards(self) -> Dashboards:
+        """Return local dashboard REST adapters."""
+        return Dashboards(self.service)
+
+    @cached_property
+    def lookup_table_files(self) -> LookupTableFiles:
+        """Return local lookup metadata REST adapters."""
+        return LookupTableFiles(self.service)
+
+    @cached_property
+    def hec_tokens(self) -> HECTokens:
+        """Return local HEC REST adapters."""
+        return HECTokens(self.service)
 
     def _siem_auth(self, cfg: dict[str, Any], connect_args: dict[str, Any]) -> None:
         """Populate SIEM auth into ``connect_args``.

@@ -67,8 +67,8 @@ def _extract_definition(xml: str) -> str | None:
         return str(defn.text)
 
 
-def _resolve(svc: Any, name: str, app: str) -> Any:
-    matches = svc.dashboards.list(
+def _resolve(client: Any, name: str, app: str) -> Any:
+    matches = client.dashboards.list(
         search=f"name={name}",
         app=app,
         owner="-",
@@ -132,7 +132,7 @@ def list_dashboards(
     dashboard-type row filters.
     """
     client = get_client(ctx)
-    items = client.service.dashboards.list(app=app, owner="-")
+    items = client.dashboards.list(app=app, owner="-")
     rows: list[dict[str, Any]] = []
     for d in items:
         if app != "-" and d.access.app != app:
@@ -175,7 +175,7 @@ def get_dashboard(
     """Get dashboard details including XML source."""
     client = get_client(ctx)
     try:
-        d = _resolve(client.service, name, app)
+        d = _resolve(client, name, app)
     except KeyError:
         output.error(f"Dashboard '{name}' not found.", kind="not_found")
         ctx.exit(1)
@@ -252,7 +252,7 @@ def create_dashboard(
         return
     client = get_client(ctx)
     try:
-        entity = client.service.dashboards.create(
+        entity = client.dashboards.create(
             name,
             content,
             app=app,
@@ -302,7 +302,7 @@ def update_dashboard(
         new_content = _studio_wrap(name, new_content)
     client = get_client(ctx)
     try:
-        d = _resolve(client.service, name, app)
+        d = _resolve(client, name, app)
     except KeyError:
         output.error(f"Dashboard '{name}' not found.", kind="not_found")
         ctx.exit(1)
@@ -331,7 +331,7 @@ def delete_dashboard(ctx: click.Context, name: str, *, app: str) -> None:
         return
     client = get_client(ctx)
     try:
-        d = _resolve(client.service, name, app)
+        d = _resolve(client, name, app)
     except KeyError:
         output.error(f"Dashboard '{name}' not found.", kind="not_found")
         ctx.exit(1)
@@ -389,7 +389,7 @@ def export_dashboard(
         return
     client = get_client(ctx)
     try:
-        d = _resolve(client.service, name, app)
+        d = _resolve(client, name, app)
     except KeyError:
         output.error(f"Dashboard '{name}' not found.", kind="not_found")
         ctx.exit(1)
@@ -420,7 +420,7 @@ def _export_all(ctx: click.Context, *, app: str, out_dir: str | None) -> None:
         ctx.exit(1)
         return
     client = get_client(ctx)
-    items = client.service.dashboards.list(app=app, owner="-")
+    items = client.dashboards.list(app=app, owner="-")
     base = Path(out_dir)
     count = 0
     for d in items:
@@ -469,7 +469,7 @@ def share_dashboard(
         return
     client = get_client(ctx)
     try:
-        d = _resolve(client.service, name, app)
+        d = _resolve(client, name, app)
     except KeyError:
         output.error(f"Dashboard '{name}' not found.", kind="not_found")
         ctx.exit(1)

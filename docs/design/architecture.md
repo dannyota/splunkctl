@@ -10,7 +10,7 @@ How splunkctl is built — the layers, the data flow, and the design decisions.
 flowchart TD
   CLI["<b>CLI layer</b> · Click<br/>main.py + commands/*.py<br/>Global flags, command groups, subcommands"]
   SVC["<b>Service layer</b><br/>config.py · client.py · output.py · guard.py<br/>Auth, formatting, mutation guard, Web UI workarounds"]
-  SDK["<b>SDK layer</b> · splunklib<br/>forked splunk-sdk-python<br/>REST bindings + Dashboard, LookupTableFile, HECToken"]
+  SDK["<b>SDK layer</b> · splunklib<br/>upstream splunk-sdk-python<br/>REST bindings + local REST adapters"]
   API["<b>Splunk Enterprise</b><br/>REST API :8089 · Web UI :8000"]
   CLI --> SVC --> SDK --> API
 ```
@@ -66,20 +66,18 @@ multipart form-data encoding for these uploads.
 Data upload (`search upload`) uses `POST /services/receivers/simple`
 which works over REST — no Web UI needed.
 
-## SDK fork
+## REST adapters
 
-The [forked SDK](https://github.com/dannyota/splunk-sdk-python/tree/splunkctl)
-adds entity classes missing from upstream:
+`splunkctl/rest_adapters.py` supplies entities absent from upstream.
+`SplunkClient` always uses these adapters with the SDK's authenticated transport.
 
-| Entity | Collection | Service property |
+| Entity | Collection | Client property |
 |---|---|---|
-| `Dashboard` | `Dashboards` | `service.dashboards` |
-| `LookupTableFile` | `LookupTableFiles` | `service.lookup_table_files` |
-| `HECToken` | `HECTokens` | `service.hec_tokens` |
+| `Dashboard` | `Dashboards` | `client.dashboards` |
+| `LookupTableFile` | `LookupTableFiles` | `client.lookup_table_files` |
+| `HECToken` | `HECTokens` | `client.hec_tokens` |
 
-Each follows the SDK's existing `Entity`/`Collection` patterns. For
-surfaces not worth a full SDK class, the generic `confs` API
-(`client.confs["props"]`) works as an escape hatch.
+Other configuration objects use the SDK's generic `service.confs` API.
 
 ## Design principles
 

@@ -2,7 +2,7 @@
 
 These assert the REAL wire form, not the argument the mocked ``svc``
 method received. ``svc.get/post/delete`` route the path through the
-forked SDK's ``Context._abspath``, which wraps a plain ``str`` in
+SDK's ``Context._abspath``, which wraps a plain ``str`` in
 ``UrlEncoded(...)`` -- re-quoting it. A path built with a plain-``str``
 ``_seg`` (``urllib.parse.quote``) therefore gets quoted TWICE on the wire
 (``%2F`` becomes ``%252F``), even though a test that only inspects the

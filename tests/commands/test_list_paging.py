@@ -5,7 +5,7 @@ Server-capable surfaces pass count/offset through to the SDK call when
 client-side to the filtered set. Surfaces that already post-process rows
 client-side (alerts, dashboards, inputs) filter and page client-side.
 
-``SdkCollection`` mimics the forked SDK's paging contract (count omitted
+``SdkCollection`` mimics the SDK's paging contract (count omitted
 means fetch everything) so these tests also guard the no-truncation
 default against regressions.
 """
@@ -21,7 +21,7 @@ from splunkctl.main import cli
 
 
 class SdkCollection:
-    """Mimic the forked SDK Collection paging contract.
+    """Mimic the SDK Collection paging contract.
 
     ``count=None`` (the default) fetches everything — the SDK sends its
     null-count sentinel and the server returns the full collection. If a
@@ -176,7 +176,7 @@ def test_indexes_list_paging_and_filter(mock_gc: MagicMock) -> None:
 def test_hec_list_paging_and_filter(mock_gc: MagicMock) -> None:
     toks = [_entity(f"http://{n}") for n in ["tok-a", "tok-b", "ingest"]]
     fake = SdkCollection(toks)
-    mock_gc.return_value.service.hec_tokens = fake
+    mock_gc.return_value.hec_tokens = fake
     result = CliRunner().invoke(cli, ["--json", "hec", "list", "--limit", "2"])
     assert result.exit_code == 0
     assert _names(result.output) == ["http://tok-a", "http://tok-b"]
@@ -197,7 +197,7 @@ def test_lookups_list_merges_app_kwargs_with_paging(mock_gc: MagicMock) -> None:
         lk.access = SimpleNamespace(app="search", owner="nobody")
         lks.append(lk)
     fake = SdkCollection(lks)
-    mock_gc.return_value.service.lookup_table_files = fake
+    mock_gc.return_value.lookup_table_files = fake
     result = CliRunner().invoke(cli, ["--json", "lookups", "list", "--limit", "1"])
     assert result.exit_code == 0
     assert _names(result.output) == ["geo.csv"]
@@ -370,7 +370,7 @@ def test_dashboards_list_filter_and_paging_after_row_filters(
         _mock_dashboard("soc_detail"),
         _mock_dashboard("exec_summary"),
     ]
-    mock_gc.return_value.service.dashboards.list.return_value = items
+    mock_gc.return_value.dashboards.list.return_value = items
     result = CliRunner().invoke(
         cli, ["--json", "dashboards", "list", "--filter", "SOC", "--limit", "1"]
     )

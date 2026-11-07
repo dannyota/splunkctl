@@ -35,6 +35,7 @@ def test_list_hec(mock_gc: MagicMock) -> None:
     mock_svc = MagicMock()
     mock_svc.hec_tokens.list.return_value = [_mock_token()]
     mock_gc.return_value.service = mock_svc
+    mock_gc.return_value.hec_tokens = mock_svc.hec_tokens
 
     result = CliRunner().invoke(cli, ["--json", "hec", "list"])
     assert result.exit_code == 0
@@ -48,6 +49,7 @@ def test_list_hec_empty(mock_gc: MagicMock) -> None:
     mock_svc = MagicMock()
     mock_svc.hec_tokens.list.return_value = []
     mock_gc.return_value.service = mock_svc
+    mock_gc.return_value.hec_tokens = mock_svc.hec_tokens
 
     result = CliRunner().invoke(cli, ["hec", "list"])
     assert result.exit_code == 0
@@ -65,6 +67,7 @@ def test_get_hec(mock_gc: MagicMock) -> None:
     mock_svc = MagicMock()
     mock_svc.hec_tokens.__getitem__.return_value = _mock_token()
     mock_gc.return_value.service = mock_svc
+    mock_gc.return_value.hec_tokens = mock_svc.hec_tokens
 
     result = CliRunner().invoke(cli, ["--json", "hec", "get", "my_token"])
     assert result.exit_code == 0
@@ -78,6 +81,7 @@ def test_get_hec_not_found(mock_gc: MagicMock) -> None:
     mock_svc = MagicMock()
     mock_svc.hec_tokens.__getitem__.side_effect = KeyError("nope")
     mock_gc.return_value.service = mock_svc
+    mock_gc.return_value.hec_tokens = mock_svc.hec_tokens
 
     result = CliRunner().invoke(cli, ["hec", "get", "nope"])
     assert result.exit_code != 0
@@ -89,6 +93,7 @@ def test_get_hec_not_found_json_envelope(mock_gc: MagicMock) -> None:
     mock_svc = MagicMock()
     mock_svc.hec_tokens.__getitem__.side_effect = KeyError("nope")
     mock_gc.return_value.service = mock_svc
+    mock_gc.return_value.hec_tokens = mock_svc.hec_tokens
 
     result = CliRunner().invoke(cli, ["--json", "hec", "get", "nope"])
     assert result.exit_code == 1
@@ -106,6 +111,7 @@ def test_create_dry_run() -> None:
 def test_create_confirmed(mock_gc: MagicMock) -> None:
     mock_svc = MagicMock()
     mock_gc.return_value.service = mock_svc
+    mock_gc.return_value.hec_tokens = mock_svc.hec_tokens
 
     result = CliRunner().invoke(
         cli, ["--yes", "hec", "create", "--name", "new_token", "--index", "main"]
@@ -129,6 +135,7 @@ def test_delete_confirmed(mock_gc: MagicMock) -> None:
     token = _mock_token()
     mock_svc.hec_tokens.__getitem__.return_value = token
     mock_gc.return_value.service = mock_svc
+    mock_gc.return_value.hec_tokens = mock_svc.hec_tokens
 
     result = CliRunner().invoke(cli, ["--yes", "hec", "delete", "my_token"])
     assert result.exit_code == 0
@@ -148,6 +155,7 @@ def test_enable_confirmed(mock_gc: MagicMock) -> None:
     token = _mock_token()
     mock_svc.hec_tokens.__getitem__.return_value = token
     mock_gc.return_value.service = mock_svc
+    mock_gc.return_value.hec_tokens = mock_svc.hec_tokens
 
     result = CliRunner().invoke(cli, ["--yes", "hec", "enable", "my_token"])
     assert result.exit_code == 0
@@ -167,6 +175,7 @@ def test_disable_confirmed(mock_gc: MagicMock) -> None:
     token = _mock_token()
     mock_svc.hec_tokens.__getitem__.return_value = token
     mock_gc.return_value.service = mock_svc
+    mock_gc.return_value.hec_tokens = mock_svc.hec_tokens
 
     result = CliRunner().invoke(cli, ["--yes", "hec", "disable", "my_token"])
     assert result.exit_code == 0
@@ -178,6 +187,7 @@ def test_disable_confirmed(mock_gc: MagicMock) -> None:
 def test_create_with_set(mock_gc: MagicMock) -> None:
     mock_svc = MagicMock()
     mock_gc.return_value.service = mock_svc
+    mock_gc.return_value.hec_tokens = mock_svc.hec_tokens
 
     result = CliRunner().invoke(
         cli,
@@ -239,7 +249,7 @@ def _setup_send_mocks(
 ) -> MagicMock:
     """Wire up the service mock for hec send tests. Returns the svc mock."""
     svc = mock_gc.return_value.service
-    svc.hec_tokens.__getitem__.return_value = _mock_token()
+    mock_gc.return_value.hec_tokens.__getitem__.return_value = _mock_token()
     svc.host = "localhost"
     resp = MagicMock()
     resp.body.read.return_value = json.dumps(
