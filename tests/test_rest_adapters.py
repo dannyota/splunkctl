@@ -296,3 +296,132 @@ def test_default_service_namespace_is_encoded_for_entity_requests() -> None:
     t.delete()
     for request in (service.http.get, service.http.post, service.http.delete):
         assert "/servicesNS/alice%2Fname/my%20app/" in str(request.call_args.args[0])
+
+
+@pytest.mark.parametrize(
+    "kind,name,owner,app,sharing,alternate",
+    [
+        (
+            "dashboards",
+            "soc_overview",
+            "alice",
+            "search",
+            "user",
+            "/servicesNS/alice/search/data/ui/views/soc_overview",
+        ),
+        (
+            "dashboards",
+            "soc_overview",
+            "alice",
+            "search",
+            "app",
+            "/servicesNS/nobody/search/data/ui/views/soc_overview",
+        ),
+        (
+            "lookup_table_files",
+            "hosts.csv",
+            "alice",
+            "search",
+            "global",
+            "/servicesNS/nobody/search/data/lookup-table-files/hosts.csv",
+        ),
+        (
+            "hec_tokens",
+            "http://demo",
+            "alice",
+            "splunk_httpinput",
+            "system",
+            "/servicesNS/nobody/system/data/inputs/http/http%3A%252F%252Fdemo",
+        ),
+    ],
+)
+def test_canonical_mutations_preserve_server_path(
+    kind: str, name: str, owner: str, app: str, sharing: str, alternate: str
+) -> None:
+    from splunklib.client import Service
+
+    c = client()
+    service = Service(token="test-token", owner="admin", app="search")  # noqa: S106
+    service.http = MagicMock()
+    service.http.get.return_value = response(
+        [
+            {
+                "name": name,
+                "id": "https://localhost:8089" + alternate,
+                "links": {"alternate": alternate, "list": alternate},
+                "acl": {"owner": owner, "app": app, "sharing": sharing},
+                "content": {"disabled": "0", "eai:data": "<dashboard/>"},
+            }
+        ]
+    )
+    c._service = service
+    entity = getattr(c, kind)[name]
+    assert entity.update(disabled="1") is entity
+    assert (
+        str(service.http.post.call_args.args[0]) == str(service.authority) + alternate
+    )
+    assert entity.acl_update(owner="bob", sharing="global") is entity
+    assert (
+        str(service.http.post.call_args.args[0])
+        == str(service.authority) + alternate + "/acl"
+    )
+    entity.delete()
+    assert (
+        str(service.http.delete.call_args.args[0]) == str(service.authority) + alternate
+    )
+    if kind == "hec_tokens":
+        assert entity.enable() is entity
+        assert entity.disable() is entity
+        assert (
+            str(service.http.post.call_args.args[0])
+            == str(service.authority) + alternate
+        )
+
+
+@pytest.mark.parametrize("operation", ["acl_update", "enable", "disable"])
+def test_mutation_refreshes_content_acl_and_subsequent_routing(operation: str) -> None:
+    c = client()
+    original = {
+        "name": "http://demo",
+        "links": {"alternate": "/servicesNS/alice/search/data/inputs/http/demo"},
+        "acl": {"owner": "alice", "app": "search", "sharing": "user"},
+        "content": {"disabled": "1"},
+    }
+    refreshed = {
+        "name": "http://demo",
+        "links": {"alternate": "/servicesNS/nobody/system/data/inputs/http/demo"},
+        "acl": {"owner": "bob", "app": "system", "sharing": "system"},
+        "content": {"disabled": "0"},
+    }
+    c.service.get.side_effect = [response([original]), response([refreshed])]
+    token = c.hec_tokens["demo"]
+    fields = {"owner": "bob", "sharing": "system"} if operation == "acl_update" else {}
+    assert getattr(token, operation)(**fields) is token
+    c.service.get.assert_called_with(
+        "/servicesNS/alice/search/data/inputs/http/demo", output_mode="json"
+    )
+    assert token.content.disabled == "0"
+    assert token.access.owner == "bob"
+    assert token.access.sharing == "system"
+    if operation == "acl_update":
+        c.service.post.assert_called_once_with(
+            "/servicesNS/alice/search/data/inputs/http/demo/acl", body=fields
+        )
+    else:
+        c.service.post.assert_called_once_with(
+            "/servicesNS/alice/search/data/inputs/http/demo",
+            disabled="0" if operation == "enable" else "1",
+        )
+    token.delete()
+    c.service.delete.assert_called_once_with(
+        "/servicesNS/nobody/system/data/inputs/http/demo"
+    )
+
+
+def test_update_rejects_renaming_before_posting() -> None:
+    c = client()
+    c.service.get.return_value = response([entry("original")])
+    dashboard = c.dashboards["original"]
+    with pytest.raises(ValueError, match="^renaming is not supported$"):
+        dashboard.update(name="renamed")
+    c.service.post.assert_not_called()
