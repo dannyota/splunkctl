@@ -197,7 +197,7 @@ def _init_soar(
 
     soar_host = click.prompt("SOAR host", type=str)
     soar_port = click.prompt("SOAR port", default=8443, type=int)
-    soar_token = click.prompt("SOAR token", default="", type=str)
+    soar_token = click.prompt("SOAR token", default="", hide_input=True, type=str)
     soar_user = click.prompt("SOAR username", default="", type=str)
     soar_pass = click.prompt("SOAR password", default="", hide_input=True, type=str)
     soar_verify = (

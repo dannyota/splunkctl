@@ -67,7 +67,7 @@ def get_soar_client(ctx: click.Context) -> SOARClient:
         return SOARClient(
             host=host,
             port=int(cfg.get("port", 8443)),
-            verify=bool(cfg.get("verify", False)),
+            verify=bool(cfg.get("verify", True)),
             cookies=rec.values,
         )
 
@@ -77,5 +77,5 @@ def get_soar_client(ctx: click.Context) -> SOARClient:
         token=cfg.get("token"),
         username=cfg.get("username"),
         password=cfg.get("password"),
-        verify=bool(cfg.get("verify", False)),
+        verify=bool(cfg.get("verify", True)),
     )

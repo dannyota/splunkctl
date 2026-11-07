@@ -15,6 +15,7 @@ from splunkctl.client import get_client
 from splunkctl.commands.common import read_results
 from splunkctl.soar.cimcef import row_to_cef
 from splunkctl.soar.client import SOARError
+from splunkctl.spl_safety import check_spl
 
 _GENERATING = (
     "abstract",
@@ -58,6 +59,8 @@ def fetch_spl_results(
     app: str | None,
 ) -> list[dict[str, Any]]:
     """Run an SPL search on SIEM and return result rows."""
+    if not check_spl(ctx, spl):
+        return []
     client = get_client(ctx)
     svc = client.service
     if app:

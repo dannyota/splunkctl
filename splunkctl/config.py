@@ -2,6 +2,7 @@
 
 import os
 import stat
+import uuid
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Literal, TypedDict
@@ -285,10 +286,15 @@ def save(cfg: dict[str, Any], path: Path | None = None) -> Path:
     """Save config to YAML with 0600 permissions."""
     config_path = effective_path(path)[0]
     _read_raw(config_path)
-    config_path.parent.mkdir(parents=True, exist_ok=True)
-
-    with open(config_path, "w") as f:
-        yaml.dump(dict(cfg), f, default_flow_style=False, sort_keys=False)
+    config_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    temp_path = config_path.parent / f".{config_path.name}.{uuid.uuid4().hex}.tmp"
+    fd = os.open(temp_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(fd, "w") as f:
+            yaml.dump(dict(cfg), f, default_flow_style=False, sort_keys=False)
+        os.replace(temp_path, config_path)
+    finally:
+        temp_path.unlink(missing_ok=True)
 
     config_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
     return config_path

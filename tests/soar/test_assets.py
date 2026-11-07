@@ -6,8 +6,11 @@ import json
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+import click
+import pytest
 from click.testing import CliRunner
 
+from splunkctl.commands.soar.assets import _parse_set_pairs
 from splunkctl.main import cli
 from splunkctl.soar.client import SOARError
 from tests.soar.conftest import PATCH_CLIENT, PATCH_RESOLVE, soar_cfg
@@ -402,3 +405,17 @@ class TestAssetsDelete:
         client.delete.assert_called_once()
 
     # test (connectivity) + ingest-status tests live in test_assets_ops.py
+
+
+@pytest.mark.parametrize("pair", ["key", ""])
+def test_asset_pairs_require_equals(pair: str) -> None:
+    with pytest.raises(click.BadParameter, match="expected KEY=VALUE"):
+        _parse_set_pairs((pair,))
+
+
+def test_asset_pairs_preserve_values_and_arbitrary_keys() -> None:
+    assert _parse_set_pairs(("key=", "url=a=b", "eai:custom=value")) == {
+        "key": "",
+        "url": "a=b",
+        "eai:custom": "value",
+    }

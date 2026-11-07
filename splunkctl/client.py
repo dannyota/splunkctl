@@ -106,8 +106,8 @@ class SplunkClient:
             if cfg.get("owner"):
                 connect_args["owner"] = cfg["owner"]
 
-            if not cfg.get("verify", False):
-                connect_args["verify"] = False
+            connect_args["verify"] = bool(cfg.get("verify", True))
+            if not connect_args["verify"]:
                 _warn_tls_off()
 
             if self._timeout:
@@ -184,7 +184,7 @@ class SplunkClient:
             cfg.update(self._overrides)
             self._web_session = _WebSession(
                 self.service,
-                verify=bool(cfg.get("verify", False)),
+                verify=bool(cfg.get("verify", True)),
                 debug=self._debug,
                 timeout=self._timeout or 30,
             )
