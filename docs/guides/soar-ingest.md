@@ -1,4 +1,6 @@
-# SOAR ingest
+<!-- summary: Turn Splunk search results into Splunk SOAR containers and artifacts with an idempotent, previewable ingest command. -->
+
+# Ingest SIEM results into SOAR
 
 Ingest SIEM search results into Splunk SOAR as containers and artifacts,
 using the official CIM-to-CEF field mapping and connector conventions.
@@ -6,7 +8,7 @@ using the official CIM-to-CEF field mapping and connector conventions.
 ## Commands
 
 ```bash
-# Dry-run (default) — preview containers, mapping table, sample CEF
+# Dry-run (default): preview containers, mapping table, sample CEF
 splunkctl soar ingest --spl '| makeresults count=2 | eval src="10.0.0.1"'
 
 # Apply
@@ -75,8 +77,8 @@ splunkctl soar ingest --spl 'index=firewall src=10.0.0.1' --grouping --yes
 ## Container naming
 
 Priority:
-1. `--container-name-field` — use that row field's value.
-2. `--container-name` — literal name or template.
+1. `--container-name-field`, use that row field's value.
+2. `--container-name`, literal name or template.
 3. `rule_name` field (ES notable convention).
 4. Fallback: `"Splunk Log Entry on <_time>: <source>"`.
 
@@ -143,19 +145,19 @@ No data is sent to SOAR in dry-run mode.
 
 | Flag | Default | Description |
 |---|---|---|
-| `--spl` | — | SPL search to run on SIEM |
-| `--sid` | — | Existing SIEM job SID |
+| `--spl` | - | SPL search to run on SIEM |
+| `--sid` | - | Existing SIEM job SID |
 | `--label` | `events` | Container label |
 | `--severity` | auto | Override SOAR severity |
 | `--sensitivity` | `amber` | Container sensitivity/TLP |
 | `--sdi-field` | `event_id` | Row field for SDI (else row hash) |
-| `--container-name` | — | Container name (literal or template) |
-| `--container-name-field` | — | Row field for container name |
+| `--container-name` | - | Container name (literal or template) |
+| `--container-name-field` | - | Row field for container name |
 | `--grouping` | off | Group all rows into one container |
-| `--map` | — | CEF_KEY=SPLUNK_FIELD — map a result field onto a CEF key (repeatable) |
-| `--map-file` | — | YAML custom mapping file |
+| `--map` | - | CEF_KEY=SPLUNK_FIELD, map a result field onto a CEF key (repeatable) |
+| `--map-file` | - | YAML custom mapping file |
 | `--include-unmapped` | off | Pass unmapped fields as custom CEF |
 | `--no-automation` | off | Suppress playbook automation |
-| `--earliest` | — | SIEM search earliest time |
-| `--latest` | — | SIEM search latest time |
-| `--app` | — | SIEM app context |
+| `--earliest` | - | SIEM search earliest time |
+| `--latest` | - | SIEM search latest time |
+| `--app` | - | SIEM app context |

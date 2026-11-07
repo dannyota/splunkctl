@@ -1,4 +1,6 @@
-# SOAR actions
+<!-- summary: Run app actions on Splunk SOAR assets, wait for results, and inspect past action runs. -->
+
+# Run actions
 
 Run, monitor, and inspect action runs on Splunk SOAR assets.
 
@@ -26,7 +28,7 @@ splunkctl soar actions run \
 asset record (or accepts `--app` to skip the lookup), and POSTs it.
 
 ```bash
-# Dry-run preview — shows the exact JSON payload
+# Dry-run preview: shows the exact JSON payload
 splunkctl soar actions run \
     --action "lookup domain" \
     --asset google_dns \
@@ -90,7 +92,7 @@ timeout, exit 1 with diagnostics.
 # Status of a specific action run
 splunkctl soar actions status 999
 
-# Per-asset detail (app_runs) — contains result_data with outputs
+# Per-asset detail (app_runs): contains result_data with outputs
 splunkctl soar actions results 999
 
 # Pipe to jq for scripted extraction

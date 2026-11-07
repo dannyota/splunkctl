@@ -1,77 +1,74 @@
-# ES notable-event triage and correlation-search admin
+<!-- summary: List, inspect, and bulk-triage Enterprise Security notable events by status, owner, urgency, disposition, and comment from the terminal. -->
 
-The SOC daily loop: see what's queued, pull the full detail on one
-notable, then assign, set status/urgency/disposition, or leave a comment
-— alone or in bulk. Reading notables already works through the generic
-`search` command (`index=notable`); this group adds the incident-review
-mutation ES's `notable_update` endpoint provides, plus normalized reads
-that don't require hand-writing SPL.
+# Triage ES notables
 
-The `correlations` subgroup adds admin operations over correlation
-searches — the saved searches scoped to the ES app that generate
-notables. List, inspect, enable, and disable them without touching
-Splunk Web.
+When to use: you work the Enterprise Security incident review queue and want to see what is open, pull the full detail of one notable, then assign it, change its status or urgency, set a disposition, or leave a comment, alone or in bulk.
 
-> **Requires Enterprise Security.** Every `es` subcommand checks for the
-> `SplunkEnterpriseSecuritySuite` app first (one cheap entity fetch, not a
-> full apps dump). Without ES installed, every subcommand exits 1 with a
-> `not_found` envelope naming the app — see **Feature detection** below.
->
-> **Live-verified against ES: pending.** The local dev instance ships
-> Splunk Security Essentials, not Enterprise Security, so only the
-> feature-detection negative path has been verified against a real
-> instance. The read/update logic is unit-tested against a mocked REST
-> layer; verify against a real ES instance before relying on it in
-> production triage.
+## Prerequisites
 
-## Commands
+- Splunk Enterprise Security installed on the target instance. Every `es` subcommand first checks for the `SplunkEnterpriseSecuritySuite` app and exits 1 with a `not_found` error when it is missing.
+- A Splunk account that can search `index=notable` and call the `notable_update` endpoint (the ES analyst role or equivalent).
+- Live verification against a real ES instance is still pending for this group. The read and update logic is unit-tested against a mocked REST layer; the feature-detection path is the only part verified live. Test on a non-production ES instance before scripting production triage.
 
-```bash
-splunkctl es notables list                              # last 24h, up to 100
-splunkctl es notables list --since -7d --status new      # open in the last week
-splunkctl es notables list --owner unassigned             # unclaimed queue
-splunkctl es notables list --rule beacon --limit 20       # by correlation search
-splunkctl es notables get <event_id>                      # full field set
-splunkctl es notables update <event_id> --status closed \
-    --comment 'false positive, ticket CHG-123' --yes
-splunkctl es notables update <id1> <id2> <id3> \
-    --owner analyst1 --urgency high --yes                # bulk triage
+## Synopsis
+
+```text
+splunkctl es notables list [--since TIME] [--until TIME] [--status NAME_OR_INT] [--owner USER] [--rule SUBSTRING] [--limit N]
+splunkctl es notables get <EVENT_ID>
+splunkctl es notables update <EVENT_IDS>... [--status NAME_OR_INT] [--owner USER] [--urgency informational|low|medium|high|critical] [--disposition ID] [--comment TEXT] [--yes]
 ```
 
-## Feature detection
+## Workflow
 
-`es` is a feature-detected group: it exists in `commands --json` and
-`--help` regardless of what's installed, but every subcommand's first
-move is a single entity fetch for `SplunkEnterpriseSecuritySuite`. On an
-instance without ES:
+### See the queue
 
 ```bash
-$ splunkctl --json es notables list
-{"error": {"kind": "not_found", "http_status": null, "message": "App 'SplunkEnterpriseSecuritySuite' is not installed on this instance. The 'es' command group requires Splunk Enterprise Security."}}
-$ echo $?
-1
+splunkctl es notables list
+splunkctl es notables list --since -7d --status new
+splunkctl es notables list --owner unassigned
+splunkctl es notables list --rule beacon --limit 20
+splunkctl es notables list --json
 ```
 
-`update`'s dry-run preview never triggers this check — like every guarded
-command, the preview is local-only (config + banner, no network call).
-The ES check runs once `--yes` is passed and the mutation is about to
-apply.
+The default window is the last 24 hours, up to 100 rows. `--since` and `--until` become the search time range; `--status`, `--owner`, and `--rule` fold into the SPL (`index=notable status=1 owner="analyst1" rule_name="*beacon*"`) so filtering happens server side. Expected columns: `time`, `rule`, `security_domain`, `urgency`, `status`, `owner`, `event_id`. Pass `event_id` straight to `get` or `update`.
 
-## List filters compose server-side
+### Read one notable
 
-`--since`/`--until` become the search's time range; `--status`, `--owner`,
-and `--rule` fold into the SPL itself (`index=notable status=1
-owner="analyst1" rule_name="*beacon*"`) rather than filtering client-side
-after a full fetch — the same "filters first" contract as every other
-list surface (see SKILL.md). Output columns are normalized: `time`,
-`rule`, `security_domain`, `urgency`, `status`, `owner`, `event_id`.
-`event_id` is the notable's unique id — pass it straight to `get` or
-`update`.
+```bash
+splunkctl es notables get <EVENT_ID>
+splunkctl es notables get <EVENT_ID> --json
+```
 
-## Status names and integers
+Returns the full field set of the notable event.
 
-`--status` (on both `list` and `update`) accepts either the canonical
-name or the raw integer ES uses internally:
+### Triage one or many notables
+
+> **Safety:** Target is the Splunk host in the active profile. Impact: status, owner, urgency, disposition, or comment changes on every event id you pass, in one `notable_update` call. Preview with `splunkctl es notables update <EVENT_ID> --status closed --comment 'false positive'`, apply by adding `--yes`, and verify with `splunkctl es notables get <EVENT_ID>`.
+
+```bash
+splunkctl es notables update <EVENT_ID> --status closed \
+  --comment 'false positive, ticket CHG-123'
+splunkctl es notables update <EVENT_ID> --status closed \
+  --comment 'false positive, ticket CHG-123' --yes
+splunkctl es notables update <ID1> <ID2> <ID3> --owner analyst1 --urgency high --yes
+splunkctl es notables update <ID1> <ID2> --status closed --comment 'duplicate of INC-4471' --yes
+```
+
+The preview looks like this:
+
+```text
+$ splunkctl es notables update evt-1 evt-2 --status closed --comment 'fp'
+[DRY RUN] Update 2 notable(s) (profile: default @ splunk.example.com:8089)
+  event_ids: evt-1, evt-2
+  changes: status=5, comment=fp
+Pass --yes to apply.
+```
+
+At least one of `--status`, `--owner`, `--urgency`, `--disposition`, or `--comment` is required; `update` with no change is a usage error (exit 2). The preview is local only; the ES feature check runs when `--yes` is passed.
+
+### Status names and integers
+
+`--status` on `list` and `update` accepts the name or the integer ES stores:
 
 | Name | Integer |
 |---|---|
@@ -82,155 +79,23 @@ name or the raw integer ES uses internally:
 | `resolved` | 4 |
 | `closed` | 5 |
 
-Custom statuses configured on an instance (via `reviewstatuses.conf`) are
-integers outside 0-5 — pass the number directly, e.g. `--status 6`.
+Custom statuses from `reviewstatuses.conf` are integers above 5; pass the number, for example `--status 6`.
 
-## Bulk triage
+### Dispositions
 
-`update` accepts one or more `EVENT_ID` arguments; all of them go into a
-single `notable_update` call (`ruleUIDs`), so a bulk status change or
-reassignment is one request, not N:
+`--disposition` is passed through as given. ES ships `disposition:1` (true positive), `disposition:2` (benign positive), `disposition:3` (false positive), and more, but installations customize the list, so check your instance's Incident Review disposition dropdown or `reviewstatuses.conf` before scripting against an id.
 
-```bash
-splunkctl es notables update <id1> <id2> <id3> --status closed \
-    --comment 'duplicate of INC-4471' --yes
-```
+## Troubleshooting
 
-At least one of `--status`/`--owner`/`--urgency`/`--disposition`/
-`--comment` is required — `update` with no fields is a usage error
-(exit 2), not a silent no-op.
+- `{"error": {"kind": "not_found", ...}}` naming `SplunkEnterpriseSecuritySuite`: ES is not installed on this instance, or the account cannot see the app.
+- Exit 2 on `update`: no change flag was given.
+- `list` returns nothing: widen `--since` (for example `--since -7d`) or drop `--status`.
+- A custom status name is rejected: use its integer.
 
-## Dry-run preview
+## See also
 
-Like every mutation, `update` previews before applying:
-
-```bash
-$ splunkctl es notables update evt-1 evt-2 --status closed --comment 'fp'
-[DRY RUN] Update 2 notable(s) (profile: default @ splunk.example.com:8089)
-  event_ids: evt-1, evt-2
-  changes: status=5, comment=fp
-Pass --yes to apply.
-```
-
-## Disposition
-
-`--disposition` is passed through exactly as given — ES ships a default
-set (`disposition:1` true positive, `disposition:2` benign positive,
-`disposition:3` false positive, ...) but installations customize this
-list, so the CLI doesn't invent a name mapping. Check your instance's
-configured dispositions (Incident Review > disposition dropdown, or
-`reviewstatuses.conf`) before scripting against specific ids.
-
-## Options
-
-| Flag | Applies to | Description |
-|------|-----------|-------------|
-| `--since` | `list` | Earliest time (default `-24h`) |
-| `--until` | `list` | Latest time (default `now`) |
-| `--status` | `list`, `update` | Status name or integer (see table above) |
-| `--owner` | `list` | Filter by assigned owner |
-| `--rule` | `list` | Correlation search name substring |
-| `--limit` | `list` | Max results (default 100) |
-| `--owner` | `update` | New assignee |
-| `--urgency` | `update` | `informational`/`low`/`medium`/`high`/`critical` |
-| `--disposition` | `update` | ES disposition id, passed through as-is |
-| `--comment` | `update` | Analyst comment |
-| `--yes` | `update` | Apply the mutation (skip dry-run preview) |
-
-## Correlation searches
-
-Correlation searches are saved searches scoped to the
-`SplunkEnterpriseSecuritySuite` app. They generate notable events when
-their SPL triggers. The `es correlations` subgroup provides admin
-operations over them using `service.saved_searches` with ES app scoping.
-
-```bash
-splunkctl es correlations list                              # all correlation searches
-splunkctl es correlations list --enabled                    # only enabled
-splunkctl es correlations list --disabled                   # only disabled
-splunkctl es correlations list --security-domain access     # filter by domain
-splunkctl es correlations get "Brute Force Access Behavior" # full detail
-splunkctl es correlations enable "Brute Force" --yes        # enable one
-splunkctl es correlations enable "Rule A" "Rule B" --yes    # enable multiple
-splunkctl es correlations disable "DNS Exfil" --yes         # disable one
-```
-
-### Correlation-search fields
-
-The summary view (`list`) surfaces: `name`, `security_domain`,
-`severity`, `enabled`, `cron_schedule`, `next_scheduled_time`. The
-detail view (`get`) adds: `search`, `description`, `is_scheduled`,
-`actions`, `dispatch.earliest_time`, `dispatch.latest_time`, `app`,
-`owner`, `sharing`.
-
-### Enable / disable
-
-Both `enable` and `disable` are guarded mutations — they preview in
-dry-run mode and require `--yes` to apply. They accept one or more
-correlation search names:
-
-```bash
-splunkctl es correlations enable "Rule A" "Rule B" --yes
-splunkctl es correlations disable "Rule A" --yes
-```
-
-## Threat intelligence
-
-The `es threat-intel` subgroup manages threat-intelligence items via
-the ES REST endpoints `/services/data/threat_intel/item` and
-`/services/data/threat_intel/upload`. These endpoints are not part of
-the Python SDK — all calls go through `service.get/post/delete` with
-`output_mode=json`.
-
-```bash
-splunkctl es threat-intel list                                # all types, up to 100
-splunkctl es threat-intel list --type ip_intel                 # filter by collection
-splunkctl es threat-intel list --type domain_intel --limit 25  # with limit
-splunkctl es threat-intel upload --type ip_intel \
-    --file iocs.csv --yes                                      # upload indicators
-splunkctl es threat-intel delete <key> --yes                   # remove one item
-```
-
-### Supported collection types
-
-`ip_intel`, `domain_intel`, `file_intel`, `email_intel`, `http_intel`,
-`certificate_intel`, `registry_intel`, `service_intel`, `user_intel`,
-`process_intel`.
-
-### Upload format
-
-The `--file` flag accepts a path to a local CSV or JSON file. The file
-is sent as the request body to the upload endpoint with the collection
-type and filename as query parameters. CSV files should have a header
-row matching the fields for the target collection type (e.g. `ip`,
-`description`, `weight` for `ip_intel`).
-
-### Delete
-
-`delete` takes the item's key (the `name` field from `list` output)
-and issues a DELETE to `/services/data/threat_intel/item/<key>`.
-
-### Dry-run
-
-Both `upload` and `delete` are guarded mutations — they preview in
-dry-run mode and require `--yes` to apply.
-
-## Implementation notes
-
-`list`/`get` (notables) run over the existing oneshot-search
-infrastructure against `index=notable` (no SDK entity class — ES ships
-no REST collection for notables, just the raw index and the
-`notable_update` action endpoint). `update` POSTs to
-`/services/notable_update` through the SDK's `service.post` via
-`client.py`'s existing request plumbing — no new HTTP stack.
-
-Correlation searches use `service.saved_searches` with
-`app=SplunkEnterpriseSecuritySuite` and `owner="-"` to fetch across all
-owners. The `security_domain` is read from the
-`action.correlationsearch.label` content key (the standard ES field for
-this), falling back to `security_domain` if absent.
-
-Threat-intel commands use `service.get/post/delete` directly against
-the ES threat_intel REST endpoints. The upload command sends the file
-as the raw request body with collection type and filename as keyword
-arguments (query parameters in the SDK's HTTP layer).
+- [Manage ES correlations and threat intel](es-detections.md)
+- [Run searches](search.md)
+- [Review fired alerts](alerts.md)
+- [Ingest SIEM results into SOAR](soar-ingest.md)
+- [Command reference: es](../commands/es.md)

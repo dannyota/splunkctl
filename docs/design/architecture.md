@@ -1,3 +1,5 @@
+<!-- summary: How splunkctl is built: the layers, the request flow, and the design decisions behind them. -->
+
 # Architecture
 
 How splunkctl is built — the layers, the data flow, and the design decisions.

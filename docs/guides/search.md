@@ -1,4 +1,6 @@
-# Search
+<!-- summary: Run SPL searches, export results, upload files, and manage search jobs on a remote Splunk instance. -->
+
+# Run searches
 
 Run SPL queries against a remote Splunk instance from your laptop.
 This is the primary interface for threat hunting, incident response,

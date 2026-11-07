@@ -1,4 +1,6 @@
-# Apps
+<!-- summary: Install, update, reload, and uninstall Splunk apps from local packages with a preview before every change. -->
+
+# Manage apps
 
 Splunk's detection and enrichment capabilities live in apps --
 Technology Add-ons (TAs) for data normalization, security content packs

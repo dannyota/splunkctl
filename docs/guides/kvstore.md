@@ -1,14 +1,16 @@
-# KV store (collections + data CRUD)
+<!-- summary: Create KV store collections and read, write, and delete their documents for allowlists and enrichment data. -->
+
+# Manage KV store collections
 
 Splunk's KV store backs allowlists, threat-intel feeds, and Enterprise
-Security's asset/identity tables — schema-less JSON document storage
+Security's asset/identity tables, schema-less JSON document storage
 scoped per app. This group manages collections (`storage/collections/
 config`) and their documents (`storage/collections/data`) directly over
-the REST API — no SDK entity class exists for KV store, so every command
+the REST API, no SDK entity class exists for KV store, so every command
 here is a thin, typed wrapper around raw `GET`/`POST`/`DELETE` calls.
 
 **Live-verified status**: the local dev instance's KV store is down
-(`server kvstore` reports `status: failed`) — round-trip CRUD is
+(`server kvstore` reports `status: failed`), round-trip CRUD is
 unit-tested against a mocked REST layer only; live verification covers
 the negative path (a down KV store fails cleanly, never blank/traceback).
 Full live round-trip is **pending a healthy KV store**.
@@ -39,20 +41,20 @@ splunkctl kvstore import my_allowlist --file backup.jsonl --yes   # upserts by _
 ## Namespace
 
 Every command addresses `servicesNS/nobody/<app>/storage/collections/
-{config|data}/...` — collection ownership is always `nobody` (the KV
+{config|data}/...`, collection ownership is always `nobody` (the KV
 store convention), scoped by app with `--app` (default `search`).
 
 ## `query`: server-side only
 
 `--query` is raw JSON, passed through unmodified to the API's own
 `query` param; `--limit`/`--skip`/`--sort` map straight to the matching
-API params. There is no client-side re-filtering or re-paging — what the
+API params. There is no client-side re-filtering or re-paging, what the
 server returns is exactly what's rendered.
 
 ## `insert`/`update`: exactly one document source
 
 Both take exactly one of `--data '<json>'` (inline) or `--file f.json`
-(a file holding a single JSON object) — passing both, or neither, is a
+(a file holding a single JSON object), passing both, or neither, is a
 usage error (exit 2), same as invalid JSON in either. Documents pass
 through unmodified: no field is added, renamed, or stripped.
 
@@ -60,19 +62,19 @@ through unmodified: no field is added, renamed, or stripped.
 
 `remove <collection> <key>` deletes by `_key`; `remove <collection>
 --query '<json>'` deletes every document matching the query. Exactly
-one of `KEY`/`--query` is required — supplying both, or neither, is a
+one of `KEY`/`--query` is required, supplying both, or neither, is a
 usage error (exit 2).
 
 ## `export`/`import`: JSONL round-trip
 
-`export` writes one JSON document per line — `_key` is preserved on
+`export` writes one JSON document per line, `_key` is preserved on
 every line, so `import` can upsert straight back onto the same keys.
 `import --file f.jsonl` reads the same shape and POSTs via `batch_save`
 in chunks of up to 500 documents; a document whose `_key` already exists
-in the collection is upserted (overwritten) — that's `batch_save`'s own
+in the collection is upserted (overwritten), that's `batch_save`'s own
 semantics, not something the CLI special-cases. Blank lines in the JSONL
 file are skipped; any non-blank line that isn't a single valid JSON
-object is a usage error (exit 2) — the whole import is rejected before
+object is a usage error (exit 2), the whole import is rejected before
 any request is sent, not partially applied.
 
 ## Worked example: allowlist from bulk intel
@@ -87,7 +89,7 @@ splunkctl kvstore import ip_allowlist --file ip_allowlist.jsonl --yes
 # 3. Query it back
 splunkctl kvstore query ip_allowlist --query '{"source": "internal"}'
 
-# 4. Use it from SPL — requires a lookup DEFINITION binding the
+# 4. Use it from SPL: requires a lookup DEFINITION binding the
 #    collection to a lookup name first (transforms.conf), which
 #    'kvstore' doesn't manage; H4 (lookup definitions & automatic
 #    lookups) wires that up. Once defined:
@@ -95,7 +97,7 @@ splunkctl kvstore query ip_allowlist --query '{"source": "internal"}'
 ```
 
 A raw collection name is **not** automatically usable via `|
-inputlookup` — Splunk's lookup command resolves a *lookup definition*
+inputlookup`, Splunk's lookup command resolves a *lookup definition*
 (a `transforms.conf` stanza with `external_type = kvstore` pointing at
 the collection), not the collection name itself. Until H4 ships that
 wiring, define it manually via Splunk Web
@@ -103,11 +105,11 @@ wiring, define it manually via Splunk Web
 
 ## Errors
 
-KV-store-down and other HTTP failures are never caught locally — they
+KV-store-down and other HTTP failures are never caught locally, they
 flow straight through the CLI's F1 error-envelope classification
 (`splunkctl.errors.classify`), so a down KV store always surfaces a
 clean `kind: "http"`, the real HTTP status (`503` observed live), and
-the server's message — never a blank result or a raw traceback:
+the server's message, never a blank result or a raw traceback:
 
 ```bash
 $ splunkctl --json kvstore query my_allowlist
@@ -116,10 +118,10 @@ $ splunkctl --json kvstore query my_allowlist
 
 ## Implementation notes
 
-No SDK entity class — `storage/collections/config` (collection CRUD,
+No SDK entity class, `storage/collections/config` (collection CRUD,
 form-encoded like most Splunk config endpoints) and `storage/
 collections/data` (document CRUD, JSON body + `Content-Type:
 application/json`) are both reached through small typed JSON helpers in
 `client.py` (`rest_get_json`/`rest_post_json`) layered on the SDK's own
-authenticated `service.get`/`service.post`/`service.delete` — no new
+authenticated `service.get`/`service.post`/`service.delete`, no new
 HTTP stack.

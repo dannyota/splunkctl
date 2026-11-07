@@ -1,89 +1,63 @@
-# soar lists -- Custom Lists (decided_list)
+<!-- summary: Create, export, import, and edit Splunk SOAR custom lists row by row, with the full-replace behaviour of update made explicit before you apply it. -->
 
-Manage SOAR custom lists (the `decided_list` API). Custom lists are
-simple tabular data structures stored as an array of rows, where each
-row is an array of string values.
+# Maintain custom lists
 
-## Quick reference
+When to use: your playbooks read a SOAR custom list (an allowlist, blocklist, or lookup table) and you need to add or remove rows, replace the whole list from a file, or back it up as JSON or CSV.
 
-```bash
-# List all custom lists
-splunkctl soar lists list
-splunkctl soar lists list --limit 10
+## Prerequisites
 
-# Get a list by name or ID (shows metadata + content)
-splunkctl soar lists get blocklist
-splunkctl soar lists get 42
+- SOAR credentials in the active profile and a passing `splunkctl soar test` (see [Set up and check SOAR](soar.md)).
+- For `create`, `update`, and `import`: a JSON or CSV file with at least one row (formats below).
+- `delete` works with an automation token; `decided_list` is the one SOAR DELETE endpoint that accepts token auth.
 
-# Create with initial content from a JSON file
-# JSON format: [["col1","col2"],["a","b"],["c","d"]]
-splunkctl soar lists create --name my_list --file rows.json
+## Synopsis
 
-# Create from CSV (parsed client-side into array-of-rows)
-splunkctl soar lists create --name my_list --file data.csv
-
-# Update (FULL REPLACE -- all existing rows are overwritten)
-splunkctl soar lists update my_list --file new_rows.json
-
-# Add a single row (fetch-modify-replace)
-splunkctl soar lists add-row my_list --values "val1,val2,val3"
-
-# Add a row with values that contain commas (JSON array form)
-splunkctl soar lists add-row my_list --values '["val, with comma","val2"]'
-
-# Remove a row by 0-based index (fetch-modify-replace)
-splunkctl soar lists remove-row my_list --index 2
-
-# Delete a list by name or ID (token auth is allowed for this endpoint)
-splunkctl soar lists delete 42
-splunkctl soar lists delete blocklist
-
-# Export as JSON (content array only)
-splunkctl soar lists export my_list
-splunkctl soar lists export my_list --out backup.json
-
-# Export as CSV (uses the formatted_content API route)
-splunkctl soar lists export my_list --format csv
-splunkctl soar lists export my_list --format csv --out backup.csv
-
-# Import: creates if new, updates (full-replace) if exists
-splunkctl soar lists import --name my_list --file rows.json
-splunkctl soar lists import --name my_list --file data.csv
+```text
+splunkctl soar lists list [--limit N]
+splunkctl soar lists get <NAME_OR_ID>
+splunkctl soar lists create --name <NAME> --file <ROWS.json|ROWS.csv> [--yes]
+splunkctl soar lists update <NAME_OR_ID> --file <ROWS.json|ROWS.csv> [--yes]
+splunkctl soar lists add-row <NAME_OR_ID> --values <"a,b,c" | '["a, b","c"]'> [--yes]
+splunkctl soar lists remove-row <NAME_OR_ID> --index <N> [--yes]
+splunkctl soar lists export <NAME_OR_ID> [--format json|csv] [--out FILE]
+splunkctl soar lists import --name <NAME> --file <ROWS.json|ROWS.csv> [--yes]
+splunkctl soar lists delete <NAME_OR_ID> [--yes]
 ```
 
-## Concepts
+`get`, `update`, `add-row`, `remove-row`, `export`, and `delete` accept a numeric id or a list name; names are resolved through a `_filter_name` query.
 
-### Content format
+## Workflow
 
-The SOAR `decided_list` API stores content as a JSON array of arrays
-(rows of string values). The server rejects `text/csv` -- all content
-is sent as JSON. The CLI handles CSV-to-JSON conversion client-side
-when you pass a `.csv` file to `--file`.
+### Read a list
 
-### Full-replace semantics
+```bash
+splunkctl soar lists list
+splunkctl soar lists get blocklist
+splunkctl soar lists get 42 --json
+```
 
-The `update` command replaces **all** content in the list. There is no
-partial merge. The dry-run preview states this explicitly. Use
-`add-row` and `remove-row` for incremental edits -- they fetch the
-current content, modify it, and POST the full replacement.
+Expected result: list metadata plus its rows. Content is an array of rows, each row an array of strings; SOAR does not distinguish a header row from data.
 
-### Name resolution
+### Back up a list
 
-The `get`, `update`, `add-row`, `remove-row`, `delete`, and `export`
-commands accept either a numeric ID or a list name. Names are resolved via a
-`_filter_name` query against the API.
+```bash
+splunkctl soar lists export blocklist --out backup.json
+splunkctl soar lists export blocklist --format csv --out backup.csv
+```
 
-### Token auth on DELETE
+JSON export writes the content array only. CSV uses SOAR's `formatted_content` route. Export before any `update` or `import` so you can restore the previous rows.
 
-Unlike most SOAR endpoints, `decided_list` DELETE accepts automation
-token auth (no Basic auth required). This is the only SOAR DELETE
-endpoint with this exception.
+### Create a list from a file
 
-## File formats
+> **Safety:** Target is the SOAR host in the active profile. Impact: a new custom list that playbooks can read immediately. Preview with `splunkctl soar lists create --name my_list --file rows.json`, apply by adding `--yes`, and verify with `splunkctl soar lists get my_list`.
 
-### JSON input (--file)
+```bash
+splunkctl soar lists create --name my_list --file rows.json
+splunkctl soar lists create --name my_list --file rows.json --yes
+splunkctl soar lists create --name my_list --file data.csv --yes
+```
 
-Array of arrays, each inner array is one row:
+JSON input is an array of arrays:
 
 ```json
 [
@@ -93,10 +67,7 @@ Array of arrays, each inner array is one row:
 ]
 ```
 
-### CSV input (--file)
-
-Standard CSV. The header row becomes the first element of the content
-array (SOAR custom lists do not distinguish headers from data):
+CSV input is parsed client side into the same shape; the header row becomes the first row:
 
 ```csv
 header1,header2
@@ -104,7 +75,61 @@ value1,value2
 value3,value4
 ```
 
-## Mutations
+The SOAR API rejects `text/csv`, so all content is sent as JSON.
 
-All mutations are dry-run by default. Pass `--yes` to apply. The
-dry-run preview shows the SOAR host and the operation details.
+### Add or remove one row
+
+> **Safety:** Target is the SOAR host in the active profile. Impact: the CLI fetches the current rows, changes one, and posts the full list back; rows changed in the UI between fetch and post are overwritten. Preview with `splunkctl soar lists add-row my_list --values "val1,val2,val3"`, apply by adding `--yes`, and verify with `splunkctl soar lists get my_list`.
+
+```bash
+splunkctl soar lists add-row my_list --values "val1,val2,val3" --yes
+splunkctl soar lists add-row my_list --values '["val, with comma","val2"]' --yes
+splunkctl soar lists remove-row my_list --index 2 --yes
+```
+
+`--values` takes comma-separated values, or a JSON array when a value contains a comma. `--index` is 0-based within the content array, so the header row is index 0.
+
+### Replace a whole list
+
+> **Safety:** Target is the SOAR host in the active profile. Impact: every existing row is overwritten; there is no merge. Preview with `splunkctl soar lists update my_list --file new_rows.json` and read the row count in the preview, apply by adding `--yes`, and verify with `splunkctl soar lists get my_list`.
+
+```bash
+splunkctl soar lists export my_list --out before.json
+splunkctl soar lists update my_list --file new_rows.json
+splunkctl soar lists update my_list --file new_rows.json --yes
+```
+
+### Import from a repository
+
+> **Safety:** Target is the SOAR host in the active profile. Impact: the list is created if it does not exist, otherwise fully replaced. Preview with `splunkctl soar lists import --name my_list --file rows.json`, apply by adding `--yes`, and verify with `splunkctl soar lists get my_list`.
+
+```bash
+splunkctl soar lists import --name my_list --file rows.json
+splunkctl soar lists import --name my_list --file data.csv --yes
+```
+
+`import` is the command to use from CI, because it is idempotent for a given file.
+
+### Delete a list
+
+> **Safety:** Target is the SOAR host in the active profile. Impact: the list is removed and playbooks that read it start failing. Preview with `splunkctl soar lists delete blocklist`, apply with `splunkctl soar lists delete blocklist --yes`, and verify with `splunkctl soar lists list`.
+
+```bash
+splunkctl soar lists export blocklist --out blocklist.json
+splunkctl soar lists delete blocklist
+splunkctl soar lists delete 42 --yes
+```
+
+## Troubleshooting
+
+- `not_found` by name: run `splunkctl soar lists list` and check the exact name, or use the id.
+- `create` rejects the file: it needs at least one row, and JSON must be an array of arrays of strings.
+- A value with a comma was split in `add-row`: pass `--values` as a JSON array.
+- Rows disappeared after `update`: `update` is a full replace; restore from your export with `splunkctl soar lists update <NAME> --file before.json --yes`.
+
+## See also
+
+- [Run playbooks](soar-playbooks.md)
+- [Look up indicators and evidence](soar-indicators.md)
+- [Set up and check SOAR](soar.md)
+- [Command reference: soar](../commands/soar.md)

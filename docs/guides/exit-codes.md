@@ -1,3 +1,5 @@
+<!-- summary: splunkctl uses three exit codes so scripts and CI pipelines can branch on success, failure, and usage errors. -->
+
 # Exit codes
 
 splunkctl uses three exit codes. Scripts and CI pipelines can branch on

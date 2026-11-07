@@ -1,4 +1,6 @@
-# SOAR Approvals
+<!-- summary: List, approve, and deny approval requests raised by Splunk SOAR playbook prompt blocks. -->
+
+# Handle approvals
 
 Manage approval requests from SOAR playbook prompt blocks. A playbook
 pauses at a prompt action and waits for an external approve/deny response

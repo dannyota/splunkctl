@@ -1,157 +1,89 @@
+<!-- summary: splunkctl is a CLI and MCP server for operating Splunk Enterprise, Enterprise Security, and Splunk SOAR with guarded, previewable changes. -->
+
 # splunkctl
 
-Open-source **MCP server** and **CLI** for Splunk Enterprise SIEM and Splunk
-SOAR. One tool, two interfaces — operate your Splunk environment from any AI
-agent that speaks [Model Context Protocol](https://modelcontextprotocol.io), or
-from the terminal.
+Operate Splunk Enterprise, Enterprise Security, and Splunk SOAR from a terminal, or give an AI agent the same commands through MCP.
 
-> Community project. Not affiliated with or endorsed by Splunk, Inc.
+Requires Python 3.13+ and credentials for your Splunk instance. splunkctl is an independent community project, not affiliated with or endorsed by Splunk Inc.
 
-## Two ways in
-
-| Interface | What it does | Get started |
-|-----------|-------------|-------------|
-| **MCP Server** | Give Claude, Cursor, or any MCP client full access to your Splunk SIEM and SOAR — 262 tools with dynamic loading | [MCP guide](guides/mcp.md) |
-| **CLI** | `splunkctl search run`, `splunkctl rules export`, `splunkctl soar containers list` — operate Splunk as code from your laptop | [Install](guides/install.md) |
-
-## MCP server — quick start
+## Quickstart
 
 ```bash
-pip install splunkctl
-
-export SPLUNK_HOST=your-splunk-host
-export SPLUNK_PORT=8089
-export SPLUNK_USER=admin
-export SPLUNK_PASS=your-password
-
-splunkctl mcp install   # writes .mcp.json in the current project
+python -m pip install splunkctl
+splunkctl config init
+splunkctl doctor
 ```
 
-Restart your MCP client. The server exposes five meta-tools (`help`, `run`,
-`focus`, `unfocus`, `usage`) and loads group-specific typed tools on demand —
-staying within context limits while covering every command.
+`config init` writes `~/.splunkctl/config.yaml`. `doctor` checks the connection, authentication, server health, and your permissions. See [Install](guides/install.md) for the optional SDK fork and shell completion, and [Configure](guides/configure.md) for profiles and environment variables.
 
-[Full MCP setup guide &rarr;](guides/mcp.md)
+## Safety
 
-## CLI — quick start
+Every command that changes a remote Splunk or SOAR instance previews by default and exits without making a request. The preview names the active profile and host. Add `--yes` to apply. `state push --report FILE` writes a change report you can attach to a change ticket. Local configuration writes (`config init`, `config use`, `auth login`, `mcp install`) are not guarded.
 
-```bash
-pip install splunkctl
+## Investigate
 
-splunkctl config init                    # interactive SIEM setup
-splunkctl config init --soar             # add SOAR credentials
-splunkctl doctor                         # check SIEM connection
-splunkctl soar test                      # check SOAR connection
+Run SPL, read fired alerts, and triage Enterprise Security notables without leaving the terminal.
 
-splunkctl search run 'index=main | head 10'
-splunkctl rules list
-splunkctl soar containers list
-```
+- [Run searches](guides/search.md)
+- [Review fired alerts](guides/alerts.md)
+- [Triage ES notables](guides/es.md)
+- [Manage dashboards](guides/dashboards.md)
 
-All write operations are **dry-run by default** — nothing changes until you
-pass `--yes`.
+## Detect
 
-[Full CLI quickstart &rarr;](guides/install.md)
+Keep detections, knowledge objects, and parsing configuration in version control and deploy them across instances.
 
-## Commands
+- [Manage detection rules](guides/rules.md)
+- [Manage ES correlations and threat intel](guides/es-detections.md)
+- [Manage macros, eventtypes, and tags](guides/knowledge.md)
+- [Check data model acceleration](guides/datamodels.md)
+- [Manage lookups](guides/lookups.md)
+- [Manage source types and field extractions](guides/parsers.md)
 
-| Group | Description |
-|---|---|
-| `doctor` | Connection, auth, health, and permissions check |
-| `config` | Setup, profiles (dev/UAT/prod), test connectivity |
-| `info` | Server info (version, OS, license) |
-| `search` | Run, export, oneshot, upload, job management |
-| `rules` | Detection rules — CRUD, import/export (YAML), alert-action flags |
-| `alerts` | Fired alerts, alert actions, suppression |
-| `dashboards` | Dashboard CRUD (XML/JSON) |
-| `indexes` | Index management |
-| `inputs` | Data inputs (monitor, tcp, udp, script, http) |
-| `lookups` | Lookup tables, definitions, automatic lookups |
-| `hec` | HEC token management |
-| `parsers` | Source types, field extractions, import/export |
-| `conf` | Generic conf file/stanza editor (any .conf) |
-| `macros` | Search macros — list, get, set |
-| `apps` | App install (.spl/.tar.gz), uninstall, update |
-| `users` | User and role management |
-| `server` | Messages, license, KV store, cluster/SHC/deployment health |
-| `es` | ES notable-event triage (feature-detected) |
-| `audit` | Change audit + RBAC attestation |
-| `kvstore` | KV store collection + document CRUD |
-| `state` | Config-as-code pull/diff/push with change-evidence reports |
-| `soar` | SOAR: containers, artifacts, vault, playbooks, actions, cases, ingest |
-| `auth` | Browser SAML login, session status, and logout |
-| `datamodels` | Inspect definitions and acceleration health |
-| `commands` | Emit the machine-readable command tree |
-| `completion` | Generate shell completion for Bash, Zsh, or Fish |
-| `mcp` | Install and run the MCP server |
-| `eventtypes` | Manage search event types |
-| `tags` | Manage search tags |
+## Respond with SOAR
 
-## Key features
+Work containers, artifacts, playbooks, actions, and cases on Splunk SOAR with the same profiles and guard as the SIEM commands.
 
-### Detection-as-code
+- [Set up and check SOAR](guides/soar.md)
+- [Work SOAR incidents](guides/soar-incidents.md)
+- [Run playbooks](guides/soar-playbooks.md)
+- [Run actions](guides/soar-actions.md)
+- [Manage cases and workbooks](guides/soar-cases.md)
+- [Handle approvals](guides/soar-approvals.md)
+- [Ingest SIEM results into SOAR](guides/soar-ingest.md)
+- [Install SOAR apps](guides/soar-apps.md) and [configure assets](guides/soar-assets.md)
+- [Maintain custom lists](guides/soar-lists.md), [custom functions](guides/soar-functions.md), and [indicators](guides/soar-indicators.md)
 
-Export rules to YAML, version control them, deploy across instances:
+## Change safely
 
-```bash
-splunkctl rules export --path detections.yml
-splunkctl rules import --path detections.yml        # dry-run preview
-splunkctl --yes rules import --path detections.yml  # apply
-```
+Pull live configuration, diff it against your repository, and push approved changes with a change report.
 
-### Config-as-code
+- [Manage configuration as code](guides/state.md)
+- [Edit any conf file](guides/conf.md)
 
-```bash
-splunkctl state pull --dir config/            # snapshot live state
-splunkctl state diff --dir config/            # structured drift report
-splunkctl state push --dir config/ --report r.json --yes  # deploy + evidence
-```
+## Give it to an agent
 
-### SOAR operations
+Register the MCP server once and let an AI agent run the same commands with the same `yes=true` guard.
 
-```bash
-splunkctl soar containers list --label events
-splunkctl soar playbooks export my-playbook --unpack --out ./playbooks/
-splunkctl soar ingest --spl 'index=notable | head 5' --yes
-```
+- [Set up the MCP server](guides/mcp.md)
 
-### Remote file operations
+## Operate and audit
 
-Upload files from your laptop without SSH access to the server:
+Install, configure, authenticate, and check the health of the instances you manage, then produce audit evidence.
 
-```bash
-splunkctl --yes search upload --path threats.csv --index threat_intel
-splunkctl --yes lookups upload threats.csv --file threats.csv --app search
-splunkctl --yes apps install --path TA_windows.spl
-```
+- [Install](guides/install.md) and [Configure](guides/configure.md)
+- [Log in through browser SAML](guides/auth.md)
+- [Diagnose a connection](guides/doctor.md)
+- [Manage indexes](guides/indexes.md), [inputs](guides/inputs.md), [HEC tokens](guides/hec.md), [apps](guides/apps.md), and [users and roles](guides/users.md)
+- [Check server health and topology](guides/server.md)
+- [Manage KV store collections](guides/kvstore.md)
+- [Audit changes and attest RBAC](guides/audit.md)
+- [Administer SOAR users and roles](guides/soar-admin.md)
 
-### Browser SAML auth
+## Reference
 
-Complete Splunk SAML SSO and MFA in a headed browser and reuse the product
-session from every command:
-
-```bash
-splunkctl config init --web-url https://splunk.example.com  # probe for SAML
-splunkctl auth login --target siem
-splunkctl auth status
-```
-
-[Browser SAML auth guide &rarr;](guides/auth.md)
-
-## Global flags
-
-```
---json              Force JSON output
---format FMT        Output format: table, json, csv, jsonl
---fields f1,f2      Project specific fields
---out FILE          Write output to file
---yes / -y          Apply mutations (skip dry-run preview)
---timeout N         Request timeout in seconds (default 30)
---config FILE       Config file path
---profile NAME      Named profile (dev/UAT/prod)
---debug             HTTP request/response logging
-```
-
-## License
-
-Apache 2.0. See [GitHub](https://github.com/dannyota/splunkctl) for source.
+- [Exit codes](guides/exit-codes.md)
+- [Command reference](commands/README.md), generated from the command tree
+- [Relationship to Splunk's splunkctl](guides/splunk-cli.md)
+- [Contributor lab: Keycloak SAML](guides/keycloak-lab.md)
+- [Architecture](design/architecture.md) and [catalog and status](design/catalog.md)

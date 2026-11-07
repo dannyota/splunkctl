@@ -51,6 +51,22 @@ name and config path, plus a green typecheck on current MCP releases.
 - Added SECURITY.md with private vulnerability reporting, and
   CONTRIBUTING.md with the release procedure.
 
+### Docs
+
+- Docs site and README rewritten for security operations engineers:
+  task-based navigation (Investigate, Detect, Respond with SOAR, Change
+  safely, Give it to an agent, Operate and audit, Reference), a guide
+  contract with synopsis, workflow, and Safety notes, and new guides for
+  SOAR incidents, SOAR assets, ES detections, and the relationship to
+  Splunk's own `splunkctl`.
+- Minimal light-first theme with a dark toggle, system fonts only, WCAG
+  contrast, print styles, and a shared `>_` mark for the banner, social
+  image, and favicon.
+- For AI readers: every page declares a one-line summary that
+  `llms.txt` uses verbatim, `llms-full.txt` holds the home page and the
+  operator guides, and `commands.json` publishes the full command tree.
+  `splunkctl docs generate` and `scripts/gen-seo.sh` check all of it in CI.
+
 ### Changed
 
 - The publish workflow fails when the release tag does not match the

@@ -1,440 +1,128 @@
-# SOAR operations
+<!-- summary: Configure SOAR credentials in a splunkctl profile, confirm connectivity, and read SOAR version, health, license, settings, metrics, and vocabularies. -->
 
-Platform reads, containers, artifacts, playbooks, and actions on Splunk
-SOAR (on-premises or cloud) via the REST API.
+# Set up and check SOAR
+
+When to use: you are connecting splunkctl to a Splunk SOAR instance for the first time, or you need a quick read of its health, license usage, settings, or SOC metrics before doing incident work.
 
 ## Prerequisites
 
-Configure SOAR credentials in the active profile:
+- A Splunk SOAR instance (on-premises or cloud) reachable on its REST port (default 8443).
+- An automation token, or a username and password. Username and password are required for any `delete` command, because SOAR refuses automation tokens on DELETE.
+- splunkctl installed (see [Install](install.md)).
 
-```bash
-splunkctl config init --soar          # interactive: host, port, token/user/pass
+## Synopsis
+
+```text
+splunkctl config init --soar [--profile NAME]
+splunkctl soar test
+splunkctl soar info
+splunkctl soar health
+splunkctl soar license
+splunkctl soar settings [--section NAME]
+splunkctl soar stats [--widget NAME] [--list]
+splunkctl soar meta <severities|statuses|labels|tags|cef|features>
+splunkctl soar search <TEXT> [--categories LIST] [--page-size N] [--page N]
 ```
 
-Or set environment variables (`SOAR_HOST`, `SOAR_TOKEN`, etc.) for
-ephemeral overrides. The CLI resolves: env vars > profile `soar:` section >
-defaults (port 8443, TLS verification on).
+## Workflow
 
-## Connectivity test
+### Add SOAR credentials to the profile
 
 ```bash
-splunkctl soar test                   # version + auth check
-splunkctl soar test --json            # machine-readable
+splunkctl config init --soar
+splunkctl --profile uat config init --soar
 ```
 
-Reports `status: ok` with the SOAR version on success. On failure, a
-typed error envelope (kind: `auth`, `connection`, `timeout`, ...) exits 1.
+The prompts ask for host, port, and either a token or a username and password. Values are saved as a `soar:` map inside the profile, next to the SIEM settings. Environment variables (`SOAR_HOST`, `SOAR_PORT`, `SOAR_TOKEN`, `SOAR_USER`, `SOAR_PASS`) override the profile for one run. Resolution order: environment variables, then the profile `soar:` section, then defaults (port 8443, TLS verification on).
 
-## System info
+This writes a local file and is not guarded.
+
+### Verify connectivity
 
 ```bash
-splunkctl soar info                   # version, FQDN, system details
-splunkctl soar info --json
+splunkctl soar test
+splunkctl soar test --json
 ```
 
-Merges `/rest/version` and `/rest/system_info` into a single row.
+Expected result: `status: ok` and the SOAR version. On failure the command prints a typed error envelope (`kind: auth`, `connection`, or `timeout`) and exits 1.
 
-## Health
+### Read version and system info
 
 ```bash
-splunkctl soar health                 # daemon status, standby, cluster
+splunkctl soar info
+```
+
+Merges `/rest/version` and `/rest/system_info` into one row: version, FQDN, and system details.
+
+### Check health
+
+```bash
+splunkctl soar health
 splunkctl soar health --json
 ```
 
-Rolls up three endpoints:
+Rolls up three endpoints into rows tagged by `type`:
 
-- `/rest/health` -- per-daemon time-series; the latest state per daemon
-  (decided, nginx, postgres, uwsgi, ...) is reported.
-- `/rest/warm_standby` -- standby mode (`off` on most installs). Errors
-  are swallowed with status `unavailable`.
-- `/rest/cluster_node` -- cluster node list. Errors are swallowed with
-  status `unclustered` (lab is single-node).
+- `daemon` rows from `/rest/health`: the latest state per daemon (decided, nginx, postgres, uwsgi, and others).
+- `warm_standby` from `/rest/warm_standby`: `off` on most installs; errors are reported as `unavailable`.
+- `cluster_node` from `/rest/cluster_node`: errors are reported as `unclustered` on single-node installs.
 
-Each row carries a `type` column (`daemon`, `warm_standby`,
-`cluster_node`) for easy filtering.
-
-## License
+### Check license usage
 
 ```bash
-splunkctl soar license                # type, action quota, usage
-splunkctl soar license --json
+splunkctl soar license
 ```
 
-Surfaces `/rest/license`: license type (community/enterprise), daily
-action cap (`max_allowed_actions_per_day`), expiry, and today's action
-count. Community license caps at 100 actions/day.
+Shows license type (community or enterprise), the daily action cap (`max_allowed_actions_per_day`), expiry, and today's action count. A community license caps at 100 actions per day, which matters before a bulk `soar actions run`.
 
-## Settings
+### Read settings and SOC metrics
 
 ```bash
-splunkctl soar settings                   # all 37 sections
+splunkctl soar settings
 splunkctl soar settings --section debug_settings
-splunkctl soar settings --json
+splunkctl soar stats
+splunkctl soar stats --widget roi_summary
+splunkctl soar stats --list
 ```
 
-Read-only dump of `/rest/system_settings`. Each row is
-`{section, settings}` where `settings` is the section's key-value map.
-Sections include `auth_settings`, `response_settings`, `debug_settings`,
-`email_settings`, `decided_runner_settings`, and 32 more.
+`settings` is a read-only dump of `/rest/system_settings`, one row per section (`auth_settings`, `response_settings`, `debug_settings`, `email_settings`, and the rest). `stats` reads `/rest/widget_data/<name>`; without `--widget` it fetches `container_stats`, `containers_workload`, `sla_stats`, and `pending_approvals`. `--list` prints the widget names without calling the API.
 
-## Stats
+### Look up vocabularies
 
 ```bash
-splunkctl soar stats                      # default 4 SOC widgets
-splunkctl soar stats --widget roi_summary # single widget
-splunkctl soar stats --list               # all 17 widget names
-splunkctl soar stats --json
+splunkctl soar meta severities
+splunkctl soar meta statuses
+splunkctl soar meta labels
+splunkctl soar meta tags
+splunkctl soar meta cef
+splunkctl soar meta features
 ```
 
-SOC metrics from `/rest/widget_data/<name>`. Defaults fetch
-`container_stats`, `containers_workload`, `sla_stats`, and
-`pending_approvals`. Use `--widget NAME` for any of the 17 widgets;
-unknown names return an error envelope. `--list` prints the catalog
-without hitting the API.
+`statuses` shows the name-to-id map; container updates take the status name, not the id. `labels` cannot be created through the REST API, only in the UI. `features` lists feature flags with their enabled state.
 
-## Meta (vocabularies)
+### Search across objects
 
 ```bash
-splunkctl soar meta severities            # high/medium/low + colors
-splunkctl soar meta statuses              # new/open/closed + status_type
-splunkctl soar meta labels                # container labels (UI-only creation)
-splunkctl soar meta tags                  # container tags
-splunkctl soar meta cef                   # CEF field vocabulary
-splunkctl soar meta features              # feature flags (enabled/disabled)
+splunkctl soar search dns
+splunkctl soar search dns --categories app,container
+splunkctl soar search dns --page-size 5 --page 2
 ```
 
-Read-only vocabulary lookups. `statuses` shows the name-to-id map needed
-for container updates (use the string name, not numeric id). `labels`
-notes that label creation has no REST endpoint (UI-only). `features`
-lists feature flags with their enabled state.
+Free-text search across apps, containers, artifacts, assets, and other object types through `/rest/search`. Each hit carries `category`, `name`, `id`, and `url`. Pagination here is 1-based, unlike other SOAR endpoints.
 
-## Containers
+## Troubleshooting
 
-### List
+- `kind: auth` from `soar test`: the token or password is wrong, or the token lacks REST access. Rerun `splunkctl config init --soar`.
+- `kind: connection`: check host, port (8443 by default), and TLS. Set `--no-verify` in `config init` only for lab instances with self-signed certificates.
+- `kind: auth` on a delete command while reads work: the profile is token-only. Add a username and password.
+- `health` shows `unavailable` or `unclustered`: expected on single-node installs without warm standby.
 
-```bash
-splunkctl soar containers list                          # all containers
-splunkctl soar containers list --label events            # by label
-splunkctl soar containers list --status open              # by status name
-splunkctl soar containers list --severity high            # by severity
-splunkctl soar containers list --owner admin              # by owner
-splunkctl soar containers list --since 2026-07-01         # created after date
-splunkctl soar containers list --type event               # events only
-splunkctl soar containers list --type case                # cases only
-splunkctl soar containers list --limit 10 --offset 20     # pagination
-splunkctl soar containers list --filter '_filter_name__icontains="dns"'
-splunkctl soar containers list --json
-```
+Error kinds match the SIEM taxonomy: `auth`, `connection`, `timeout`, `not_found`, `permission`, `usage`, `error`. See [Exit codes](exit-codes.md).
 
-Filters compose (AND). `--status` validates the name against
-`/rest/container_status` before querying; unknown names exit 1 with a
-usage error (if the lookup itself fails, a warning is printed and the
-name passes through to the server). `--type event` maps to API
-`container_type=default`. `--since` maps to `_filter_create_time__gt`.
-`--filter` passes a raw Django-style filter for advanced queries.
-`--offset` requires `--limit` and must be a multiple of it (the API
-pages by page number: `page = offset / limit`).
+## See also
 
-### Get
-
-```bash
-splunkctl soar containers get 42                        # full container
-splunkctl soar containers get 42 --artifacts             # artifacts
-splunkctl soar containers get 42 --notes                 # notes
-splunkctl soar containers get 42 --comments              # comments
-splunkctl soar containers get 42 --audit                 # audit log
-splunkctl soar containers get 42 --activity              # activity feed
-splunkctl soar containers get 42 --playbook-runs         # playbook runs
-splunkctl soar containers get 42 --phases                # case phases
-splunkctl soar containers get 42 --json
-```
-
-Without a sub-view flag, returns the full container object. Each flag
-fetches the corresponding pseudo-field endpoint
-(`/rest/container/<id>/<suffix>`). When multiple sub-view flags are given, the last one takes effect.
-
-### Create
-
-```bash
-splunkctl soar containers create --name "DNS Alert" --label events --yes
-splunkctl soar containers create --name "Alert" --label events \
-  --severity high --sensitivity white --sdi "SDI-001" \
-  --description "Probe" --tag malware --field priority=P1 --yes
-```
-
-Creates a container with `run_automation: false`. When `--sdi` is given,
-the CLI queries for an existing container with that SDI first; if found,
-it exits 1 with `kind: conflict` and the existing container id. The
-server also returns `existing_container_id` on a 400 duplicate, which the
-CLI surfaces. Tags and custom fields are passed inline. All mutations are
-dry-run by default (pass `--yes` to apply); the guard banner shows the
-SOAR host.
-
-### Update
-
-```bash
-splunkctl soar containers update 42 --severity critical --yes
-splunkctl soar containers update 42 --status closed --yes
-splunkctl soar containers update 42 --owner analyst --yes
-splunkctl soar containers update 1 2 3 --severity low --yes   # bulk
-splunkctl soar containers update 42 --tag new_tag --yes       # read-modify-write
-```
-
-Updates one or more containers. Multiple ids use a single bulk array POST
-to `/rest/container`. Status must be a name (`closed`, not `2`) -- numeric
-ids are rejected with a `usage` error. Tags are read-modify-write: each
-container's existing tags are fetched at apply time, new tags merged per
-container, duplicates removed (dry-run previews the merge without any
-API call).
-
-### Close
-
-```bash
-splunkctl soar containers close 42 --yes
-splunkctl soar containers close 1 2 3 --yes                   # bulk
-```
-
-Sugar for `update --status closed`. Multiple ids use one array POST.
-
-### Assign
-
-```bash
-splunkctl soar containers assign 42 --owner analyst --yes
-splunkctl soar containers assign 1 2 --role analyst --yes     # bulk
-```
-
-Assigns an owner OR a role — mutually exclusive, since SOAR assigns a
-container to a single principal (setting one clears the other; passing
-both is a usage error). Names resolve to `owner_id`/`role_id` at apply
-time — the name lookup runs first, so an all-digit username resolves
-correctly; a raw numeric id is used only when no name matches. Every
-container is read-back verified: a write the server accepted but
-ignored exits 1, and an unverifiable read-back prints a warning.
-Multiple ids use one array POST.
-
-### Delete
-
-```bash
-splunkctl soar containers delete 42 --yes
-splunkctl soar containers delete 1 2 3 --yes
-```
-
-Cascading delete (artifacts, vault, comments, notes, phases, tasks).
-Requires Basic auth credentials (username/password in profile); SOAR
-refuses automation tokens on DELETE. Token-only profiles get a clear
-`kind: auth` error.
-
-## Artifacts
-
-### List
-
-```bash
-splunkctl soar artifacts list --container 42
-splunkctl soar artifacts list --container 42 --limit 10 --offset 20
-splunkctl soar artifacts list --container 42 --json
-```
-
-Lists artifacts in a container. `--container` is required. `--limit`
-and `--offset` paginate (page = offset / limit).
-
-### Get
-
-```bash
-splunkctl soar artifacts get 77
-splunkctl soar artifacts get 77 --json
-```
-
-Returns a single artifact by ID.
-
-### Create
-
-```bash
-splunkctl soar artifacts create --container 42 --name "Suspicious IP" \
-  --cef sourceAddress=10.0.0.5 --yes
-splunkctl soar artifacts create --container 42 --name "Malware" \
-  --cef-file ./cef.json --cef-type myField="custom type" --yes
-splunkctl soar artifacts create --container 42 --name "DNS hit" \
-  --cef destinationDnsDomain=evil.example \
-  --severity high --type network --yes
-splunkctl soar artifacts create --container 42 --name "Alert" \
-  --cef sourceAddress=1.2.3.4 --sdi "SDI-001" --no-automation --yes
-```
-
-CEF fields come from `--cef key=value` (repeatable) and/or `--cef-file`
-(JSON file); when both are given, `--cef` keys override `--cef-file`.
-`cef_types` (contains-type annotations) are auto-populated from a
-built-in CEF-to-contains map (e.g. `sourceAddress` -> `["ip",
-"host name"]`); `--cef-type field=type` overrides specific entries.
-
-When `--sdi` is given, the CLI queries for an existing artifact with
-that `source_data_identifier` in the same container first and warns if
-found -- SOAR does not deduplicate artifacts by SDI server-side, so
-duplicates are silently accepted without this check. If the precheck
-query itself fails, a warning is emitted and the create proceeds.
-
-`--no-automation` sets `run_automation: false` to suppress playbook
-triggers on the new artifact.
-
-Guarded: dry-run by default, `--yes` to apply.
-
-### Update
-
-```bash
-splunkctl soar artifacts update 77 --cef sourceAddress=9.9.9.9 --yes
-splunkctl soar artifacts update 77 --cef sourceAddress=9.9.9.9 --replace-cef --yes
-splunkctl soar artifacts update 77 --name "Renamed" --yes
-```
-
-By default, `--cef` keys are merged into the artifact's existing CEF
-dict (fetch-merge-write). Pass `--replace-cef` to replace the CEF dict
-wholesale instead of merging. `--name`, `--severity`, and `--type`
-update their respective fields.
-
-### Delete
-
-```bash
-splunkctl --yes soar artifacts delete 77
-```
-
-Deletes an artifact by ID. Guarded.
-
-## Vault
-
-### List
-
-```bash
-splunkctl soar vault list                             # all vault items
-splunkctl soar vault list --container 42              # by container
-splunkctl soar vault list --json
-```
-
-Lists vault attachments via `/rest/container_attachment`. `--container`
-filters by container ID.
-
-### Get
-
-```bash
-splunkctl soar vault get <vault_id>                   # by SHA1 hash
-splunkctl soar vault get <vault_id> --json
-```
-
-Queries `/rest/vault_document` by hash. Returns metadata including SHA1,
-SHA256, file names, size, and tags.
-
-### Upload
-
-```bash
-splunkctl soar vault upload --container 42 ./sample.pcap
-splunkctl --yes soar vault upload --container 42 ./sample.pcap
-```
-
-Base64-encodes the file and POSTs to `/rest/container_attachment`.
-Guarded: dry-run by default, `--yes` to apply. Files over 30 MB emit a
-warning (SOAR's nginx proxy caps at ~32 MB).
-
-### Download
-
-```bash
-splunkctl soar vault download <vault_id>              # raw bytes to stdout
-splunkctl soar vault download <vault_id> --out ./file # write to file
-```
-
-Downloads via `GET /rest/download_attachment?vault_id=<sha1>` (the only
-working download path). Without `--out`, writes raw bytes to stdout
-(pipe-friendly). `--out` overwrites the target file without prompting
-(same convention as `lookups download --out` and `dashboards export --out`).
-
-### Delete
-
-```bash
-splunkctl --yes soar vault delete <attachment_id>
-```
-
-Deletes via `DELETE /rest/container_attachment/<id>`. Use the attachment
-ID from `vault list` (the `id` column), not the vault_id hash. SOAR's
-`vault_document` DELETE endpoint returns 405 -- the CLI explains this
-if encountered. Guarded: dry-run by default, `--yes` to apply.
-Requires Basic auth (SOAR refuses token auth on DELETE).
-
-## Notes & comments
-
-### List
-
-```bash
-splunkctl soar notes list --container 42
-splunkctl soar notes list --container 42 --task 7   # task-scoped notes
-splunkctl soar notes list --container 42 --json
-```
-
-Lists notes for a container. `--task` filters to notes attached to a
-specific task ID (queries `/rest/note` with container + task_id filters,
-since task notes are not visible on the container sub-view endpoint).
-
-### Add
-
-```bash
-splunkctl soar notes add --container 42 --title "Summary" "Investigation findings"
-splunkctl soar notes add --container 42 --title "Report" --file ./report.md --yes
-splunkctl soar notes add --container 42 --title "Task note" --task-id 7 "Task analysis" --yes
-```
-
-Content comes from the positional argument or `--file`; when both are
-given, `--file` takes precedence. `--task-id` makes the note a task note instead of a general
-container note. Guarded: dry-run by default, `--yes` to apply.
-
-### Delete
-
-```bash
-splunkctl --yes soar notes delete 10
-```
-
-Deletes a note by its numeric ID. Guarded.
-
-### Comment
-
-```bash
-splunkctl --yes soar notes comment 42 "Investigation complete"
-```
-
-Adds a comment to a container. Comments are immutable -- once created,
-they cannot be edited or deleted via the API.
-
-### Comment-delete
-
-```bash
-splunkctl soar notes comment-delete 50
-```
-
-Exits with a usage error explaining that SOAR comments are immutable and
-cannot be deleted. Comments are removed only when the parent container is
-deleted. No API call is made.
-
-## Search
-
-```bash
-splunkctl soar search dns                                 # cross-object search
-splunkctl soar search dns --categories app,container      # restrict to types
-splunkctl soar search dns --page-size 5 --page 2          # paginate (1-based)
-splunkctl soar search dns --json
-```
-
-Free-text search across all SOAR object types (apps, containers, artifacts,
-assets, ...) via `/rest/search`. Results include `category`, `name`, `id`,
-and `url` per hit.
-
-`--categories` takes a comma-separated list of object types to restrict
-results. Pagination is **1-based** (unlike other SOAR endpoints which are
-0-based); without `--page`, the server defaults to page 1.
-
-## Error handling
-
-All SOAR commands produce typed error envelopes on failure:
-
-```bash
-SOAR_TOKEN=bogus splunkctl soar test --json
-# stderr: {"error": {"kind": "auth", "http_status": 401, "message": "..."}}
-# exit 1
-```
-
-Error kinds match the SIEM taxonomy: `auth`, `connection`, `timeout`,
-`not_found`, `permission`, `usage`, `error`.
+- [Work SOAR incidents](soar-incidents.md)
+- [Configure](configure.md)
+- [Install SOAR apps](soar-apps.md)
+- [Administer SOAR users and roles](soar-admin.md)
+- [Command reference: soar](../commands/soar.md)

@@ -1,4 +1,6 @@
-# Doctor
+<!-- summary: Diagnose connection, authentication, server health, and user permissions for the active splunkctl profile before doing real work. -->
+
+# Diagnose a connection
 
 Diagnose connection, authentication, server health, and user permissions
 in a single command.

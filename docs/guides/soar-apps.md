@@ -1,56 +1,76 @@
-# soar apps -- App Catalog
+<!-- summary: List, inspect, install, and uninstall Splunk SOAR apps, and read an app's configuration schema before creating an asset for it. -->
 
-Manage SOAR apps -- list installed and staged apps, view config schemas,
-install from tgz packages, and uninstall.
+# Install SOAR apps
 
-## Quick reference
+When to use: you need to see which apps a SOAR instance has, read the configuration keys an app expects before creating an asset, or install or remove an app package.
+
+## Prerequisites
+
+- SOAR credentials in the active profile (`splunkctl config init --soar`) and a passing `splunkctl soar test`.
+- `uninstall` requires username and password credentials. SOAR refuses automation tokens on DELETE, so a token-only profile fails with a `kind: auth` error.
+- `install` needs a local `.tgz` package from the Splunk SOAR app store or an app developer build.
+
+## Synopsis
+
+```text
+splunkctl soar apps list [--installed] [--category TEXT] [--limit N]
+splunkctl soar apps get <APP_ID> [--actions]
+splunkctl soar apps install <PATH> [--yes]
+splunkctl soar apps uninstall <NAME_OR_ID> [--yes]
+```
+
+## Workflow
+
+### Find the app
 
 ```bash
-# List all apps (installed + staged)
-splunkctl soar apps list
-splunkctl soar apps list --limit 10
-
-# Only installed apps (exclude staged)
 splunkctl soar apps list --installed
-
-# Filter by category
 splunkctl soar apps list --category SIEM
+splunkctl soar apps list --json
+```
 
-# Get app details (config schema)
+`--installed` excludes staged apps (uploaded but not configured). `--category` filters by the app's category string. Expected result: one row per app with its id, name, version, and install status.
+
+### Read the configuration schema
+
+```bash
 splunkctl soar apps get 5
-
-# Get app details with supported actions
 splunkctl soar apps get 5 --actions
+```
 
-# Install an app from a tgz (dry-run preview)
+The `configuration` map lists each key with `data_type` (string, password, numeric, boolean), `required`, and `default`. These are the keys you pass to `soar assets create --set` (see [Configure assets and monitor ingestion](soar-assets.md)). `--actions` appends the supported actions from `/rest/app/<id>/actions` under an `actions` key.
+
+### Install an app
+
+> **Safety:** Target is the SOAR host in the active profile. Impact: a new app appears as staged on the instance. Preview with `splunkctl soar apps install myapp.tgz`, apply with `splunkctl soar apps install myapp.tgz --yes`, and verify with `splunkctl soar apps list`.
+
+```bash
 splunkctl soar apps install myapp.tgz
-
-# Install an app (apply)
 splunkctl soar apps install myapp.tgz --yes
+```
 
-# Uninstall by name (dry-run preview)
+The file is base64-encoded and posted to `/rest/app`. The new app shows as staged until you configure and activate it in the SOAR UI.
+
+### Uninstall an app
+
+> **Safety:** Target is the SOAR host in the active profile. Impact: the app and its assets stop working. Preview with `splunkctl soar apps uninstall DNS`, apply with `splunkctl soar apps uninstall DNS --yes`, and verify with `splunkctl soar apps list --installed`.
+
+```bash
 splunkctl soar apps uninstall DNS
-
-# Uninstall by id (apply)
 splunkctl soar apps uninstall 42 --yes
 ```
 
-## Install
+A name is resolved to an id through the API before the DELETE.
 
-Accepts a local `.tgz` file (app package from the SOAR app store or a
-developer build). The file is base64-encoded and POSTed to
-`/rest/app`. Guarded: dry-run by default, `--yes` to apply.
+## Troubleshooting
 
-## Uninstall
+- `kind: auth` on uninstall: the profile has only an automation token. Add a username and password with `splunkctl config init --soar`.
+- The app does not appear in `list --installed` after install: it is staged. Configure and activate it in the SOAR UI, or drop `--installed` to see it.
+- `kind: not_found` on uninstall by name: run `splunkctl soar apps list` and use the numeric id.
 
-Accepts an app name or numeric id. If a name is given, it is resolved
-to an id via the API. Uses `DELETE /rest/app/<id>`. SOAR refuses token
-auth on DELETE for most endpoints, so username/password credentials must
-be configured in the profile.
+## See also
 
-## Notes
-
-- Staging: newly installed apps appear as "staged" until configured and
-  activated through the SOAR UI.
-- Credentials: uninstall requires Basic auth (username + password).
-  Token-only profiles will fail on DELETE.
+- [Configure assets and monitor ingestion](soar-assets.md)
+- [Run actions](soar-actions.md)
+- [Set up and check SOAR](soar.md)
+- [Command reference: soar](../commands/soar.md)

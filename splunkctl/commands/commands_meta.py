@@ -61,6 +61,26 @@ def _walk(group: click.Group) -> list[dict[str, Any]]:
     return nodes
 
 
+def command_tree(root: click.Group) -> dict[str, Any]:
+    """The machine-readable command tree: version, global options, commands.
+
+    Shared by `splunkctl commands` and the docs/commands.json that
+    `splunkctl docs generate` publishes, so both stay byte-identical.
+    """
+    global_opts = [_param_entry(p) for p in root.params if p.name not in ("help",)]
+    return {
+        "version": __version__,
+        "global_options": global_opts,
+        "note": "guarded commands are dry-run by default; pass --yes to apply",
+        "commands": _walk(root),
+    }
+
+
+def render_command_tree(root: click.Group) -> str:
+    """`commands --json` output as text, newline-terminated."""
+    return json.dumps(command_tree(root), indent=2) + "\n"
+
+
 @click.command("commands")
 @click.pass_context
 def commands_meta(ctx: click.Context) -> None:
@@ -70,13 +90,4 @@ def commands_meta(ctx: click.Context) -> None:
         output.error("Cannot resolve CLI root.")
         ctx.exit(1)
         return
-    global_opts = [
-        _param_entry(p) for p in root.command.params if p.name not in ("help",)
-    ]
-    result: dict[str, Any] = {
-        "version": __version__,
-        "global_options": global_opts,
-        "note": "guarded commands are dry-run by default; pass --yes to apply",
-        "commands": _walk(root.command),
-    }
-    click.echo(json.dumps(result, indent=2))
+    click.echo(render_command_tree(root.command), nl=False)

@@ -1,4 +1,6 @@
-# Detection rules
+<!-- summary: Export detection rules to YAML, review them in version control, and import them on another Splunk instance with a preview. -->
+
+# Manage detection rules
 
 `splunkctl rules` manages saved searches (detections) over the REST API
 so they can live in git, pass through CI, and deploy across instances.
@@ -39,7 +41,7 @@ the most common alert-action fields, available on both `create` and
 | `--email-subject` | `action.email.subject` | `--actions email` to enable |
 | `--webhook-url` | `action.webhook.param.url` | `--actions webhook` to enable |
 
-Setting a flag does not enable its action by itself — Splunk keeps
+Setting a flag does not enable its action by itself, Splunk keeps
 `action.*` params inert until the action is named in `--actions`. Passing
 a flag whose action isn't enabled prints a non-blocking advisory
 (`--email-to is set but 'email' is not in --actions`); the command still
@@ -47,7 +49,7 @@ applies. Note: on `update`, this advisory fires based on the current
 invocation's `--actions`, so it may fire even if the action is already
 enabled server-side (e.g., when rotating an email recipient without
 re-specifying `--actions email`). A flag and an equivalent `--set` for
-the same field is a usage error (exit 2) rather than a silent pick — fix
+the same field is a usage error (exit 2) rather than a silent pick, fix
 the collision instead:
 
 ```bash
@@ -61,14 +63,14 @@ splunkctl rules create --name 'Rule' --search '<SPL>' \
 
 `--set action.*` remains the escape hatch for any action field without a
 dedicated flag (ES notable/risk params, `action.webhook.param.method`,
-etc.) — see below.
+etc.), see below.
 
 ### App-private rules
 
 `list`/`get` default to the current namespace, which does not include
 saved searches private to a specific app (for example, rules shipped by
 an add-on like Splunk_Security_Essentials). Pass `--app` to scope into
-that namespace — the owner is automatically wildcarded, so app-private
+that namespace, the owner is automatically wildcarded, so app-private
 rules owned by any user are included. Add `--owner` only to narrow the
 scope to a single user's rules:
 

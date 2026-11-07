@@ -1,4 +1,6 @@
-# Server Operations
+<!-- summary: Read Splunk server health, license, KV store status, topology, deployment, authentication, tokens, and workload settings. -->
+
+# Check server health and topology
 
 System health, license, KV store status, and topology health reads.
 
@@ -172,7 +174,7 @@ splunkctl server health --json
 ```
 
 Flattens Splunk's health-report tree (search scheduler, disk space, KV
-store, ingestion latency...) into one row per component — nested feature
+store, ingestion latency...) into one row per component, nested feature
 names join with `/`, and unhealthy components carry their reason text in
 a `reasons` column. The command reports, it does not gate: red
 components still exit 0. Complements `doctor` (connectivity-oriented)

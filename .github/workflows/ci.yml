@@ -102,7 +102,11 @@ jobs:
           python-version: "3.13"
       - run: pip install -e .
       - run: bash scripts/check-lengths.sh
-      - run: bash scripts/gen-seo.sh --check
-      # Command-reference freshness: docs/commands/ + the sidebar block must
+      # Command-reference freshness: docs/commands/, the sidebar block and
+      # docs/commands.json (the published `splunkctl commands --json`) must
       # match the committed command tree (regenerate with `splunkctl docs generate`).
       - run: splunkctl docs generate --check
+      # SEO/AI files: every sidebar page needs one `<!-- summary: ... -->`;
+      # sitemap.xml, llms.txt and llms-full.txt must be regenerated after any
+      # docs change (`bash scripts/gen-seo.sh`).
+      - run: bash scripts/gen-seo.sh --check

@@ -1,4 +1,6 @@
-# SOAR Indicators & Evidence
+<!-- summary: Look up indicators of compromise across Splunk SOAR and manage evidence items on containers. -->
+
+# Look up indicators and evidence
 
 IOC indicator lookups and evidence management on Splunk SOAR.
 
@@ -49,7 +51,7 @@ splunkctl soar indicators get evil.com --json
 
 Looks up an indicator by its exact value via `indicator_by_value`.
 
-### Pivot — common containers
+### Pivot: common containers
 
 ```bash
 splunkctl soar indicators pivot evil.com

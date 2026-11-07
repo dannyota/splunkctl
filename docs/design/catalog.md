@@ -1,3 +1,5 @@
+<!-- summary: Status of every splunkctl command group and core module, updated with the commits that move them forward. -->
+
 # Catalog & status
 
 The source of truth for **what exists and how mature it is** — one status per

@@ -1,4 +1,6 @@
-# Browser SAML authentication
+<!-- summary: Complete Splunk and SOAR SAML single sign-on, including a second factor, in a browser and reuse the session from every splunkctl command. -->
+
+# Log in through browser SAML
 
 splunkctl can complete Splunk SAML single sign-on (including a second factor)
 in a headed Chromium window and then reuse the resulting product session until
