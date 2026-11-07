@@ -28,9 +28,9 @@ expect_ok "$S" dashboards get sc_live_dash --app search --json
 expect_ok "$S" dashboards export sc_live_dash --app search --out "$T/export.xml"
 grep -q "splunkctl live test" "$T/export.xml" && echo "export OK" || { echo "FAIL export content"; fail=$((fail+1)); }
 expect_ok "$S" dashboards update sc_live_dash --file "$T/dash2.xml" --app search --yes
-"$S" dashboards get sc_live_dash --app search --definition 2>/dev/null | grep -q "v2" && echo "update OK" || { echo "FAIL update content"; fail=$((fail+1)); }
+"$S" dashboards get sc_live_dash --app search --json | grep -q "v2" && echo "update OK" || { echo "FAIL update content"; fail=$((fail+1)); }
 expect_ok "$S" dashboards share sc_live_dash --sharing app --app search --yes
-"$S" dashboards list --app search --filter sc_live --json 2>/dev/null | grep -q '"sharing": "app"' && echo "share OK" || { echo "FAIL sharing"; fail=$((fail+1)); }
+"$S" dashboards list --app search --filter sc_live --json | grep -q '"sharing": "app"' && echo "share OK" || { echo "FAIL sharing"; fail=$((fail+1)); }
 expect_ok "$S" dashboards share sc_live_dash --sharing global --app search --yes
 expect_ok "$S" dashboards delete sc_live_dash --app search --yes
 expect_fail "$S" dashboards get sc_live_dash --app search --json
@@ -42,6 +42,9 @@ expect_ok "$S" lookups download sc_live_lk.csv --app search --out "$T/dl.csv"
 grep -q "test-b" "$T/dl.csv" && echo "download OK" || { echo "FAIL download content"; fail=$((fail+1)); }
 printf 'ip,label\n10.0.0.9,test-z\n' > "$T/lk2.csv"
 expect_ok "$S" lookups update sc_live_lk.csv --file "$T/lk2.csv" --app search --yes
+expect_ok "$S" lookups download sc_live_lk.csv --app search --out "$T/dl2.csv"
+head -c 1 "$T/dl2.csv" | grep -q "i" && echo "no leading blank line OK" || { echo "FAIL leading blank line"; fail=$((fail+1)); }
+grep -q "test-z" "$T/dl2.csv" && ! grep -q "test-a" "$T/dl2.csv" && echo "update content OK" || { echo "FAIL update content"; fail=$((fail+1)); }
 expect_ok "$S" lookups delete sc_live_lk.csv --app search --yes
 expect_fail "$S" lookups get sc_live_lk.csv --app search --json
 step "hec: settings, create, list, get (bare and http:// name), disable, enable, delete"
@@ -51,9 +54,9 @@ expect_ok "$S" hec list --filter sc_live --json
 expect_ok "$S" hec get sc_live_tok --json
 expect_ok "$S" hec get http://sc_live_tok --json
 expect_ok "$S" hec disable sc_live_tok --yes
-"$S" hec get sc_live_tok --json 2>/dev/null | grep -Eq '"disabled": (true|"1"|1)' && echo "disable OK" || { echo "FAIL disabled flag"; fail=$((fail+1)); }
+"$S" hec get sc_live_tok --json | grep -Eq '"disabled": (true|"1"|1)' && echo "disable OK" || { echo "FAIL disabled flag"; fail=$((fail+1)); }
 expect_ok "$S" hec enable sc_live_tok --yes
-"$S" hec get sc_live_tok --json 2>/dev/null | grep -Eq '"disabled": (false|"0"|0)' && echo "enable OK" || { echo "FAIL enabled flag"; fail=$((fail+1)); }
+"$S" hec get sc_live_tok --json | grep -Eq '"disabled": (false|"0"|0)' && echo "enable OK" || { echo "FAIL enabled flag"; fail=$((fail+1)); }
 expect_ok "$S" hec delete sc_live_tok --yes
 expect_fail "$S" hec get sc_live_tok --json
 step "state pull with dashboards and lookups"

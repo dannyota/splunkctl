@@ -338,3 +338,33 @@ def test_get_lookup_auth_error_propagates(mock_gc: MagicMock) -> None:
     result = CliRunner().invoke(cli, ["--json", "lookups", "get", "test.csv"])
     # Should NOT say "not found"
     assert "not_found" not in result.stderr
+
+
+def test_download_strips_leading_blank_line(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Splunk's CSV export starts with a newline; the saved file must not."""
+    from io import BytesIO
+
+    class _Jobs:
+        def oneshot(self, *_a: object, **_k: object) -> BytesIO:
+            return BytesIO(b"\nip,label\n10.0.0.1,a\n")
+
+    class _Svc:
+        jobs = _Jobs()
+
+    class _Files:
+        def list(self, **_k: object) -> list[object]:
+            return [object()]
+
+    class _Client:
+        service = _Svc()
+        lookup_table_files = _Files()
+
+    monkeypatch.setattr("splunkctl.commands.lookups.get_client", lambda _ctx: _Client())
+    out = tmp_path / "dl.csv"
+    result = CliRunner().invoke(
+        cli, ["lookups", "download", "x.csv", "--out", str(out)]
+    )
+    assert result.exit_code == 0, result.output
+    assert out.read_text() == "ip,label\n10.0.0.1,a\n"

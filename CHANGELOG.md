@@ -14,6 +14,8 @@
 - `doctor` and `lookups upload` honor the profile's `web_url` instead of
   deriving the Web UI address from the server's `httpport`, so port-mapped
   and proxied instances work.
+- `lookups download` no longer writes the blank first line that Splunk's
+  CSV export emits, so downloaded files round-trip through `upload`.
 
 ### Added
 

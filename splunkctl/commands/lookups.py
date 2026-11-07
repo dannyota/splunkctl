@@ -157,7 +157,9 @@ def download_lookup(
             output_mode="csv",
             app=app,
         )
-        csv_content = stream.read().decode("utf-8")
+        # Splunk's CSV export starts with a blank line; drop it so the file
+        # round-trips through upload without an empty header row.
+        csv_content = stream.read().decode("utf-8").lstrip("\r\n")
     except Exception as exc:
         output.error(f"Download failed: {exc}")
         ctx.exit(1)

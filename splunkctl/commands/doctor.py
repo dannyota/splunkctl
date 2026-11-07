@@ -274,7 +274,7 @@ def doctor_cmd(ctx: click.Context, *, strict: bool = False) -> None:
             _check(
                 "Web UI reachable",
                 resp.status == 200,
-                f"{web_url} (port {web_port})",
+                web_url,
             )
         )
     except Exception as exc:
@@ -282,7 +282,7 @@ def doctor_cmd(ctx: click.Context, *, strict: bool = False) -> None:
             _check(
                 "Web UI reachable",
                 False,
-                f"port {web_port}: {exc}" if "web_port" in dir() else str(exc),
+                f"{web_url}: {exc}" if "web_url" in dir() else str(exc),
                 warn=True,
             )
         )
