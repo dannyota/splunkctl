@@ -5,12 +5,7 @@ in a single command.
 
 ## Why this matters
 
-`doctor` is the first command to run on a fresh setup, the first command
-an LLM agent should call to bootstrap its session, and the fastest way
-to isolate what broke when a previously working instance stops
-responding. It validates every layer of the stack -- network, auth,
-license, permissions, web UI -- so you do not waste time debugging the
-wrong layer.
+Run `doctor` after setup or when a connection fails.
 
 ## Commands
 
@@ -21,7 +16,7 @@ splunkctl doctor --json           # machine-readable output
 
 ## What it checks
 
-1. **Connection** -- can we reach the REST API?
+1. Connection: check REST API reachability.
 2. **Authentication** -- are credentials valid?
 3. **Server health** -- version, OS, license status
 4. **Permissions** -- 9 key capabilities: `search`, `admin_all_objects`,

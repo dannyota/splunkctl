@@ -6,8 +6,13 @@
 pip install git+https://github.com/dannyota/splunkctl
 ```
 
-This pulls the forked SDK (`splunkctl` branch) automatically as a
-dependency.
+Core commands work with the upstream Splunk SDK installed from PyPI.
+Dashboard, lookup-file, and HTTP Event Collector (HEC) token commands
+need the optional SDK fork, installed separately:
+
+```bash
+python -m pip install git+https://github.com/dannyota/splunk-sdk-python@splunkctl
+```
 
 ## From source
 

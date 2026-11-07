@@ -190,8 +190,13 @@ has no authentication and cannot bind to a non-loopback address.
 pip install git+https://github.com/dannyota/splunkctl
 ```
 
-This pulls the forked SDK (`splunkctl` branch) automatically as a
-dependency.
+Core commands work with the upstream Splunk SDK installed from PyPI.
+Dashboard, lookup-file, and HTTP Event Collector (HEC) token commands
+need the optional SDK fork, installed separately:
+
+```bash
+python -m pip install git+https://github.com/dannyota/splunk-sdk-python@splunkctl
+```
 
 ## From source
 
@@ -248,8 +253,10 @@ Restart your shell (or `source` the profile) to activate.
 splunkctl config init
 ```
 
-Prompts for host, port, auth method (token or username/password), tests the
-connection, and writes `~/.splunkctl/config.yaml` with `0600` permissions.
+Prompts for host, port, username, password, and TLS verification, then writes
+`~/.splunkctl/config.yaml` with `0600` permissions. SAML detection runs only
+when `--web-url URL` is supplied. Run `splunkctl config test` to check
+connectivity and authentication after setup.
 
 ## Config file
 
@@ -330,14 +337,40 @@ config only; it never opens a connection.
 | `SPLUNK_USER` | `username` |
 | `SPLUNK_PASS` | `password` |
 
-Env vars override fields of whichever profile is selected — same as they
-override the flat config today.
+Environment variables override fields in the selected profile.
 
 ## Resolution priority
 
-1. CLI flags (`--host`, `--port`, `--token`)
-2. Environment variables
-3. Profile (config file)
+1. Environment variables
+2. Selected profile
+3. Built-in defaults
+
+`--profile` and `--config` are the only root options that select configuration.
+
+## Coexistence with Splunk's splunkctl
+
+Splunk's own Go CLI, [`splunk/splunkctl`](https://github.com/splunk/splunkctl),
+also writes `~/.splunkctl/config.yaml`, as a flat file with `host` (a full
+URL) and `token`. This tool never rewrites that file.
+
+- When `~/.splunkctl/config.yaml` is in Splunk's format and no `--config`
+  is given, this tool reads and writes `~/.splunkctl/profiles.yaml`
+  instead and prints one notice on standard error:
+  `Splunk-format config at ~/.splunkctl/config.yaml; using ~/.splunkctl/profiles.yaml`.
+- `splunkctl config init` writes to the same fallback file, so a single
+  `config init` is enough on a host that already has Splunk's tool.
+- An explicit `--config FILE` is never redirected. If that file is in
+  Splunk's format, the command fails with
+  `Splunk-format config at FILE: this is a flat host/token file written by Splunk's splunkctl. Pass a profiles file with --config, or create one with: splunkctl config init --path FILE`
+- `splunkctl doctor` reports the config file in use as its first check.
+- A hand-written file of this tool's own legacy flat format that contains
+  only `host` and `token` is indistinguishable from Splunk's format and is
+  treated the same way. Add `port` or `scheme`, or run `config init`, to
+  keep using it.
+
+Both tools install an executable named `splunkctl`. This package also
+installs `splunkctl-py`, which runs the same CLI, for hosts where Splunk's
+binary comes first on `PATH`.
 
 ## Watch mode
 
@@ -372,7 +405,7 @@ stores TOTP secrets or codes.
 
 ## How it works
 
-1. `splunkctl config init` probes the public login route. When it sees a
+1. `splunkctl config init --web-url https://splunk.example.com` probes the public login route. When it sees a
    redirect to an external identity provider, it records `auth_mode: browser`
    and stores the product `web_url`.
 2. `splunkctl auth login --target <siem|soar>` opens Chromium at the product
@@ -457,12 +490,7 @@ in a single command.
 
 ## Why this matters
 
-`doctor` is the first command to run on a fresh setup, the first command
-an LLM agent should call to bootstrap its session, and the fastest way
-to isolate what broke when a previously working instance stops
-responding. It validates every layer of the stack -- network, auth,
-license, permissions, web UI -- so you do not waste time debugging the
-wrong layer.
+Run `doctor` after setup or when a connection fails.
 
 ## Commands
 
@@ -473,7 +501,7 @@ splunkctl doctor --json           # machine-readable output
 
 ## What it checks
 
-1. **Connection** -- can we reach the REST API?
+1. Connection: check REST API reachability.
 2. **Authentication** -- are credentials valid?
 3. **Server health** -- version, OS, license status
 4. **Permissions** -- 9 key capabilities: `search`, `admin_all_objects`,
@@ -523,6 +551,54 @@ network, auth, license, or permissions -- so you fix the right thing.
 
 ---
 
+# Exit codes
+
+splunkctl uses three exit codes. Scripts and CI pipelines can branch on
+`$?` to distinguish success, operational errors, and bad invocations.
+
+| Code | Meaning | Examples |
+|------|---------|---------|
+| 0 | Success | Command completed normally. |
+| 1 | Command error | Auth failure, resource not found, API/network error, validation rejected by the server, runtime fault. |
+| 2 | Usage error | Invalid argument, unknown option, missing required option, unrecognized subcommand. |
+
+## Details
+
+**Code 0** -- the command ran and produced its result. For mutation
+commands with `--yes`, the change was applied. For dry-run previews
+(the default), the preview was printed successfully.
+
+**Code 1** -- the command understood what you asked for but could not
+complete it. Common causes:
+
+- Write SPL refused without `--yes` (`confirmation_required` in JSON errors).
+- Authentication or authorization failure (wrong credentials, expired
+  token, insufficient role).
+- Resource not found (no such index, saved search, dashboard, lookup,
+  container, playbook).
+- Server-side validation error (invalid cron, duplicate name, field
+  constraint).
+- Network or connectivity error (host unreachable, timeout, TLS
+  handshake failure).
+
+**Code 2** -- Click rejected the invocation before the command ran.
+The arguments or options did not match the command's schema. Fix the
+invocation and retry. This code is never produced by splunkctl's own
+logic; it comes from the argument parser.
+
+## Scripting example
+
+```bash
+splunkctl rules list --format json > rules.json
+case $? in
+  0) echo "OK";;
+  1) echo "command failed" >&2; exit 1;;
+  2) echo "bad usage" >&2; exit 2;;
+esac
+```
+
+---
+
 # Search
 
 Run SPL queries against a remote Splunk instance from your laptop.
@@ -531,7 +607,7 @@ and ad-hoc log analysis without opening Splunk Web.
 
 ## Commands
 
-```
+```bash
 splunkctl search run '<SPL>'              # sync search, wait for results
 splunkctl search export '<SPL>'           # streaming export (large result sets)
 splunkctl search oneshot '<SPL>'          # fire-and-forget, small queries
@@ -550,6 +626,8 @@ offline analysis). No result-count cap.
 
 **oneshot** is the fastest path for small, read-only queries. No job
 object, no poll loop. Good for counts, stats, and quick checks.
+
+SPL containing write commands requires `--yes`; refusal exits with code 1 and emits a `confirmation_required` error envelope in JSON output mode (including the non-TTY default).
 
 ## Common options
 
@@ -1776,7 +1854,7 @@ splunkctl state push --dir ./snapshot --yes \
 
 ## The pulled tree
 
-```
+```text
 snapshot/
   manifest.json       # tool version, host, per-type object counts
   rules.yml           # saved searches (rules_io's YAML shape)
@@ -1870,7 +1948,7 @@ pull`/`state diff` work normally for dashboards; `state push` reports
 drifted dashboards as apply-unsupported and skips them without
 erroring:
 
-```
+```text
 note: dashboards: 1 drifted object(s) — apply not supported (export-only, no import path)
 ```
 
@@ -1961,7 +2039,7 @@ splunkctl state push --dir ./snap --types soar-assets --yes
 
 ### The pulled tree (SOAR types)
 
-```
+```text
 snapshot/
   soar-playbooks/
     index.json                  # id/name/filename map for diff/push
@@ -2937,7 +3015,7 @@ classified error envelope.
 
 ---
 
-# SOAR Operations
+# SOAR operations
 
 Platform reads, containers, artifacts, playbooks, and actions on Splunk
 SOAR (on-premises or cloud) via the REST API.
@@ -2952,9 +3030,9 @@ splunkctl config init --soar          # interactive: host, port, token/user/pass
 
 Or set environment variables (`SOAR_HOST`, `SOAR_TOKEN`, etc.) for
 ephemeral overrides. The CLI resolves: env vars > profile `soar:` section >
-defaults (port 8443, verify off).
+defaults (port 8443, TLS verification on).
 
-## Connectivity Test
+## Connectivity test
 
 ```bash
 splunkctl soar test                   # version + auth check
@@ -2964,7 +3042,7 @@ splunkctl soar test --json            # machine-readable
 Reports `status: ok` with the SOAR version on success. On failure, a
 typed error envelope (kind: `auth`, `connection`, `timeout`, ...) exits 1.
 
-## System Info
+## System info
 
 ```bash
 splunkctl soar info                   # version, FQDN, system details
@@ -3031,7 +3109,7 @@ SOC metrics from `/rest/widget_data/<name>`. Defaults fetch
 unknown names return an error envelope. `--list` prints the catalog
 without hitting the API.
 
-## Meta (Vocabularies)
+## Meta (vocabularies)
 
 ```bash
 splunkctl soar meta severities            # high/medium/low + colors
@@ -3295,7 +3373,7 @@ ID from `vault list` (the `id` column), not the vault_id hash. SOAR's
 if encountered. Guarded: dry-run by default, `--yes` to apply.
 Requires Basic auth (SOAR refuses token auth on DELETE).
 
-## Notes & Comments
+## Notes & comments
 
 ### List
 
@@ -3365,7 +3443,7 @@ and `url` per hit.
 results. Pagination is **1-based** (unlike other SOAR endpoints which are
 0-based); without `--page`, the server defaults to page 1.
 
-## Error Handling
+## Error handling
 
 All SOAR commands produce typed error envelopes on failure:
 
@@ -3377,6 +3455,65 @@ SOAR_TOKEN=bogus splunkctl soar test --json
 
 Error kinds match the SIEM taxonomy: `auth`, `connection`, `timeout`,
 `not_found`, `permission`, `usage`, `error`.
+
+---
+
+# soar apps -- App Catalog
+
+Manage SOAR apps -- list installed and staged apps, view config schemas,
+install from tgz packages, and uninstall.
+
+## Quick reference
+
+```bash
+# List all apps (installed + staged)
+splunkctl soar apps list
+splunkctl soar apps list --limit 10
+
+# Only installed apps (exclude staged)
+splunkctl soar apps list --installed
+
+# Filter by category
+splunkctl soar apps list --category SIEM
+
+# Get app details (config schema)
+splunkctl soar apps get 5
+
+# Get app details with supported actions
+splunkctl soar apps get 5 --actions
+
+# Install an app from a tgz (dry-run preview)
+splunkctl soar apps install myapp.tgz
+
+# Install an app (apply)
+splunkctl soar apps install myapp.tgz --yes
+
+# Uninstall by name (dry-run preview)
+splunkctl soar apps uninstall DNS
+
+# Uninstall by id (apply)
+splunkctl soar apps uninstall 42 --yes
+```
+
+## Install
+
+Accepts a local `.tgz` file (app package from the SOAR app store or a
+developer build). The file is base64-encoded and POSTed to
+`/rest/app`. Guarded: dry-run by default, `--yes` to apply.
+
+## Uninstall
+
+Accepts an app name or numeric id. If a name is given, it is resolved
+to an id via the API. Uses `DELETE /rest/app/<id>`. SOAR refuses token
+auth on DELETE for most endpoints, so username/password credentials must
+be configured in the profile.
+
+## Notes
+
+- Staging: newly installed apps appear as "staged" until configured and
+  activated through the SOAR UI.
+- Credentials: uninstall requires Basic auth (username + password).
+  Token-only profiles will fail on DELETE.
 
 ---
 
@@ -4435,7 +4572,7 @@ Every indicator command checks `/rest/feature_flag` for
 `use_indicators=true` before proceeding. If the flag is off or the
 endpoint is unreachable, you get:
 
-```
+```text
 Error: Indicators feature is disabled on this SOAR instance.
 Enable it in Administration > Product Settings > Feature Toggles,
 or POST /rest/feature_flag with name='use_indicators' and value=true.

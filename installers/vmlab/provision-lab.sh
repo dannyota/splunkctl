@@ -32,6 +32,8 @@ done
 [[ "$ONLY" == siem || "$ONLY" == soar || "$ONLY" == both ]] ||
   die "--only must be siem, soar, or both"
 
+[[ "$LAB_PASSWORD" != changeme ]] || die "set LAB_PASSWORD in config.env before provisioning"
+
 "$HERE/check-lab.sh" --only "$ONLY"
 
 ensure_role_vm() {

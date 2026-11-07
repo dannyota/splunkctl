@@ -2,6 +2,8 @@
 
 import os
 import stat
+import uuid
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Literal, TypedDict
 
@@ -9,6 +11,7 @@ import yaml
 
 DEFAULT_DIR: Path = Path.home() / ".splunkctl"
 DEFAULT_PATH: Path = DEFAULT_DIR / "config.yaml"
+FALLBACK_PATH: Path = DEFAULT_DIR / "profiles.yaml"
 
 PROFILES_KEY = "profiles"
 CURRENT_KEY = "current"
@@ -58,6 +61,45 @@ class Resolved(TypedDict):
     source: ConfigSource
 
 
+class ForeignConfigError(Exception):
+    """Raised before reading or overwriting another tool's configuration."""
+
+    def __init__(self, path: Path) -> None:
+        """Store the foreign file path without exposing its contents."""
+        self.path = path
+        super().__init__(
+            f"Splunk-format config at {path}: this is a flat host/token file "
+            "written by Splunk's splunkctl. Pass a profiles file with --config, "
+            "or create one with: splunkctl config init --path FILE"
+        )
+
+
+def is_foreign(raw: Mapping[str, Any]) -> bool:
+    """Identify Splunk's flat string configuration, excluding v2 files."""
+    if PROFILES_KEY in raw:
+        return False
+    host = raw.get("host")
+    return (isinstance(host, str) and "://" in host) or (
+        bool(raw)
+        and "host" in raw
+        and raw.keys() <= {"host", "token"}
+        and all(isinstance(value, str) for value in raw.values())
+    )
+
+
+def effective_path(path: Path | None) -> tuple[Path, bool]:
+    """Redirect an implicit foreign default without emitting or raising."""
+    if path is not None:
+        return path, False
+    try:
+        raw = _read_unchecked(DEFAULT_PATH)
+        if is_foreign(raw):
+            return FALLBACK_PATH, True
+    except Exception:
+        return DEFAULT_PATH, False
+    return DEFAULT_PATH, False
+
+
 class ProfileNotFoundError(Exception):
     """Raised when a named profile does not exist in the config file."""
 
@@ -84,13 +126,21 @@ def soar_defaults() -> dict[str, Any]:
     return {"port": 8443, "verify": True}
 
 
-def _read_raw(path: Path) -> dict[str, Any]:
+def _read_unchecked(path: Path) -> dict[str, Any]:
     """Read a config file as a plain dict; {} if missing or empty."""
     if not path.exists():
         return {}
     with open(path) as f:
         data = yaml.safe_load(f)
     return data if isinstance(data, dict) else {}
+
+
+def _read_raw(path: Path) -> dict[str, Any]:
+    """Read our configuration, refusing files owned by Splunk's CLI."""
+    raw = _read_unchecked(path)
+    if is_foreign(raw):
+        raise ForeignConfigError(path)
+    return raw
 
 
 def _is_v2(raw: dict[str, Any]) -> bool:
@@ -151,12 +201,12 @@ def is_v2_file(path: Path | None = None) -> bool:
     values into a profile, preserving siblings) instead of ``save`` (raw
     overwrite) — see ``config init``.
     """
-    return _is_v2(_read_raw(path or DEFAULT_PATH))
+    return _is_v2(_read_raw(effective_path(path)[0]))
 
 
 def profile_names(path: Path | None = None) -> list[str]:
     """List known profile names — ``["default"]`` for a legacy/missing file."""
-    raw = _read_raw(path or DEFAULT_PATH)
+    raw = _read_raw(effective_path(path)[0])
     if _is_v2(raw):
         return sorted(raw.get(PROFILES_KEY) or {})
     return [_DEFAULT_PROFILE]
@@ -216,7 +266,7 @@ def resolve(
         ProfileNotFoundError: the selected profile does not exist.
     """
     cfg = defaults()
-    config_path = path or DEFAULT_PATH
+    config_path = effective_path(path)[0]
     raw = _read_raw(config_path)
     name = _active_profile_name(raw, profile)
     cfg.update(_profile_config(raw, name))
@@ -237,11 +287,19 @@ def load(path: Path | None = None, *, profile: str | None = None) -> dict[str, A
 
 def save(cfg: dict[str, Any], path: Path | None = None) -> Path:
     """Save config to YAML with 0600 permissions."""
-    config_path = path or DEFAULT_PATH
-    config_path.parent.mkdir(parents=True, exist_ok=True)
-
-    with open(config_path, "w") as f:
-        yaml.dump(dict(cfg), f, default_flow_style=False, sort_keys=False)
+    config_path = effective_path(path)[0]
+    if config_path.is_symlink():
+        config_path = config_path.resolve(strict=True)
+    _read_raw(config_path)
+    config_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    temp_path = config_path.parent / f".{config_path.name}.{uuid.uuid4().hex}.tmp"
+    fd = os.open(temp_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(fd, "w") as f:
+            yaml.dump(dict(cfg), f, default_flow_style=False, sort_keys=False)
+        os.replace(temp_path, config_path)
+    finally:
+        temp_path.unlink(missing_ok=True)
 
     config_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
     return config_path
@@ -254,7 +312,7 @@ def save_profile(cfg: dict[str, Any], name: str, path: Path | None = None) -> Pa
     first, upgrading the file to schema v2. An already-v2 file keeps its
     other profiles and ``current`` pointer untouched. Preserves 0600 perms.
     """
-    config_path = path or DEFAULT_PATH
+    config_path = effective_path(path)[0]
     raw = _read_raw(config_path)
 
     if _is_v2(raw):
@@ -277,7 +335,7 @@ def use_profile(name: str, path: Path | None = None) -> Path:
     Raises:
         ProfileNotFoundError: ``name`` is not a known profile.
     """
-    config_path = path or DEFAULT_PATH
+    config_path = effective_path(path)[0]
     raw = _read_raw(config_path)
     if name not in profile_names(config_path):
         raise ProfileNotFoundError(name)
@@ -334,7 +392,7 @@ def resolve_soar(
     check for ``host`` to decide if SOAR is configured.
     """
     cfg = soar_defaults()
-    config_path = path or DEFAULT_PATH
+    config_path = effective_path(path)[0]
     raw = _read_raw(config_path)
     name = _active_profile_name(raw, profile)
     cfg.update(_soar_profile_config(raw, name))

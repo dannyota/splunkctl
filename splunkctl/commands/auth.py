@@ -28,9 +28,9 @@ from splunkctl.auth.session import (
 )
 
 
-def _config_path(ctx: click.Context) -> Path | None:
+def _config_path(ctx: click.Context) -> Path:
     cfg = (ctx.obj or {}).get("config")
-    return Path(cfg) if cfg else None
+    return Path(cfg) if cfg else cfg_mod.DEFAULT_PATH
 
 
 def _auth_mode(

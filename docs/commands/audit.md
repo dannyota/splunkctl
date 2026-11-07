@@ -49,4 +49,4 @@ imported roles, deduplicated and sorted.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--roles-only` | flag | false | One row per role instead of per user (role-centric attestation view). |
+| `--roles-only` | flag | - | One row per role instead of per user (role-centric attestation view). |

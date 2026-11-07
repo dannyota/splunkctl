@@ -248,7 +248,7 @@ def hec_send(
     timeout: int = ctx.obj.get("timeout", 30)
     obj: dict[str, Any] = ctx.obj
     cfg = cfg_mod.load(
-        Path(obj["config"]) if obj.get("config") else None,
+        Path(obj.get("config") or cfg_mod.DEFAULT_PATH),
         profile=obj.get("profile"),
     )
     verify: bool = bool(cfg.get("verify", True))

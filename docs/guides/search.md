@@ -6,7 +6,7 @@ and ad-hoc log analysis without opening Splunk Web.
 
 ## Commands
 
-```
+```bash
 splunkctl search run '<SPL>'              # sync search, wait for results
 splunkctl search export '<SPL>'           # streaming export (large result sets)
 splunkctl search oneshot '<SPL>'          # fire-and-forget, small queries
@@ -25,6 +25,8 @@ offline analysis). No result-count cap.
 
 **oneshot** is the fastest path for small, read-only queries. No job
 object, no poll loop. Good for counts, stats, and quick checks.
+
+SPL containing write commands requires `--yes`; refusal exits with code 1 and emits a `confirmation_required` error envelope in JSON output mode (including the non-TTY default).
 
 ## Common options
 

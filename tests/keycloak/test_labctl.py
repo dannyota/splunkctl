@@ -62,6 +62,13 @@ def test_start_requires_podman(tmp_path: Path) -> None:
 
 
 def test_configure_renders_and_imports_realm(tmp_path: Path) -> None:
+    lab = tmp_path / "keycloak"
+    lab.mkdir()
+    for name in ("labctl.sh", "lib.sh", "realm-template.json", ".env.example"):
+        shutil.copy2(KC / name, lab / name)
+    runtime = lab / ".runtime"
+    runtime.mkdir()
+    runtime.chmod(0o777)
     (tmp_path / "bin").mkdir(exist_ok=True)
     fake_bin = tmp_path / "bin"
     (fake_bin / "podman").write_text("#!/bin/sh\nexit 0\n")
@@ -77,7 +84,7 @@ def test_configure_renders_and_imports_realm(tmp_path: Path) -> None:
         "esac\n",
     )
     result = subprocess.run(  # noqa: S603
-        [str(KC / "labctl.sh"), "configure"],
+        [str(lab / "labctl.sh"), "configure"],
         cwd=ROOT,
         env={
             "PATH": f"{fake_bin}:{os.environ['PATH']}",
@@ -93,6 +100,11 @@ def test_configure_renders_and_imports_realm(tmp_path: Path) -> None:
     calls = log_file.read_text()
     assert "realms/master/protocol/openid-connect/token" in calls
     assert "admin/realms" in calls
+
+    assert runtime.stat().st_mode & 0o777 == 0o700
+    rendered = list(runtime.glob("*-realm.json"))
+    assert len(rendered) == 1
+    assert rendered[0].stat().st_mode & 0o777 == 0o600
 
 
 def test_verify_fails_when_health_is_down(tmp_path: Path) -> None:

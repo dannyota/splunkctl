@@ -1,6 +1,7 @@
 """Click entry point and global flags."""
 
 import sys
+from pathlib import Path
 from typing import Any
 
 import click
@@ -82,14 +83,21 @@ class _CLI(click.Group):
         }
     )
 
-    def _leaf_opts(self, args: list[str]) -> frozenset[str]:
+    def _leaf_opts(
+        self, args: list[str], *, value_only: bool = False
+    ) -> frozenset[str]:
         """Option names defined by the subcommand the args resolve to.
 
         A flag spelled the same as a global one stays with the leaf.
         """
         cmd: click.Command = self
-        for tok in args:
+        tokens = iter(args)
+        for tok in tokens:
+            if tok == "--":
+                break
             if tok.startswith("-"):
+                if tok in self._HOIST_VALUE:
+                    next(tokens, None)
                 continue
             if isinstance(cmd, click.Group) and tok in cmd.commands:
                 cmd = cmd.commands[tok]
@@ -99,6 +107,8 @@ class _CLI(click.Group):
             return frozenset()
         opts: set[str] = set()
         for p in cmd.params:
+            if value_only and (not isinstance(p, click.Option) or p.is_flag or p.count):
+                continue
             opts.update(p.opts)
             opts.update(p.secondary_opts)
         return frozenset(opts)
@@ -109,10 +119,18 @@ class _CLI(click.Group):
         # to resolve the leaf command for the guard check.
         ctx.meta["_watch_orig_args"] = list(args)
         leaf_opts = self._leaf_opts(args)
+        leaf_values = self._leaf_opts(args, value_only=True)
         prefix: list[str] = []
         rest: list[str] = []
         i = 0
         while i < len(args):
+            if args[i] == "--":
+                rest.extend(args[i:])
+                break
+            if args[i] in leaf_values and i + 1 < len(args):
+                rest.extend(args[i : i + 2])
+                i += 2
+                continue
             if args[i] in self._HOIST_FLAGS and args[i] not in leaf_opts:
                 prefix.append(args[i])
             elif (
@@ -234,7 +252,15 @@ def cli(
     ctx.obj["fields"] = fields
     ctx.obj["out"] = out
     ctx.obj["dry_run"] = not yes
-    ctx.obj["config"] = config
+    path, fell_back = cfg_mod.effective_path(Path(config) if config else None)
+    ctx.obj["config"] = str(path)
+    ctx.obj["config_fallback"] = fell_back
+    if fell_back:
+        click.echo(
+            f"Splunk-format config at {cfg_mod.DEFAULT_PATH}; "
+            f"using {cfg_mod.FALLBACK_PATH}",
+            err=True,
+        )
     ctx.obj["profile"] = profile
     ctx.obj["debug"] = debug
     ctx.obj["timeout"] = timeout

@@ -38,7 +38,7 @@ def _decode_stream(data: bytes) -> str:
 
 def exec_cli(args: list[str]) -> str:
     """Run ``splunkctl <args>`` as a subprocess and return output."""
-    cmd = [sys.executable, "-m", "splunkctl", *args, *_FORCE_FLAGS]
+    cmd = [sys.executable, "-m", "splunkctl", *_FORCE_FLAGS, *args]
     try:
         result = subprocess.run(  # noqa: S603
             cmd,
@@ -107,6 +107,8 @@ def build_cli_args(entry: ToolEntry, params: dict[str, Any]) -> list[str]:
                 args.extend([flag, str(item)])
         else:
             args.extend([flag, str(value)])
+    if any(positional.values()):
+        args.append("--")
     for pname in entry.arg_order:
         args.extend(positional.pop(pname, []))
     for leftovers in positional.values():

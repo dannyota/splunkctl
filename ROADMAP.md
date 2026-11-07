@@ -161,6 +161,27 @@ Extends the read-only `list`/`get` from Wave 4:
 
 ---
 
+## Naming and coexistence with Splunk's splunkctl
+
+Decision (2026-11-08): keep the `splunkctl` name and PyPI package. This
+project predates Splunk's Go CLI of the same name
+([`splunk/splunkctl`](https://github.com/splunk/splunkctl), first release
+2026-09-09; this project's first release was 2026-06-29). The README states
+that the two are unrelated, both tools can share `~/.splunkctl`, and this
+package also installs a `splunkctl-py` executable for hosts that have both.
+
+Revisit the rename plan if any of these happen:
+
+- Splunk publishes a `splunkctl` package to PyPI or asks for the name.
+- Splunk raises a trademark concern about the name.
+- User reports show the name collision causing real confusion or breakage
+  that the coexistence measures do not cover.
+
+The rename plan, if triggered: rename package, executable, skill, MCP
+registration, and config directory together; keep `splunkctl` on PyPI as a
+migration shim that does not install a competing executable; ship an
+explicit config import.
+
 ## Deferred
 
 - Forwarder fleet / deployment-server management

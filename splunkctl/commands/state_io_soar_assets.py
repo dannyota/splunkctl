@@ -6,10 +6,9 @@ on pull (replaced with ``"****"``) so secrets never land on disk; masked
 fields are ignored during diff comparison.  Push uses fetch-merge-post
 semantics (same as ``soar assets update``) and never deletes.
 
-Each adapter function builds its own ``SOARClient`` from resolved SOAR
-config (``config.resolve_soar()``), so the ``client`` parameter (which
-the orchestrator passes as the SIEM client) is accepted for signature
-compatibility but ignored.
+Each adapter builds a ``SOARClient`` using the CLI-selected config and
+profile. The ``client`` parameter is accepted for signature compatibility
+but ignored.
 """
 
 from __future__ import annotations
@@ -17,6 +16,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
+
+import click
 
 from splunkctl import config as cfg_mod
 from splunkctl.commands.state_types import (
@@ -37,8 +38,11 @@ _SUBDIR = "soar-assets"
 
 
 def _build_soar_client() -> SOARClient:
-    """Construct a SOARClient from resolved SOAR config (no Click context)."""
-    cfg = cfg_mod.resolve_soar()
+    """Construct a SOARClient using the CLI-selected config and profile."""
+    ctx = click.get_current_context(silent=True)
+    obj = (ctx.obj or {}) if ctx is not None else {}
+    config_path = Path(obj.get("config") or cfg_mod.DEFAULT_PATH)
+    cfg = cfg_mod.resolve_soar(config_path, profile=obj.get("profile"))
     host = cfg.get("host")
     if not host:
         raise RuntimeError(

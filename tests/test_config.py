@@ -35,7 +35,7 @@ def test_load_from_file(tmp_path: Path) -> None:
 
 def test_load_env_overlay(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     p = tmp_path / "config.yaml"
-    p.write_text(yaml.dump({"host": "file-host"}))
+    p.write_text(yaml.dump({"host": "file-host", "port": 8089}))
     monkeypatch.setenv("SPLUNK_HOST", "env-host")
     monkeypatch.setenv("SPLUNK_PORT", "1234")
     monkeypatch.setenv("SPLUNK_VERIFY", "true")
@@ -85,205 +85,6 @@ def test_redact_keeps_empty_secrets() -> None:
 # --- Profiles (schema v2) ---
 
 
-def _write_v2(path: Path, profiles: dict[str, Any], current: str | None = None) -> None:
-    raw: dict[str, Any] = {"profiles": profiles}
-    if current is not None:
-        raw["current"] = current
-    path.write_text(yaml.dump(raw, sort_keys=False))
-
-
-def test_load_v2_uses_current_pointer(tmp_path: Path) -> None:
-    p = tmp_path / "config.yaml"
-    _write_v2(
-        p,
-        {"dev": {"host": "dev-host"}, "uat": {"host": "uat-host"}},
-        current="uat",
-    )
-    cfg = config.load(p)
-    assert cfg["host"] == "uat-host"
-
-
-def test_load_v2_defaults_to_default_profile_when_no_current(tmp_path: Path) -> None:
-    p = tmp_path / "config.yaml"
-    _write_v2(p, {"default": {"host": "default-host"}, "uat": {"host": "uat-host"}})
-    cfg = config.load(p)
-    assert cfg["host"] == "default-host"
-
-
-def test_load_v2_profile_flag_overrides_current(tmp_path: Path) -> None:
-    p = tmp_path / "config.yaml"
-    _write_v2(
-        p,
-        {"dev": {"host": "dev-host"}, "prod": {"host": "prod-host"}},
-        current="dev",
-    )
-    cfg = config.load(p, profile="prod")
-    assert cfg["host"] == "prod-host"
-
-
-def test_load_v2_missing_profile_raises_not_found(tmp_path: Path) -> None:
-    p = tmp_path / "config.yaml"
-    _write_v2(p, {"dev": {"host": "dev-host"}})
-    with pytest.raises(config.ProfileNotFoundError) as exc_info:
-        config.load(p, profile="uat")
-    assert exc_info.value.name == "uat"
-
-
-def test_load_legacy_file_as_implicit_default(tmp_path: Path) -> None:
-    p = tmp_path / "config.yaml"
-    p.write_text(yaml.dump({"host": "legacy-host"}))
-    cfg = config.load(p, profile="default")
-    assert cfg["host"] == "legacy-host"
-
-
-def test_load_legacy_file_requesting_other_profile_raises(tmp_path: Path) -> None:
-    p = tmp_path / "config.yaml"
-    p.write_text(yaml.dump({"host": "legacy-host"}))
-    with pytest.raises(config.ProfileNotFoundError):
-        config.load(p, profile="uat")
-
-
-def test_load_no_file_requesting_named_profile_raises(tmp_path: Path) -> None:
-    with pytest.raises(config.ProfileNotFoundError):
-        config.load(tmp_path / "nonexistent.yaml", profile="uat")
-
-
-def test_resolve_env_overrides_profile_fields(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    p = tmp_path / "config.yaml"
-    _write_v2(p, {"uat": {"host": "uat-host", "username": "uat-user"}}, current="uat")
-    monkeypatch.setenv("SPLUNK_HOST", "env-host")
-    resolved = config.resolve(p)
-    assert resolved["cfg"]["host"] == "env-host"
-    assert resolved["cfg"]["username"] == "uat-user"
-    assert resolved["profile"] == "uat"
-    assert resolved["source"] == "env"
-
-
-def test_resolve_source_is_profile_when_no_overlay(tmp_path: Path) -> None:
-    p = tmp_path / "config.yaml"
-    _write_v2(p, {"uat": {"host": "uat-host"}}, current="uat")
-    resolved = config.resolve(p)
-    assert resolved["source"] == "profile"
-    assert resolved["profile"] == "uat"
-
-
-def test_resolve_source_is_flags_when_overrides_win(tmp_path: Path) -> None:
-    p = tmp_path / "config.yaml"
-    _write_v2(p, {"uat": {"host": "uat-host"}}, current="uat")
-    resolved = config.resolve(p, overrides={"host": "flag-host"})
-    assert resolved["cfg"]["host"] == "flag-host"
-    assert resolved["source"] == "flags"
-
-
-def test_resolve_flags_beat_env(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    p = tmp_path / "config.yaml"
-    _write_v2(p, {"uat": {"host": "uat-host"}}, current="uat")
-    monkeypatch.setenv("SPLUNK_HOST", "env-host")
-    resolved = config.resolve(p, overrides={"host": "flag-host"})
-    assert resolved["cfg"]["host"] == "flag-host"
-    assert resolved["source"] == "flags"
-
-
-def test_resolve_non_identity_env_does_not_flip_source(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    p = tmp_path / "config.yaml"
-    _write_v2(p, {"uat": {"host": "uat-host"}}, current="uat")
-    monkeypatch.setenv("SPLUNK_APP", "search")
-    resolved = config.resolve(p)
-    assert resolved["source"] == "profile"
-
-
-def test_profile_names_v2(tmp_path: Path) -> None:
-    p = tmp_path / "config.yaml"
-    _write_v2(p, {"dev": {}, "uat": {}, "prod": {}}, current="uat")
-    assert config.profile_names(p) == ["dev", "prod", "uat"]
-
-
-def test_profile_names_legacy(tmp_path: Path) -> None:
-    p = tmp_path / "config.yaml"
-    p.write_text(yaml.dump({"host": "h"}))
-    assert config.profile_names(p) == ["default"]
-
-
-def test_profile_names_no_file(tmp_path: Path) -> None:
-    assert config.profile_names(tmp_path / "nonexistent.yaml") == ["default"]
-
-
-def test_save_profile_creates_v2_from_scratch(tmp_path: Path) -> None:
-    p = tmp_path / "config.yaml"
-    config.save_profile({"host": "uat-host"}, "uat", p)
-    raw = yaml.safe_load(p.read_text())
-    assert raw["profiles"]["uat"]["host"] == "uat-host"
-    assert "current" not in raw
-
-
-def test_save_profile_upgrades_legacy_preserving_default(tmp_path: Path) -> None:
-    p = tmp_path / "config.yaml"
-    p.write_text(yaml.dump({"host": "legacy-host", "port": 8089}))
-    config.save_profile({"host": "uat-host", "port": 8089}, "uat", p)
-    raw = yaml.safe_load(p.read_text())
-    assert raw["profiles"]["default"]["host"] == "legacy-host"
-    assert raw["profiles"]["uat"]["host"] == "uat-host"
-
-
-def test_save_profile_preserves_0600(tmp_path: Path) -> None:
-    p = tmp_path / "config.yaml"
-    p.write_text(yaml.dump({"host": "legacy-host"}))
-    config.save_profile({"host": "uat-host"}, "uat", p)
-    mode = p.stat().st_mode
-    assert mode & 0o777 == 0o600
-
-
-def test_save_profile_preserves_siblings_and_current(tmp_path: Path) -> None:
-    p = tmp_path / "config.yaml"
-    _write_v2(p, {"dev": {"host": "dev-host"}}, current="dev")
-    config.save_profile({"host": "uat-host"}, "uat", p)
-    raw = yaml.safe_load(p.read_text())
-    assert raw["profiles"]["dev"]["host"] == "dev-host"
-    assert raw["profiles"]["uat"]["host"] == "uat-host"
-    assert raw["current"] == "dev"
-
-
-def test_use_profile_sets_current(tmp_path: Path) -> None:
-    p = tmp_path / "config.yaml"
-    _write_v2(p, {"dev": {"host": "dev-host"}, "uat": {"host": "uat-host"}})
-    config.use_profile("uat", p)
-    raw = yaml.safe_load(p.read_text())
-    assert raw["current"] == "uat"
-
-
-def test_use_profile_not_found_raises(tmp_path: Path) -> None:
-    p = tmp_path / "config.yaml"
-    _write_v2(p, {"dev": {"host": "dev-host"}})
-    with pytest.raises(config.ProfileNotFoundError) as exc_info:
-        config.use_profile("uat", p)
-    assert exc_info.value.name == "uat"
-    raw = yaml.safe_load(p.read_text())
-    assert "current" not in raw
-
-
-def test_use_profile_does_not_test_connectivity(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """`config use` never opens a socket — it only rewrites the pointer."""
-    import splunklib.client as splunk_client
-
-    def _boom(*args: Any, **kwargs: Any) -> Any:
-        raise AssertionError("config use must not connect to Splunk")
-
-    monkeypatch.setattr(splunk_client, "connect", _boom)
-    p = tmp_path / "config.yaml"
-    _write_v2(p, {"dev": {"host": "dev-host"}, "uat": {"host": "uat-host"}})
-    config.use_profile("uat", p)
-    raw = yaml.safe_load(p.read_text())
-    assert raw["current"] == "uat"
-
-
 # --- SOAR profile section (L1) ---
 
 
@@ -297,113 +98,6 @@ def test_soar_defaults() -> None:
     assert "token" not in d
     assert "username" not in d
     assert "password" not in d
-
-
-def test_resolve_soar_from_profile(tmp_path: Path) -> None:
-    """A profile with a soar: section resolves SOAR fields."""
-    p = tmp_path / "config.yaml"
-    _write_v2(
-        p,
-        {"lab": {"host": "siem", "soar": {"host": "soar-host", "token": "tok123"}}},
-        current="lab",
-    )
-    resolved = config.resolve_soar(p)
-    assert resolved["host"] == "soar-host"
-    assert resolved["token"] == "tok123"
-    assert resolved["port"] == 8443  # default
-
-
-def test_resolve_soar_env_overlay(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """SOAR_* env vars override profile soar: values."""
-    p = tmp_path / "config.yaml"
-    _write_v2(
-        p,
-        {"lab": {"host": "siem", "soar": {"host": "profile-soar"}}},
-        current="lab",
-    )
-    monkeypatch.setenv("SOAR_HOST", "env-soar")
-    monkeypatch.setenv("SOAR_PORT", "9443")
-    monkeypatch.setenv("SOAR_TOKEN", "env-token")
-    monkeypatch.setenv("SOAR_VERIFY", "true")
-    resolved = config.resolve_soar(p)
-    assert resolved["host"] == "env-soar"
-    assert resolved["port"] == 9443
-    assert resolved["token"] == "env-token"
-    assert resolved["verify"] is True
-
-
-def test_resolve_soar_env_user_and_pass(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """SOAR_USER and SOAR_PASS map to username and password."""
-    p = tmp_path / "config.yaml"
-    _write_v2(
-        p,
-        {"lab": {"host": "siem", "soar": {"host": "soar-host"}}},
-        current="lab",
-    )
-    monkeypatch.setenv("SOAR_USER", "soar-admin")
-    monkeypatch.setenv("SOAR_PASS", "s3cret")
-    resolved = config.resolve_soar(p)
-    assert resolved["username"] == "soar-admin"
-    assert resolved["password"] == "s3cret"
-
-
-def test_resolve_soar_flags_beat_env(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Explicit overrides (flags) beat env vars."""
-    p = tmp_path / "config.yaml"
-    _write_v2(
-        p,
-        {"lab": {"host": "siem", "soar": {"host": "profile-soar"}}},
-        current="lab",
-    )
-    monkeypatch.setenv("SOAR_HOST", "env-soar")
-    resolved = config.resolve_soar(p, overrides={"host": "flag-soar"})
-    assert resolved["host"] == "flag-soar"
-
-
-def test_resolve_soar_no_soar_section(tmp_path: Path) -> None:
-    """A profile without soar: returns only defaults (port, verify)."""
-    p = tmp_path / "config.yaml"
-    _write_v2(p, {"lab": {"host": "siem"}}, current="lab")
-    resolved = config.resolve_soar(p)
-    assert resolved["port"] == 8443
-    assert resolved["verify"] is True
-    assert "host" not in resolved
-
-
-def test_resolve_soar_respects_profile_flag(tmp_path: Path) -> None:
-    """--profile selects which profile's soar: to read."""
-    p = tmp_path / "config.yaml"
-    _write_v2(
-        p,
-        {
-            "dev": {"host": "dev-siem", "soar": {"host": "dev-soar"}},
-            "prod": {"host": "prod-siem", "soar": {"host": "prod-soar"}},
-        },
-        current="dev",
-    )
-    resolved = config.resolve_soar(p, profile="prod")
-    assert resolved["host"] == "prod-soar"
-
-
-def test_resolve_soar_invalid_port_env_ignored(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Non-numeric SOAR_PORT is silently ignored."""
-    p = tmp_path / "config.yaml"
-    _write_v2(
-        p,
-        {"lab": {"host": "siem", "soar": {"host": "soar-host", "port": 9443}}},
-        current="lab",
-    )
-    monkeypatch.setenv("SOAR_PORT", "not-a-number")
-    resolved = config.resolve_soar(p)
-    assert resolved["port"] == 9443
 
 
 def test_redact_soar_masks_secrets() -> None:
@@ -432,69 +126,129 @@ def test_redact_soar_keeps_empty_secrets() -> None:
     assert r["password"] == ""
 
 
-def test_save_profile_with_soar_roundtrips(tmp_path: Path) -> None:
-    """A profile with soar: nested map saves and reloads correctly."""
-    p = tmp_path / "config.yaml"
-    profile_cfg: dict[str, Any] = {
-        "host": "siem-host",
-        "port": 8089,
-        "soar": {"host": "soar-host", "port": 8443, "token": "tok"},
-    }
-    config.save_profile(profile_cfg, "lab", p)
-    raw = yaml.safe_load(p.read_text())
-    assert raw["profiles"]["lab"]["soar"]["host"] == "soar-host"
-    assert raw["profiles"]["lab"]["soar"]["token"] == "tok"
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ({"host": "https://splunk.example:8089", "extra": 1}, True),
+        ({"host": "bare", "token": "secret"}, True),
+        ({"token": "secret"}, False),
+        ({"host": "bare"}, True),
+        ({"host": "", "token": ""}, True),
+        ({"profiles": {}, "host": "https://example"}, False),
+        ({"host": "bare", "port": 8089}, False),
+        ({"host": "bare", "scheme": "https"}, False),
+        ({"username": "admin"}, False),
+        ({"password": "secret"}, False),
+        ({"token": 123}, False),
+        ({}, False),
+    ],
+)
+def test_foreign_detection(raw: dict[str, Any], expected: bool) -> None:
+    assert config.is_foreign(raw) is expected
 
 
-def test_resolve_soar_verify_false_string_env(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """SOAR_VERIFY=false resolves as boolean False."""
-    p = tmp_path / "config.yaml"
-    _write_v2(p, {"lab": {"host": "siem", "soar": {"host": "s"}}}, current="lab")
-    monkeypatch.setenv("SOAR_VERIFY", "false")
-    resolved = config.resolve_soar(p)
-    assert resolved["verify"] is False
-
-
-def test_siem_profile_unaffected_by_soar_section(tmp_path: Path) -> None:
-    """Adding soar: to a profile does not pollute SIEM resolve."""
-    p = tmp_path / "config.yaml"
-    _write_v2(
-        p,
-        {
-            "lab": {
-                "host": "siem-host",
-                "port": 8089,
-                "soar": {"host": "soar-host", "token": "tok"},
-            }
-        },
-        current="lab",
+def _foreign_default() -> None:
+    config.DEFAULT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    config.DEFAULT_PATH.write_text(
+        "host: https://foreign.example:8089\ntoken: secret-value\n"
     )
-    siem = config.resolve(p)
-    assert siem["cfg"]["host"] == "siem-host"
-    # SIEM resolve must strip the nested soar: map entirely.
-    assert "soar" not in siem["cfg"]
-    assert "token" not in siem["cfg"]
 
 
-def test_resolve_inherits_verify_true_when_profile_omits_it(tmp_path: Path) -> None:
-    p = tmp_path / "config.yaml"
-    _write_v2(p, {"prod": {"host": "prod-host"}}, current="prod")
-    assert config.load(p)["verify"] is True
+def test_effective_path_explicit_never_redirects() -> None:
+    _foreign_default()
+    assert config.effective_path(config.DEFAULT_PATH) == (config.DEFAULT_PATH, False)
 
 
-def test_profile_explicit_verify_false_overrides_default(tmp_path: Path) -> None:
-    p = tmp_path / "config.yaml"
-    _write_v2(p, {"lab": {"host": "lab-host", "verify": False}}, current="lab")
-    assert config.load(p)["verify"] is False
+def test_effective_path_implicit_fallback() -> None:
+    _foreign_default()
+    assert config.effective_path(None) == (config.FALLBACK_PATH, True)
 
 
-def test_soar_profile_explicit_verify_false(tmp_path: Path) -> None:
-    p = tmp_path / "config.yaml"
-    _write_v2(
-        p,
-        {"lab": {"host": "siem", "soar": {"host": "soar-host", "verify": False}}},
-        current="lab",
+def test_effective_path_missing_default() -> None:
+    assert config.effective_path(None) == (config.DEFAULT_PATH, False)
+
+
+def test_effective_path_invalid_yaml_never_raises() -> None:
+    config.DEFAULT_PATH.parent.mkdir(parents=True)
+    config.DEFAULT_PATH.write_text("[invalid")
+    assert config.effective_path(None) == (config.DEFAULT_PATH, False)
+
+
+@pytest.mark.parametrize(
+    "reader", ["resolve", "resolve_soar", "load", "profile_names", "is_v2_file"]
+)
+def test_explicit_foreign_read_refused(reader: str) -> None:
+    _foreign_default()
+    with pytest.raises(config.ForeignConfigError) as caught:
+        getattr(config, reader)(config.DEFAULT_PATH)
+    assert caught.value.path == config.DEFAULT_PATH
+    assert (
+        str(caught.value)
+        == f"Splunk-format config at {config.DEFAULT_PATH}: this is a flat host/token "
+        "file written by Splunk's splunkctl. Pass a profiles file with --config, "
+        "or create one with: splunkctl config init --path FILE"
     )
-    assert config.resolve_soar(p)["verify"] is False
+
+
+def test_implicit_missing_fallback_defaults() -> None:
+    _foreign_default()
+    assert config.load() == config.defaults()
+    assert config.resolve_soar() == config.soar_defaults()
+    assert config.profile_names() == ["default"]
+    assert not config.is_v2_file()
+
+
+def test_implicit_fallback_overlay(monkeypatch: pytest.MonkeyPatch) -> None:
+    _foreign_default()
+    config.FALLBACK_PATH.write_text(
+        "host: fallback\nport: 9000\nsoar:\n  host: soar-fallback\n"
+    )
+    monkeypatch.setenv("SPLUNK_HOST", "env-host")
+    monkeypatch.setenv("SOAR_TOKEN", "env-token")
+    assert config.resolve()["cfg"]["host"] == "env-host"
+    assert config.load()["port"] == 9000
+    assert config.resolve_soar()["host"] == "soar-fallback"
+    assert config.resolve_soar()["token"] == "env-token"
+
+
+@pytest.mark.parametrize("writer", ["save", "save_profile", "use_profile"])
+def test_foreign_write_preserves_bytes_and_mode(writer: str) -> None:
+    _foreign_default()
+    config.DEFAULT_PATH.chmod(0o640)
+    before = config.DEFAULT_PATH.read_bytes()
+    with pytest.raises(config.ForeignConfigError):
+        _write_config(writer, config.DEFAULT_PATH)
+    assert config.DEFAULT_PATH.read_bytes() == before
+    assert config.DEFAULT_PATH.stat().st_mode & 0o777 == 0o640
+
+
+def _write_config(writer: str, path: Path | None) -> None:
+    if writer == "save":
+        config.save({"host": "ours", "port": 8089}, path)
+    elif writer == "save_profile":
+        config.save_profile({"host": "ours"}, "new", path)
+    else:
+        config.use_profile("default", path)
+
+
+@pytest.mark.parametrize("writer", ["save", "save_profile", "use_profile"])
+def test_fallback_write_permissions(writer: str) -> None:
+    _foreign_default()
+    if writer == "use_profile":
+        config.save_profile({"port": 8089}, "other")
+        config.save_profile({"port": 9090}, "default")
+        config.use_profile("other")
+    _write_config(writer, None)
+    assert config.FALLBACK_PATH.stat().st_mode & 0o777 == 0o600
+    assert "secret-value" in config.DEFAULT_PATH.read_text()
+
+
+@pytest.mark.parametrize("operation", ["load", "save", "save_profile", "use_profile"])
+def test_foreign_fallback_refused(operation: str) -> None:
+    _foreign_default()
+    config.FALLBACK_PATH.write_text("host: bare\ntoken: foreign-fallback\n")
+    with pytest.raises(config.ForeignConfigError):
+        if operation == "load":
+            config.load()
+        else:
+            _write_config(operation, None)

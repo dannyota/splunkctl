@@ -32,7 +32,7 @@ SSH access to the server.
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--path` | file | - | Path to .tar.gz or .spl package. [required] |
-| `--force` | flag | false | Overwrite if app already exists. |
+| `--force` | flag | - | Overwrite if app already exists. |
 
 ## apps list
 

@@ -21,7 +21,7 @@ def get_soar_client(ctx: click.Context) -> SOARClient:
     obj: dict[str, Any] = ctx.obj or {}
     cfg_path = obj.get("config")
     profile = obj.get("profile")
-    config_path = Path(cfg_path) if cfg_path else None
+    config_path = Path(cfg_path) if cfg_path else cfg_mod.DEFAULT_PATH
     cfg = cfg_mod.resolve_soar(config_path, profile=profile)
 
     host = cfg.get("host")
@@ -67,7 +67,7 @@ def get_soar_client(ctx: click.Context) -> SOARClient:
         return SOARClient(
             host=host,
             port=int(cfg.get("port", 8443)),
-            verify=bool(cfg.get("verify", False)),
+            verify=bool(cfg.get("verify", True)),
             cookies=rec.values,
         )
 
@@ -77,5 +77,5 @@ def get_soar_client(ctx: click.Context) -> SOARClient:
         token=cfg.get("token"),
         username=cfg.get("username"),
         password=cfg.get("password"),
-        verify=bool(cfg.get("verify", False)),
+        verify=bool(cfg.get("verify", True)),
     )

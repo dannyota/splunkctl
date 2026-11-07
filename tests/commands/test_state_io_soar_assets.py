@@ -470,3 +470,20 @@ class TestRegistration:
         from splunkctl.commands import state_io
 
         assert "soar-assets" in state_io.APPLY_FNS
+
+
+def test_soar_assets_uses_context_config(tmp_path: Path) -> None:
+    import click
+
+    from splunkctl.commands.state_io_soar_assets import _build_soar_client
+    from splunkctl.main import cli
+
+    config_path = tmp_path / "selected.yaml"
+    config_path.write_text(
+        "profiles:\n  lab:\n    soar:\n      host: selected-soar\n"
+        "      token: selected-token\ncurrent: lab\n"
+    )
+    with click.Context(cli, obj={"config": str(config_path), "profile": "lab"}):
+        with patch("splunkctl.commands.state_io_soar_assets.SOARClient") as client:
+            _build_soar_client()
+    assert client.call_args.kwargs["host"] == "selected-soar"

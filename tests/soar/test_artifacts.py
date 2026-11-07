@@ -6,8 +6,11 @@ import json
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+import click
+import pytest
 from click.testing import CliRunner
 
+from splunkctl.commands.soar.artifacts import _parse_cef_pairs, _parse_cef_type_pairs
 from splunkctl.main import cli
 from splunkctl.soar.client import SOARError
 from tests.soar.conftest import PATCH_CLIENT, PATCH_RESOLVE, soar_cfg
@@ -143,3 +146,19 @@ class TestArtifactsLimitValidation:
             ],
         )
         assert result.exit_code == 2
+
+
+@pytest.mark.parametrize("pair", ["key", ""])
+@pytest.mark.parametrize("parser", [_parse_cef_pairs, _parse_cef_type_pairs])
+def test_artifact_pairs_require_equals(parser: Any, pair: str) -> None:
+    with pytest.raises(click.BadParameter, match="expected KEY=VALUE"):
+        parser((pair,))
+
+
+def test_artifact_pairs_preserve_values_and_arbitrary_keys() -> None:
+    assert _parse_cef_pairs(("key=", "url=a=b", "eai:custom=value")) == {
+        "key": "",
+        "url": "a=b",
+        "eai:custom": "value",
+    }
+    assert _parse_cef_type_pairs(("key=", "url=a=b")) == {"key": [""], "url": ["a=b"]}

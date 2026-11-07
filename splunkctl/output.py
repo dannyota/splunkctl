@@ -134,7 +134,8 @@ def error(
         msg: Human-readable message (no ``Error: `` prefix — this function
             adds it for the text path and omits it for the JSON path).
         kind: One of ``auth``, ``not_found``, ``conflict``, ``permission``,
-            ``timeout``, ``connection``, ``http``, ``usage``, or the
+            ``timeout``, ``connection``, ``http``, ``usage``, ``config``,
+            ``confirmation_required``, or the
             fallback ``error`` (default) for unclassified app errors.
         http_status: HTTP status code for HTTP-derived kinds; ``None``
             (serializes to ``null``) for non-HTTP kinds.

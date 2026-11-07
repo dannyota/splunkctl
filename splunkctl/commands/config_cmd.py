@@ -101,7 +101,15 @@ def init(
     them as a nested ``soar:`` map within the profile, preserving existing
     SIEM fields.
     """
-    dest = Path(path) if path else None
+    obj: dict[str, Any] = ctx.obj or {}
+    dest = Path(path or obj.get("config") or cfg_mod.DEFAULT_PATH)
+    try:
+        cfg_mod.is_v2_file(dest)
+    except cfg_mod.ForeignConfigError:
+        raise click.ClickException(
+            f"Refusing to write Splunk-format config at {dest}. "
+            "Choose another file with --path or --config."
+        ) from None
     if soar_mode:
         _init_soar(profile_name, dest, web_url, sso_url, auth_mode, verify)
         return
@@ -175,7 +183,7 @@ def _auto_detect_sso_url(
 
 def _init_soar(
     profile_name: str | None,
-    dest: Path | None,
+    dest: Path,
     web_url: str | None,
     sso_url: str | None,
     auth_mode: str | None,
@@ -183,13 +191,13 @@ def _init_soar(
 ) -> None:
     """Prompt for SOAR fields and merge into the target profile."""
     # Resolve the profile first so the SSO URL can be derived from its SIEM.
-    config_path = dest or cfg_mod.DEFAULT_PATH
+    config_path = dest
     raw = cfg_mod._read_raw(config_path)  # noqa: SLF001
     name = cfg_mod._active_profile_name(raw, profile_name)  # noqa: SLF001
 
     soar_host = click.prompt("SOAR host", type=str)
     soar_port = click.prompt("SOAR port", default=8443, type=int)
-    soar_token = click.prompt("SOAR token", default="", type=str)
+    soar_token = click.prompt("SOAR token", default="", hide_input=True, type=str)
     soar_user = click.prompt("SOAR username", default="", type=str)
     soar_pass = click.prompt("SOAR password", default="", hide_input=True, type=str)
     soar_verify = (
@@ -244,7 +252,7 @@ def _init_soar(
         existing = {}
     existing["soar"] = soar_cfg
     saved = cfg_mod.save_profile(existing, name, dest)
-    output.info(f"SOAR config saved to {saved}")
+    output.info(f"Config saved to {saved}")
 
 
 @config_group.command()
@@ -258,7 +266,7 @@ def show(ctx: click.Context) -> None:
     """
     obj: dict[str, Any] = ctx.obj or {}
     cfg_path = obj.get("config")
-    config_path = Path(cfg_path) if cfg_path else None
+    config_path = Path(cfg_path) if cfg_path else cfg_mod.DEFAULT_PATH
     explicit_profile = obj.get("profile")
 
     resolved = cfg_mod.resolve(config_path, profile=explicit_profile)
@@ -290,7 +298,7 @@ def use(ctx: click.Context, name: str) -> None:
     """Switch the active profile — sets 'current', no connectivity test."""
     obj: dict[str, Any] = ctx.obj or {}
     cfg_path = obj.get("config")
-    config_path = Path(cfg_path) if cfg_path else None
+    config_path = Path(cfg_path) if cfg_path else cfg_mod.DEFAULT_PATH
     cfg_mod.use_profile(name, config_path)
     output.info(f"Active profile: {name}")
 
@@ -302,7 +310,7 @@ def test(ctx: click.Context) -> None:
     obj: dict[str, Any] = ctx.obj or {}
     cfg_path = obj.get("config")
     profile = obj.get("profile")
-    config_path = Path(cfg_path) if cfg_path else None
+    config_path = Path(cfg_path) if cfg_path else cfg_mod.DEFAULT_PATH
     cfg = cfg_mod.load(config_path, profile=profile)
 
     output.info(

@@ -40,7 +40,7 @@ def test_dynamic_tool_call_builds_cli_arguments() -> None:
     )
 
     assert result.is_error is False
-    assert calls == [["search", "run", "--limit", "5", "index=main"]]
+    assert calls == [["search", "run", "--limit", "5", "--", "index=main"]]
     assert len(result.content) == 1
     assert isinstance(result.content[0], TextContent)
     assert result.content[0].text == "[]"

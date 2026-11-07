@@ -109,7 +109,7 @@ splunkctl server license [OPTIONS]
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--usage` | flag | false | Today's indexed volume vs quota and soonest license expiry. |
+| `--usage` | flag | - | Today's indexed volume vs quota and soonest license expiry. |
 
 ## server messages
 

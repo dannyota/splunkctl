@@ -1,4 +1,4 @@
-# SOAR Operations
+# SOAR operations
 
 Platform reads, containers, artifacts, playbooks, and actions on Splunk
 SOAR (on-premises or cloud) via the REST API.
@@ -13,9 +13,9 @@ splunkctl config init --soar          # interactive: host, port, token/user/pass
 
 Or set environment variables (`SOAR_HOST`, `SOAR_TOKEN`, etc.) for
 ephemeral overrides. The CLI resolves: env vars > profile `soar:` section >
-defaults (port 8443, verify off).
+defaults (port 8443, TLS verification on).
 
-## Connectivity Test
+## Connectivity test
 
 ```bash
 splunkctl soar test                   # version + auth check
@@ -25,7 +25,7 @@ splunkctl soar test --json            # machine-readable
 Reports `status: ok` with the SOAR version on success. On failure, a
 typed error envelope (kind: `auth`, `connection`, `timeout`, ...) exits 1.
 
-## System Info
+## System info
 
 ```bash
 splunkctl soar info                   # version, FQDN, system details
@@ -92,7 +92,7 @@ SOC metrics from `/rest/widget_data/<name>`. Defaults fetch
 unknown names return an error envelope. `--list` prints the catalog
 without hitting the API.
 
-## Meta (Vocabularies)
+## Meta (vocabularies)
 
 ```bash
 splunkctl soar meta severities            # high/medium/low + colors
@@ -356,7 +356,7 @@ ID from `vault list` (the `id` column), not the vault_id hash. SOAR's
 if encountered. Guarded: dry-run by default, `--yes` to apply.
 Requires Basic auth (SOAR refuses token auth on DELETE).
 
-## Notes & Comments
+## Notes & comments
 
 ### List
 
@@ -426,7 +426,7 @@ and `url` per hit.
 results. Pagination is **1-based** (unlike other SOAR endpoints which are
 0-based); without `--page`, the server defaults to page 1.
 
-## Error Handling
+## Error handling
 
 All SOAR commands produce typed error envelopes on failure:
 

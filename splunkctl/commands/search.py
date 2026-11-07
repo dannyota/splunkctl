@@ -9,6 +9,7 @@ import click
 from splunkctl import guard, output
 from splunkctl.client import get_client
 from splunkctl.commands.common import fetch_page, list_options, read_results, spl_quote
+from splunkctl.spl_safety import check_spl
 
 _GENERATING = (
     "abstract",
@@ -80,6 +81,8 @@ def run_search(
     detach: bool,
 ) -> None:
     """Run a search synchronously and print results."""
+    if not check_spl(ctx, spl):
+        return
     client = get_client(ctx)
     svc = client.service
     if app:
@@ -133,6 +136,8 @@ def export_search(
     app: str | None,
 ) -> None:
     """Streaming export for large result sets."""
+    if not check_spl(ctx, spl):
+        return
     client = get_client(ctx)
     svc = client.service
     if app:
@@ -166,6 +171,8 @@ def oneshot_search(
     app: str | None,
 ) -> None:
     """Quick one-off search."""
+    if not check_spl(ctx, spl):
+        return
     client = get_client(ctx)
     svc = client.service
     if app:

@@ -22,7 +22,9 @@ def _parse_set_pairs(raw: tuple[str, ...]) -> dict[str, str]:
     """Parse ``key=value`` pairs into a config dict."""
     cfg: dict[str, str] = {}
     for pair in raw:
-        key, _, value = pair.partition("=")
+        key, sep, value = pair.partition("=")
+        if not sep:
+            raise click.BadParameter(f"expected KEY=VALUE, got '{pair}'")
         if key:
             cfg[key] = value
     return cfg

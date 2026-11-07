@@ -134,7 +134,7 @@ class SOARClient:
         token: str | None = None,
         username: str | None = None,
         password: str | None = None,
-        verify: bool = False,
+        verify: bool = True,
         timeout: tuple[int, int] | int | None = None,
         cookies: dict[str, str] | None = None,
     ) -> None:

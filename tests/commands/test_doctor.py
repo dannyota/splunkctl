@@ -4,8 +4,10 @@ import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
 from click.testing import CliRunner
 
+from splunkctl import config as cfg_mod
 from splunkctl.main import cli
 
 _PATCH = "splunkctl.commands.doctor.get_client"
@@ -189,287 +191,113 @@ def test_doctor_json_includes_hints(mock_gc: MagicMock, mock_urllib: MagicMock) 
 # -------------------------------------------------------------------
 
 
-def _soar_cfg(
-    *,
-    host: str = "soar.test",
-    port: int = 8443,
-    token: str = "tok123",  # noqa: S107
-    verify: bool = False,
-) -> dict[str, object]:
-    return {"host": host, "port": port, "token": token, "verify": verify}
-
-
-def _soar_responses_all_pass() -> dict[str, object]:
-    """Mock SOAR client.get responses for all-pass scenario."""
-    return {
-        "version": {"version": "8.5.0.248"},
-        "health": {
-            "status": {"nginx": "running", "splunkd": "running"},
-        },
-        "license": {
-            "license_info": {"maximum_actions_per_day": 1000},
-            "current_usage": {"recent_app_run_count": 42},
-        },
-    }
-
-
-@patch(_PATCH_SOAR_RESOLVE)
-@patch("splunkctl.commands.doctor.urllib.request")
 @patch(_PATCH)
-def test_doctor_soar_all_pass(
-    mock_gc: MagicMock,
-    mock_urllib: MagicMock,
-    mock_soar_resolve: MagicMock,
-) -> None:
-    """SOAR section passes when version/health/license all return OK."""
-    svc = _mock_service()
-    mock_gc.return_value.service = svc
-
-    mock_resp = MagicMock()
-    mock_resp.status = 200
-    mock_urllib.build_opener.return_value.open.return_value = mock_resp
-    mock_urllib.HTTPSHandler = MagicMock()
-
-    mock_soar_resolve.return_value = _soar_cfg()
-    responses = _soar_responses_all_pass()
-
-    with patch(_PATCH_SOAR_CLIENT) as mock_cls:
-        soar = MagicMock()
-        soar.get.side_effect = lambda path, **kw: responses.get(path, {})
-        mock_cls.return_value = soar
-
-        result = CliRunner().invoke(cli, ["doctor"])
-
-    assert result.exit_code == 0
-    assert "PASS  SOAR connection" in result.stderr
-    assert "soar.test v8.5.0.248" in result.stderr
-    assert "PASS  SOAR auth" in result.stderr
-    assert "PASS  SOAR health" in result.stderr
-    assert "all daemons running" in result.stderr
-    assert "PASS  SOAR license" in result.stderr
-    assert "quota 42/1000 actions/day" in result.stderr
-
-
-@patch(_PATCH_SOAR_RESOLVE)
-@patch("splunkctl.commands.doctor.urllib.request")
-@patch(_PATCH)
-def test_doctor_soar_skip_no_profile(
-    mock_gc: MagicMock,
-    mock_urllib: MagicMock,
-    mock_soar_resolve: MagicMock,
-) -> None:
-    """SOAR section skipped when no soar: host in profile."""
-    svc = _mock_service()
-    mock_gc.return_value.service = svc
-
-    mock_resp = MagicMock()
-    mock_resp.status = 200
-    mock_urllib.build_opener.return_value.open.return_value = mock_resp
-    mock_urllib.HTTPSHandler = MagicMock()
-
-    # No host → skip
-    mock_soar_resolve.return_value = {"port": 8443, "verify": False}
-
-    result = CliRunner().invoke(cli, ["doctor"])
-    assert result.exit_code == 0
-    assert "[SOAR] skipped" in result.stderr
-    assert "no soar profile configured" in result.stderr
-
-
-@patch(_PATCH_SOAR_RESOLVE)
-@patch("splunkctl.commands.doctor.urllib.request")
-@patch(_PATCH)
-def test_doctor_soar_connection_fail(
-    mock_gc: MagicMock,
-    mock_urllib: MagicMock,
-    mock_soar_resolve: MagicMock,
-) -> None:
-    """SOAR section fails gracefully on connection error; remaining checks skipped."""
-    svc = _mock_service()
-    mock_gc.return_value.service = svc
-
-    mock_resp = MagicMock()
-    mock_resp.status = 200
-    mock_urllib.build_opener.return_value.open.return_value = mock_resp
-    mock_urllib.HTTPSHandler = MagicMock()
-
-    mock_soar_resolve.return_value = _soar_cfg()
-
-    with patch(_PATCH_SOAR_CLIENT) as mock_cls:
-        soar = MagicMock()
-        soar.get.side_effect = ConnectionError("refused")
-        mock_cls.return_value = soar
-
-        result = CliRunner().invoke(cli, ["doctor"])
-
-    assert result.exit_code != 0
-    assert "FAIL  SOAR connection" in result.stderr
-    # Auth/health/license should not appear (early return on connection fail)
-    assert "SOAR auth" not in result.stderr
-    assert "SOAR health" not in result.stderr
-
-
-@patch(_PATCH_SOAR_RESOLVE)
-@patch("splunkctl.commands.doctor.urllib.request")
-@patch(_PATCH)
-def test_doctor_soar_health_degraded(
-    mock_gc: MagicMock,
-    mock_urllib: MagicMock,
-    mock_soar_resolve: MagicMock,
-) -> None:
-    """SOAR health warns when a daemon is not running."""
-    svc = _mock_service()
-    mock_gc.return_value.service = svc
-
-    mock_resp = MagicMock()
-    mock_resp.status = 200
-    mock_urllib.build_opener.return_value.open.return_value = mock_resp
-    mock_urllib.HTTPSHandler = MagicMock()
-
-    mock_soar_resolve.return_value = _soar_cfg()
-    responses: dict[str, object] = {
-        "version": {"version": "8.5.0"},
-        "health": {
-            "status": {"nginx": "running", "crond": "stopped"},
-        },
-        "license": {"status": "valid"},
-    }
-
-    with patch(_PATCH_SOAR_CLIENT) as mock_cls:
-        soar = MagicMock()
-        soar.get.side_effect = lambda path, **kw: responses.get(path, {})
-        mock_cls.return_value = soar
-
-        result = CliRunner().invoke(cli, ["doctor"])
-
-    assert "WARN  SOAR health" in result.stderr
-    assert "degraded: crond" in result.stderr
-
-
-@patch(_PATCH_SOAR_RESOLVE)
-@patch("splunkctl.commands.doctor.urllib.request")
-@patch(_PATCH)
-def test_doctor_soar_license_quota_exceeded(
-    mock_gc: MagicMock,
-    mock_urllib: MagicMock,
-    mock_soar_resolve: MagicMock,
-) -> None:
-    """SOAR license warns when actions used >= quota."""
-    svc = _mock_service()
-    mock_gc.return_value.service = svc
-
-    mock_resp = MagicMock()
-    mock_resp.status = 200
-    mock_urllib.build_opener.return_value.open.return_value = mock_resp
-    mock_urllib.HTTPSHandler = MagicMock()
-
-    mock_soar_resolve.return_value = _soar_cfg()
-    responses: dict[str, object] = {
-        "version": {"version": "8.5.0"},
-        "health": {"status": {"nginx": "running"}},
-        "license": {
-            "license_info": {"maximum_actions_per_day": 100},
-            "current_usage": {"recent_app_run_count": 100},
-        },
-    }
-
-    with patch(_PATCH_SOAR_CLIENT) as mock_cls:
-        soar = MagicMock()
-        soar.get.side_effect = lambda path, **kw: responses.get(path, {})
-        mock_cls.return_value = soar
-
-        result = CliRunner().invoke(cli, ["doctor"])
-
-    assert "WARN  SOAR license" in result.stderr
-    assert "quota 100/100" in result.stderr
-
-
-@patch(_PATCH_SOAR_RESOLVE)
-@patch("splunkctl.commands.doctor.urllib.request")
-@patch(_PATCH)
-def test_doctor_soar_json_output(
-    mock_gc: MagicMock,
-    mock_urllib: MagicMock,
-    mock_soar_resolve: MagicMock,
-) -> None:
-    """SOAR checks appear in JSON output."""
-    svc = _mock_service()
-    mock_gc.return_value.service = svc
-
-    mock_resp = MagicMock()
-    mock_resp.status = 200
-    mock_urllib.build_opener.return_value.open.return_value = mock_resp
-    mock_urllib.HTTPSHandler = MagicMock()
-
-    mock_soar_resolve.return_value = _soar_cfg()
-    responses = _soar_responses_all_pass()
-
-    with patch(_PATCH_SOAR_CLIENT) as mock_cls:
-        soar = MagicMock()
-        soar.get.side_effect = lambda path, **kw: responses.get(path, {})
-        mock_cls.return_value = soar
-
-        result = CliRunner().invoke(cli, ["--json", "doctor"])
-
-    assert result.exit_code == 0
-    assert '"SOAR connection"' in result.output
-    assert '"SOAR auth"' in result.output
-    assert '"SOAR health"' in result.output
-    assert '"SOAR license"' in result.output
-
-
-@patch(_PATCH_SOAR_RESOLVE)
-@patch("splunkctl.commands.doctor.urllib.request")
-@patch(_PATCH)
-def test_doctor_soar_skip_json_output(
-    mock_gc: MagicMock,
-    mock_urllib: MagicMock,
-    mock_soar_resolve: MagicMock,
-) -> None:
-    """SOAR skip result appears in JSON output with SKIP status."""
-    svc = _mock_service()
-    mock_gc.return_value.service = svc
-
-    mock_resp = MagicMock()
-    mock_resp.status = 200
-    mock_urllib.build_opener.return_value.open.return_value = mock_resp
-    mock_urllib.HTTPSHandler = MagicMock()
-
-    mock_soar_resolve.return_value = {"port": 8443, "verify": False}
-
+def test_doctor_config_pass(mock_gc: MagicMock) -> None:
+    cfg_mod.DEFAULT_PATH.parent.mkdir(parents=True)
+    cfg_mod.DEFAULT_PATH.write_text("profiles: {}\n")
+    type(mock_gc.return_value).service = property(
+        lambda self: (_ for _ in ()).throw(ConnectionError("offline"))
+    )
     result = CliRunner().invoke(cli, ["--json", "doctor"])
-    assert result.exit_code == 0
-    assert '"SOAR"' in result.output
-    assert '"SKIP"' in result.output
+    assert "PASS  Config" in result.stderr
+    assert json.loads(result.stdout)[0] == {
+        "check": "Config",
+        "status": "OK",
+        "detail": str(cfg_mod.DEFAULT_PATH),
+    }
 
 
-@patch(_PATCH_SOAR_RESOLVE)
+@patch(_PATCH)
+def test_doctor_config_fallback(mock_gc: MagicMock) -> None:
+    cfg_mod.DEFAULT_PATH.parent.mkdir(parents=True)
+    cfg_mod.DEFAULT_PATH.write_text("host: bare\ntoken: foreign-secret\n")
+    cfg_mod.FALLBACK_PATH.write_text("profiles: {}\n")
+    type(mock_gc.return_value).service = property(
+        lambda self: (_ for _ in ()).throw(ConnectionError("offline"))
+    )
+    result = CliRunner().invoke(cli, ["--json", "doctor"])
+    assert "PASS  Config" in result.stderr
+    assert (
+        f"{cfg_mod.FALLBACK_PATH} "
+        "(fallback: Splunk-format config at ~/.splunkctl/config.yaml)" in result.stderr
+    )
+
+
+@patch(_PATCH)
+def test_doctor_foreign_strict_json_no_network(
+    mock_gc: MagicMock, tmp_path: Path
+) -> None:
+    dest = tmp_path / "foreign.yaml"
+    dest.write_text("host: bare\ntoken: foreign-secret\n")
+    result = CliRunner().invoke(
+        cli, ["--json", "--config", str(dest), "doctor", "--strict"]
+    )
+    assert result.exit_code == 1
+    mock_gc.assert_not_called()
+    rows = json.loads(result.stdout)
+    assert rows == [
+        {
+            "check": "Config",
+            "status": "FAIL",
+            "detail": (
+                f"Splunk-format config at {dest}: this is a flat host/token file "
+                "written by Splunk's splunkctl. Pass a profiles file with --config, "
+                "or create one with: splunkctl config init --path FILE"
+            ),
+            "hint": "Run splunkctl config init --path ~/.splunkctl/profiles.yaml",
+        }
+    ]
+
+
+@pytest.mark.parametrize("strict", [False, True])
+@pytest.mark.parametrize("mode", ["default", "explicit", "fallback"])
 @patch("splunkctl.commands.doctor.urllib.request")
 @patch(_PATCH)
-def test_doctor_soar_basic_auth(
+def test_doctor_missing_config_warns_and_continues(
     mock_gc: MagicMock,
     mock_urllib: MagicMock,
-    mock_soar_resolve: MagicMock,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    strict: bool,
+    mode: str,
 ) -> None:
-    """SOAR auth detail shows 'basic' when no token is set."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".mcp.json").write_text('{"mcpServers": {"splunkctl": {}}}')
     svc = _mock_service()
+    svc.get.return_value.body.read.return_value = json.dumps(
+        {"entry": [{"content": {"health": "green", "current": {"status": "ready"}}}]}
+    ).encode()
     mock_gc.return_value.service = svc
+    mock_urllib.build_opener.return_value.open.return_value.status = 200
+    config_path = cfg_mod.DEFAULT_PATH
+    args = ["--json"]
+    if mode == "explicit":
+        config_path = tmp_path / "missing.yaml"
+        args += ["--config", str(config_path)]
+    elif mode == "fallback":
+        cfg_mod.DEFAULT_PATH.parent.mkdir(parents=True)
+        cfg_mod.DEFAULT_PATH.write_text("host: bare\ntoken: foreign-secret\n")
+        config_path = cfg_mod.FALLBACK_PATH
+    args += ["doctor"]
+    if strict:
+        args += ["--strict"]
 
-    mock_resp = MagicMock()
-    mock_resp.status = 200
-    mock_urllib.build_opener.return_value.open.return_value = mock_resp
-    mock_urllib.HTTPSHandler = MagicMock()
+    result = CliRunner().invoke(cli, args)
 
-    cfg = _soar_cfg()
-    cfg["token"] = None  # no token → basic auth
-    mock_soar_resolve.return_value = cfg
-    responses = _soar_responses_all_pass()
-
-    with patch(_PATCH_SOAR_CLIENT) as mock_cls:
-        soar = MagicMock()
-        soar.get.side_effect = lambda path, **kw: responses.get(path, {})
-        mock_cls.return_value = soar
-
-        result = CliRunner().invoke(cli, ["doctor"])
-
-    assert "token=basic" in result.stderr
+    assert result.exit_code == (1 if strict else 0), result.output
+    rows = json.loads(result.stdout)
+    assert rows[0] == {
+        "check": "Config",
+        "status": "WARN",
+        "detail": (
+            f"{config_path} (not found; using defaults and environment variables)"
+        ),
+        "hint": "Run splunkctl config init",
+    }
+    assert "WARN  Config" in result.stderr
+    assert "PASS  Config" not in result.stderr
+    assert "hint: Run splunkctl config init" in result.stderr
+    assert "PASS  REST API reachable" in result.stderr
+    assert "1 warnings, 0 failures" in result.stderr
+    assert rows[-1]["check"] == "MCP registered"
+    assert not config_path.exists()

@@ -58,6 +58,11 @@ def classify(exc: Exception) -> Classified | None:
     callers should fall back to their own default handling (e.g. an
     unclassified ``error`` kind, or re-raising).
     """
+    from splunkctl.config import ForeignConfigError
+
+    if isinstance(exc, ForeignConfigError):
+        return Classified(str(exc), "config", None)
+
     # WebSessionError carries kind natively (auth/web).
     if isinstance(exc, WebSessionError):
         return Classified(exc.message, exc.kind, None)

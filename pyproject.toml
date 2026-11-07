@@ -29,7 +29,7 @@ dependencies = [
     "tabulate>=0.9",
     "requests>=2.32",
     "defusedxml>=0.7",
-    "mcp>=2,<3",
+    "mcp>=2.3,<3",
 ]
 
 [project.optional-dependencies]
@@ -48,6 +48,7 @@ browser = [
 
 [project.scripts]
 splunkctl = "splunkctl.main:cli"
+splunkctl-py = "splunkctl.main:cli"
 
 [project.urls]
 Homepage = "https://github.com/dannyota/splunkctl"

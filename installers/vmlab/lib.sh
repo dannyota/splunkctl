@@ -5,7 +5,10 @@ VMLAB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 : "${INSTALLERS_DIR:=$(cd "$VMLAB_DIR/.." && pwd)}"
 # shellcheck source=/dev/null
 # Local (gitignored) overrides first, so config.env's defaults only fill gaps.
-[ -f "$VMLAB_DIR/config.local.env" ] && source "$VMLAB_DIR/config.local.env"
+# Tests point VMLAB_LOCAL_ENV at /dev/null so a developer's overrides never
+# leak into a test run.
+: "${VMLAB_LOCAL_ENV:=$VMLAB_DIR/config.local.env}"
+[ -f "$VMLAB_LOCAL_ENV" ] && source "$VMLAB_LOCAL_ENV"
 source "$VMLAB_DIR/config.env"
 
 log()  { printf '\033[1;34m[vmlab]\033[0m %s\n' "$*"; }
@@ -129,4 +132,10 @@ render() {
   local pair k v
   for pair in "$@"; do k="${pair%%=*}"; v="${pair#*=}"; out="${out//@@${k}@@/$v}"; done
   printf '%s\n' "$out"
+}
+
+# Octal permission bits of a file, portable across GNU and BSD stat.
+file_mode() {
+  if stat -c '%a' "$1" 2>/dev/null; then return; fi
+  stat -f '%Lp' "$1"
 }

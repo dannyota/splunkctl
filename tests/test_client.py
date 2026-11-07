@@ -33,7 +33,7 @@ def test_client_connects_on_service_access(
 @patch("splunkctl.client.splunk_client.connect")
 def test_client_token_auth(mock_connect: MagicMock, tmp_path: Path) -> None:
     cfg_path = tmp_path / "config.yaml"
-    cfg_path.write_text("host: h\ntoken: mytoken\n")
+    cfg_path.write_text("host: h\nport: 8089\ntoken: mytoken\n")
     c = SplunkClient(config_path=cfg_path)
     _ = c.service
     call_kwargs = mock_connect.call_args[1]

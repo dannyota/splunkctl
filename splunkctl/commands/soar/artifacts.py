@@ -19,7 +19,9 @@ def _parse_cef_pairs(raw: tuple[str, ...]) -> dict[str, str]:
     """Parse ``key=value`` pairs into a CEF dict."""
     cef: dict[str, str] = {}
     for pair in raw:
-        key, _, value = pair.partition("=")
+        key, sep, value = pair.partition("=")
+        if not sep:
+            raise click.BadParameter(f"expected KEY=VALUE, got '{pair}'")
         if not key:
             continue
         cef[key] = value
@@ -30,7 +32,9 @@ def _parse_cef_type_pairs(raw: tuple[str, ...]) -> dict[str, list[str]]:
     """Parse ``field=type`` pairs into a cef_types dict."""
     types: dict[str, list[str]] = {}
     for pair in raw:
-        key, _, value = pair.partition("=")
+        key, sep, value = pair.partition("=")
+        if not sep:
+            raise click.BadParameter(f"expected KEY=VALUE, got '{pair}'")
         if not key:
             continue
         types[key] = [value]

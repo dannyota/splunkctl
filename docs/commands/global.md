@@ -32,7 +32,7 @@ splunkctl doctor [OPTIONS]
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--strict` | flag | false | Treat warnings as failures (exit 1). |
+| `--strict` | flag | - | Treat warnings as failures (exit 1). |
 
 ## info
 

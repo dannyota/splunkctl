@@ -1,27 +1,15 @@
 """Tests for config commands."""
 
 import json
-import stat
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
 import yaml
 from click.testing import CliRunner
 
+from splunkctl import config as cfg_mod
 from splunkctl.main import cli
-
-
-def test_config_init(tmp_path: Path) -> None:
-    runner = CliRunner()
-    cfg = tmp_path / "config.yaml"
-    result = runner.invoke(
-        cli,
-        ["config", "init", "--path", str(cfg)],
-        input="myhost\n8089\nadmin\nsecret\ny\n",
-    )
-    assert result.exit_code == 0
-    assert cfg.exists()
-    assert "Config saved" in result.output
 
 
 def test_config_show() -> None:
@@ -168,103 +156,13 @@ def test_config_show_explicit_profile_flag(tmp_path: Path) -> None:
 
 def test_config_show_legacy_file_presents_as_default(tmp_path: Path) -> None:
     cfg = tmp_path / "config.yaml"
-    cfg.write_text("host: legacy-host\n")
+    cfg.write_text("host: legacy-host\nport: 8089\n")
     runner = CliRunner()
     result = runner.invoke(cli, ["--json", "--config", str(cfg), "config", "show"])
     assert result.exit_code == 0
     data = json.loads(result.stdout)[0]
     assert data["profile"] == "default"
     assert data["host"] == "legacy-host"
-
-
-def test_config_init_profile_creates_v2(tmp_path: Path) -> None:
-    cfg = tmp_path / "config.yaml"
-    runner = CliRunner()
-    result = runner.invoke(
-        cli,
-        ["config", "init", "--path", str(cfg), "--profile", "uat"],
-        input="uathost\n9089\nuatuser\nuatpass\ny\n",
-    )
-    assert result.exit_code == 0
-    raw = yaml.safe_load(cfg.read_text())
-    assert raw["profiles"]["uat"]["host"] == "uathost"
-    assert "default" not in raw["profiles"]
-
-
-def test_config_init_profile_upgrades_legacy_preserving_default_and_perms(
-    tmp_path: Path,
-) -> None:
-    cfg = tmp_path / "config.yaml"
-    cfg.write_text(yaml.dump({"host": "legacy-host", "port": 8089}))
-    cfg.chmod(stat.S_IRUSR | stat.S_IWUSR)
-    runner = CliRunner()
-    result = runner.invoke(
-        cli,
-        ["config", "init", "--path", str(cfg), "--profile", "uat"],
-        input="uathost\n9089\nuatuser\nuatpass\ny\n",
-    )
-    assert result.exit_code == 0
-    raw = yaml.safe_load(cfg.read_text())
-    assert raw["profiles"]["default"]["host"] == "legacy-host"
-    assert raw["profiles"]["uat"]["host"] == "uathost"
-    mode = cfg.stat().st_mode
-    assert mode & 0o777 == 0o600
-
-
-def test_config_init_bare_still_writes_flat_file(tmp_path: Path) -> None:
-    """Bare `config init` keeps writing the unchanged legacy shape."""
-    cfg = tmp_path / "config.yaml"
-    runner = CliRunner()
-    result = runner.invoke(
-        cli,
-        ["config", "init", "--path", str(cfg)],
-        input="myhost\n8089\nadmin\nsecret\ny\n",
-    )
-    assert result.exit_code == 0
-    raw = yaml.safe_load(cfg.read_text())
-    assert "profiles" not in raw
-    assert raw["host"] == "myhost"
-
-
-def test_config_init_bare_never_clobbers_existing_profiles(tmp_path: Path) -> None:
-    """Bare `config init` against a v2 file must fold into 'default', not
-    overwrite the whole file and destroy sibling profiles."""
-    cfg = tmp_path / "config.yaml"
-    _v2_config(
-        cfg,
-        {
-            "default": {"host": "old-default-host"},
-            "uat": {"host": "uat-host", "port": 9089},
-        },
-        current="uat",
-    )
-    cfg.chmod(stat.S_IRUSR | stat.S_IWUSR)
-    runner = CliRunner()
-    result = runner.invoke(
-        cli,
-        [
-            "config",
-            "init",
-            "--path",
-            str(cfg),
-            "--host",
-            "newhost",
-            "--port",
-            "8089",
-            "--username",
-            "admin",
-            "--password",
-            "secret",
-            "--verify",
-        ],
-    )
-    assert result.exit_code == 0, result.output
-    raw = yaml.safe_load(cfg.read_text())
-    assert raw["profiles"]["uat"] == {"host": "uat-host", "port": 9089}
-    assert raw["current"] == "uat"
-    assert raw["profiles"]["default"]["host"] == "newhost"
-    mode = cfg.stat().st_mode
-    assert mode & 0o777 == 0o600
 
 
 def test_global_profile_flag_selects_profile_for_read_commands(
@@ -345,127 +243,45 @@ def test_config_show_soar_redacts_password(tmp_path: Path) -> None:
     assert "s3cret" not in result.stdout
 
 
-def test_config_init_soar_prompts_and_saves(tmp_path: Path) -> None:
-    """config init --soar prompts for SOAR fields and saves them."""
-    cfg = tmp_path / "config.yaml"
-    # Pre-create a SIEM profile so --soar can add to it.
-    _v2_config(cfg, {"default": {"host": "siem-host", "port": 8089}})
-    runner = CliRunner()
-    result = runner.invoke(
-        cli,
-        ["config", "init", "--soar", "--path", str(cfg)],
-        input="soar-host\n8443\ntok123\nsoar-admin\nsoarpass\n\n\n",
-    )
-    assert result.exit_code == 0, result.output
-    raw = yaml.safe_load(cfg.read_text())
-    soar = raw["profiles"]["default"]["soar"]
-    assert soar["host"] == "soar-host"
-    assert soar["port"] == 8443
-    assert soar["token"] == "tok123"
-    assert soar["username"] == "soar-admin"
-    assert soar["password"] == "soarpass"
-    assert soar["verify"] is True
-
-
-def test_config_init_soar_with_profile_flag(tmp_path: Path) -> None:
-    """config init --soar --profile <name> saves to the right profile."""
-    cfg = tmp_path / "config.yaml"
-    _v2_config(
-        cfg,
-        {"lab": {"host": "siem-host"}, "prod": {"host": "prod-siem"}},
-        current="lab",
-    )
-    runner = CliRunner()
-    result = runner.invoke(
-        cli,
-        ["config", "init", "--soar", "--path", str(cfg), "--profile", "lab"],
-        input="soar-lab\n8443\ntok-lab\n\n\n\n\n",
-    )
-    assert result.exit_code == 0, result.output
-    raw = yaml.safe_load(cfg.read_text())
-    assert raw["profiles"]["lab"]["soar"]["host"] == "soar-lab"
-    # Verify sibling profile untouched.
-    assert "soar" not in raw["profiles"]["prod"]
-
-
-def test_config_init_soar_preserves_siem_fields(tmp_path: Path) -> None:
-    """config init --soar must not clobber existing SIEM fields."""
-    cfg = tmp_path / "config.yaml"
-    _v2_config(
-        cfg,
-        {"lab": {"host": "siem-host", "port": 8089, "username": "admin"}},
-        current="lab",
-    )
-    runner = CliRunner()
-    result = runner.invoke(
-        cli,
-        ["config", "init", "--soar", "--path", str(cfg)],
-        input="soar-host\n8443\ntok\n\n\n\n\n",
-    )
-    assert result.exit_code == 0, result.output
-    raw = yaml.safe_load(cfg.read_text())
-    # SIEM fields intact.
-    assert raw["profiles"]["lab"]["host"] == "siem-host"
-    assert raw["profiles"]["lab"]["port"] == 8089
-    # SOAR added.
-    assert raw["profiles"]["lab"]["soar"]["host"] == "soar-host"
-
-
 # --- TLS verify defaults (S2) ---
 
 
-def test_config_init_verify_defaults_true(tmp_path: Path) -> None:
-    """config init with default TLS prompt (Enter=yes) writes verify: true."""
-    cfg = tmp_path / "config.yaml"
-    runner = CliRunner()
-    # Accept all defaults including TLS verification (Enter = yes)
-    result = runner.invoke(
-        cli,
-        ["config", "init", "--path", str(cfg)],
-        input="myhost\n8089\nadmin\nsecret\n\n",
+@pytest.mark.parametrize("command", [["show"], ["use", "default"], ["test"]])
+def test_explicit_foreign_command_error(tmp_path: Path, command: list[str]) -> None:
+    dest = tmp_path / "foreign.yaml"
+    dest.write_text("host: https://foreign.example\ntoken: foreign-secret\n")
+    result = CliRunner().invoke(
+        cli, ["--json", "--config", str(dest), "config", *command]
     )
-    assert result.exit_code == 0, result.output
-    raw = yaml.safe_load(cfg.read_text())
-    assert raw["verify"] is True
-
-
-def test_config_init_verify_no_writes_false(tmp_path: Path) -> None:
-    """config init answering 'n' to TLS prompt writes verify: false."""
-    cfg = tmp_path / "config.yaml"
-    runner = CliRunner()
-    result = runner.invoke(
-        cli,
-        ["config", "init", "--path", str(cfg)],
-        input="myhost\n8089\nadmin\nsecret\nn\n",
+    assert result.exit_code == 1
+    err = json.loads(result.stderr)["error"]
+    assert err["kind"] == "config"
+    assert err["http_status"] is None
+    assert (
+        err["message"]
+        == f"Splunk-format config at {dest}: this is a flat host/token file "
+        "written by Splunk's splunkctl. Pass a profiles file with --config, "
+        "or create one with: splunkctl config init --path FILE"
     )
+    assert "foreign-secret" not in result.output
+    assert "foreign.example" not in result.output
+
+
+def test_fallback_show_redacts() -> None:
+    cfg_mod.DEFAULT_PATH.parent.mkdir(parents=True)
+    cfg_mod.DEFAULT_PATH.write_text("host: bare\ntoken: foreign-secret\n")
+    cfg_mod.FALLBACK_PATH.write_text("host: ours\nport: 8089\ntoken: our-secret\n")
+    result = CliRunner().invoke(cli, ["--json", "config", "show"])
+    assert result.exit_code == 0
+    assert json.loads(result.stdout)[0]["token"] == "****"
+    assert "our-secret" not in result.output
+    assert "foreign-secret" not in result.output
+
+
+@pytest.mark.parametrize("args", [["--version"], ["completion", "bash"], ["commands"]])
+def test_offline_commands_with_foreign_default(args: list[str]) -> None:
+    cfg_mod.DEFAULT_PATH.parent.mkdir(parents=True)
+    cfg_mod.DEFAULT_PATH.write_text("host: bare\ntoken: foreign-secret\n")
+    result = CliRunner().invoke(cli, args)
     assert result.exit_code == 0, result.output
-    raw = yaml.safe_load(cfg.read_text())
-    assert raw["verify"] is False
-
-
-def test_config_init_verify_flag_skips_prompt(tmp_path: Path) -> None:
-    """--verify / --no-verify flags skip the interactive TLS prompt."""
-    cfg = tmp_path / "config.yaml"
-    runner = CliRunner()
-    result = runner.invoke(
-        cli,
-        ["config", "init", "--path", str(cfg), "--no-verify"],
-        input="myhost\n8089\nadmin\nsecret\n",
-    )
-    assert result.exit_code == 0, result.output
-    raw = yaml.safe_load(cfg.read_text())
-    assert raw["verify"] is False
-
-
-def test_config_init_always_writes_explicit_verify(tmp_path: Path) -> None:
-    """Every config init run writes an explicit verify key."""
-    cfg = tmp_path / "config.yaml"
-    runner = CliRunner()
-    result = runner.invoke(
-        cli,
-        ["config", "init", "--path", str(cfg)],
-        input="myhost\n8089\nadmin\nsecret\ny\n",
-    )
-    assert result.exit_code == 0, result.output
-    raw = yaml.safe_load(cfg.read_text())
-    assert "verify" in raw
+    assert "foreign-secret" not in result.output
