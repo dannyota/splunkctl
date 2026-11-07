@@ -269,7 +269,7 @@ def test_explicit_foreign_command_error(tmp_path: Path, command: list[str]) -> N
 
 def test_fallback_show_redacts() -> None:
     cfg_mod.DEFAULT_PATH.parent.mkdir(parents=True)
-    cfg_mod.DEFAULT_PATH.write_text("token: foreign-secret\n")
+    cfg_mod.DEFAULT_PATH.write_text("host: bare\ntoken: foreign-secret\n")
     cfg_mod.FALLBACK_PATH.write_text("host: ours\nport: 8089\ntoken: our-secret\n")
     result = CliRunner().invoke(cli, ["--json", "config", "show"])
     assert result.exit_code == 0
@@ -281,7 +281,7 @@ def test_fallback_show_redacts() -> None:
 @pytest.mark.parametrize("args", [["--version"], ["completion", "bash"], ["commands"]])
 def test_offline_commands_with_foreign_default(args: list[str]) -> None:
     cfg_mod.DEFAULT_PATH.parent.mkdir(parents=True)
-    cfg_mod.DEFAULT_PATH.write_text("token: foreign-secret\n")
+    cfg_mod.DEFAULT_PATH.write_text("host: bare\ntoken: foreign-secret\n")
     result = CliRunner().invoke(cli, args)
     assert result.exit_code == 0, result.output
     assert "foreign-secret" not in result.output

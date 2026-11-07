@@ -26,6 +26,8 @@ offline analysis). No result-count cap.
 **oneshot** is the fastest path for small, read-only queries. No job
 object, no poll loop. Good for counts, stats, and quick checks.
 
+SPL containing write commands requires `--yes`; refusal exits with code 1 and emits a `confirmation_required` error envelope in JSON output mode (including the non-TTY default).
+
 ## Common options
 
 | Flag | Default | Notes |

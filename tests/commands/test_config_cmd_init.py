@@ -259,7 +259,7 @@ def test_init_honors_global_config(tmp_path: Path, soar: bool) -> None:
 
 def test_init_foreign_default_uses_fallback() -> None:
     cfg_mod.DEFAULT_PATH.parent.mkdir(parents=True)
-    cfg_mod.DEFAULT_PATH.write_text("token: foreign-secret\n")
+    cfg_mod.DEFAULT_PATH.write_text("host: bare\ntoken: foreign-secret\n")
     result = CliRunner().invoke(
         cli, ["config", "init"], input="ours\n8089\nadmin\nsecret\ny\n"
     )
@@ -270,13 +270,13 @@ def test_init_foreign_default_uses_fallback() -> None:
     )
     assert result.stderr.count(notice) == 1
     assert f"Config saved to {cfg_mod.FALLBACK_PATH}" in result.output
-    assert cfg_mod.DEFAULT_PATH.read_text() == "token: foreign-secret\n"
+    assert cfg_mod.DEFAULT_PATH.read_text() == "host: bare\ntoken: foreign-secret\n"
 
 
 @pytest.mark.parametrize("soar", [False, True])
 def test_init_foreign_path_refuses_before_prompt(tmp_path: Path, soar: bool) -> None:
     dest = tmp_path / "foreign.yaml"
-    dest.write_text("token: foreign-secret\n")
+    dest.write_text("host: bare\ntoken: foreign-secret\n")
     args = ["config", "init", "--path", str(dest), "--web-url", "https://example"]
     if soar:
         args += ["--soar"]

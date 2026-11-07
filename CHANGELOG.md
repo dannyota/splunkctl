@@ -14,7 +14,9 @@ name and config path, plus a green typecheck on current MCP releases.
   `~/.splunkctl/profiles.yaml` instead, and prints one notice on standard
   error. An explicit `--config FILE` in Splunk's format is refused with a
   `config` error rather than redirected. `doctor` reports the config file
-  in use as its first check.
+  in use as its first check, warns when the file is missing, and fails on
+  unreadable or malformed files. A token-only flat file is still read as
+  this tool's own legacy format.
 - README section comparing this project with `splunk/splunkctl`, and a
   ROADMAP note recording the decision to keep the name.
 
@@ -32,10 +34,14 @@ name and config path, plus a green typecheck on current MCP releases.
   `search oneshot`, and `soar ingest` refuse SPL containing `outputlookup`,
   `collect`, `mcollect`, `meventcollect`, `sendalert`, `delete`,
   `outputcsv`, `outputtext`, `sendemail`, `runshellscript`, or `script`
-  unless `--yes` is passed. MCP search tools have no `yes` parameter, so
-  such SPL is refused there.
+  unless `--yes` is passed. A refusal exits with code 1 and, in JSON
+  output mode, emits a `confirmation_required` error so scripts notice.
+  Field comparisons such as `outputlookup=x`, search terms after
+  `search`, and macro arguments are not treated as commands. MCP search
+  tools have no `yes` parameter, so such SPL is refused there.
 - Config files are written through a `0600` temporary file and renamed into
-  place; the config directory is created with mode `0700`.
+  place, writing through symlinks; the config directory is created with
+  mode `0700`.
 - The SOAR token prompt in `config init --soar` no longer echoes input.
 - SOAR asset and artifact `KEY=VALUE` options reject a missing `=`.
 - Lab scripts: Keycloak realm files are rendered under `umask 077`, and VM

@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import click
+import yaml
 
 from splunkctl import config as cfg_mod
 from splunkctl.client import get_client
@@ -90,6 +91,11 @@ def doctor_cmd(ctx: click.Context, *, strict: bool = False) -> None:
     config_path = Path(obj["config"])
     try:
         cfg_mod.is_v2_file(config_path)
+        if config_path.exists():
+            with config_path.open() as stream:
+                raw = yaml.safe_load(stream)
+            if not isinstance(raw, dict):
+                raise yaml.YAMLError(f"{config_path} is not a YAML mapping")
     except cfg_mod.ForeignConfigError as exc:
         results.append(
             _check(
@@ -97,6 +103,17 @@ def doctor_cmd(ctx: click.Context, *, strict: bool = False) -> None:
                 False,
                 str(exc),
                 hint="Run splunkctl config init --path ~/.splunkctl/profiles.yaml",
+            )
+        )
+        _finish(ctx, results, strict=strict)
+        return
+    except (OSError, yaml.YAMLError) as exc:
+        results.append(
+            _check(
+                "Config",
+                False,
+                str(exc),
+                hint="Fix or remove the file, or pass --config",
             )
         )
         _finish(ctx, results, strict=strict)

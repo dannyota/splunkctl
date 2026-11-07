@@ -4,6 +4,8 @@ import re
 
 import click
 
+from splunkctl import output
+
 WRITE_COMMANDS = frozenset(
     {
         "outputlookup",
@@ -21,14 +23,14 @@ WRITE_COMMANDS = frozenset(
 )
 _TOKENS = re.compile(
     r'```[\s\S]*?(?:```|$)|"(?:\\.|[^"\\])*"'
-    r"|'(?:\\.|[^'\\])*'|[|\[\]]|[A-Za-z_][A-Za-z_0-9]*|[^\s]",
+    r"|'(?:\\.|[^'\\])*'|`[^`]*`|[|\[\]]|[A-Za-z_][A-Za-z_0-9]*|[^\s]",
 )
 
 
 def find_write_commands(spl: str) -> list[str]:
     """Return distinct write commands in pipeline order, ignoring literals."""
     found: list[str] = []
-    leading = True
+    leading = False
     for match in _TOKENS.finditer(spl):
         part = match.group()
         if part.startswith("```"):
@@ -39,11 +41,10 @@ def find_write_commands(spl: str) -> list[str]:
             leading = False
         elif leading:
             command = part.lower()
-            if command == "search":
-                continue
-            if command in WRITE_COMMANDS and command not in found:
-                found.append(command)
             leading = False
+            comparison = spl[match.end() :].lstrip().startswith("=")
+            if not comparison and command in WRITE_COMMANDS and command not in found:
+                found.append(command)
     return found
 
 
@@ -51,10 +52,13 @@ def check_spl(ctx: click.Context, spl: str) -> bool:
     """Refuse explicit write SPL during a dry run."""
     commands = find_write_commands(spl)
     if commands and ctx.obj.get("dry_run", True):
-        click.echo(
+        message = (
             f"[DRY RUN] SPL contains write command(s): {', '.join(commands)}. "
-            "Pass --yes to run it.",
-            err=True,
+            "Pass --yes to run it."
         )
-        return False
+        if output._json_errors():
+            output.error(message, kind="confirmation_required")
+        else:
+            click.echo(message, err=True)
+        ctx.exit(1)
     return True

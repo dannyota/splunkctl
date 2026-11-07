@@ -18,6 +18,7 @@ commands with `--yes`, the change was applied. For dry-run previews
 **Code 1** -- the command understood what you asked for but could not
 complete it. Common causes:
 
+- Write SPL refused without `--yes` (`confirmation_required` in JSON errors).
 - Authentication or authorization failure (wrong credentials, expired
   token, insufficient role).
 - Resource not found (no such index, saved search, dashboard, lookup,

@@ -13,7 +13,7 @@ splunkctl config init --soar          # interactive: host, port, token/user/pass
 
 Or set environment variables (`SOAR_HOST`, `SOAR_TOKEN`, etc.) for
 ephemeral overrides. The CLI resolves: env vars > profile `soar:` section >
-defaults (port 8443, verify off).
+defaults (port 8443, TLS verification on).
 
 ## Connectivity test
 

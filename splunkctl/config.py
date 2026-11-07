@@ -81,6 +81,7 @@ def is_foreign(raw: Mapping[str, Any]) -> bool:
     host = raw.get("host")
     return (isinstance(host, str) and "://" in host) or (
         bool(raw)
+        and "host" in raw
         and raw.keys() <= {"host", "token"}
         and all(isinstance(value, str) for value in raw.values())
     )
@@ -287,6 +288,8 @@ def load(path: Path | None = None, *, profile: str | None = None) -> dict[str, A
 def save(cfg: dict[str, Any], path: Path | None = None) -> Path:
     """Save config to YAML with 0600 permissions."""
     config_path = effective_path(path)[0]
+    if config_path.is_symlink():
+        config_path = config_path.resolve(strict=True)
     _read_raw(config_path)
     config_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     temp_path = config_path.parent / f".{config_path.name}.{uuid.uuid4().hex}.tmp"

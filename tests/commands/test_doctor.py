@@ -210,7 +210,7 @@ def test_doctor_config_pass(mock_gc: MagicMock) -> None:
 @patch(_PATCH)
 def test_doctor_config_fallback(mock_gc: MagicMock) -> None:
     cfg_mod.DEFAULT_PATH.parent.mkdir(parents=True)
-    cfg_mod.DEFAULT_PATH.write_text("token: foreign-secret\n")
+    cfg_mod.DEFAULT_PATH.write_text("host: bare\ntoken: foreign-secret\n")
     cfg_mod.FALLBACK_PATH.write_text("profiles: {}\n")
     type(mock_gc.return_value).service = property(
         lambda self: (_ for _ in ()).throw(ConnectionError("offline"))
@@ -228,7 +228,7 @@ def test_doctor_foreign_strict_json_no_network(
     mock_gc: MagicMock, tmp_path: Path
 ) -> None:
     dest = tmp_path / "foreign.yaml"
-    dest.write_text("token: foreign-secret\n")
+    dest.write_text("host: bare\ntoken: foreign-secret\n")
     result = CliRunner().invoke(
         cli, ["--json", "--config", str(dest), "doctor", "--strict"]
     )
@@ -276,7 +276,7 @@ def test_doctor_missing_config_warns_and_continues(
         args += ["--config", str(config_path)]
     elif mode == "fallback":
         cfg_mod.DEFAULT_PATH.parent.mkdir(parents=True)
-        cfg_mod.DEFAULT_PATH.write_text("token: foreign-secret\n")
+        cfg_mod.DEFAULT_PATH.write_text("host: bare\ntoken: foreign-secret\n")
         config_path = cfg_mod.FALLBACK_PATH
     args += ["doctor"]
     if strict:

@@ -571,6 +571,7 @@ commands with `--yes`, the change was applied. For dry-run previews
 **Code 1** -- the command understood what you asked for but could not
 complete it. Common causes:
 
+- Write SPL refused without `--yes` (`confirmation_required` in JSON errors).
 - Authentication or authorization failure (wrong credentials, expired
   token, insufficient role).
 - Resource not found (no such index, saved search, dashboard, lookup,
@@ -625,6 +626,8 @@ offline analysis). No result-count cap.
 
 **oneshot** is the fastest path for small, read-only queries. No job
 object, no poll loop. Good for counts, stats, and quick checks.
+
+SPL containing write commands requires `--yes`; refusal exits with code 1 and emits a `confirmation_required` error envelope in JSON output mode (including the non-TTY default).
 
 ## Common options
 
@@ -3027,7 +3030,7 @@ splunkctl config init --soar          # interactive: host, port, token/user/pass
 
 Or set environment variables (`SOAR_HOST`, `SOAR_TOKEN`, etc.) for
 ephemeral overrides. The CLI resolves: env vars > profile `soar:` section >
-defaults (port 8443, verify off).
+defaults (port 8443, TLS verification on).
 
 ## Connectivity test
 

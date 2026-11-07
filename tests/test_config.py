@@ -131,7 +131,7 @@ def test_redact_soar_keeps_empty_secrets() -> None:
     [
         ({"host": "https://splunk.example:8089", "extra": 1}, True),
         ({"host": "bare", "token": "secret"}, True),
-        ({"token": "secret"}, True),
+        ({"token": "secret"}, False),
         ({"host": "bare"}, True),
         ({"host": "", "token": ""}, True),
         ({"profiles": {}, "host": "https://example"}, False),
@@ -246,7 +246,7 @@ def test_fallback_write_permissions(writer: str) -> None:
 @pytest.mark.parametrize("operation", ["load", "save", "save_profile", "use_profile"])
 def test_foreign_fallback_refused(operation: str) -> None:
     _foreign_default()
-    config.FALLBACK_PATH.write_text("token: foreign-fallback\n")
+    config.FALLBACK_PATH.write_text("host: bare\ntoken: foreign-fallback\n")
     with pytest.raises(config.ForeignConfigError):
         if operation == "load":
             config.load()
