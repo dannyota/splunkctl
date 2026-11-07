@@ -104,7 +104,18 @@ def doctor_cmd(ctx: click.Context, *, strict: bool = False) -> None:
     detail = str(config_path)
     if obj.get("config_fallback"):
         detail += " (fallback: Splunk-format config at ~/.splunkctl/config.yaml)"
-    results.append(_check("Config", True, detail))
+    if config_path.exists():
+        results.append(_check("Config", True, detail))
+    else:
+        results.append(
+            _check(
+                "Config",
+                False,
+                f"{config_path} (not found; using defaults and environment variables)",
+                warn=True,
+                hint="Run splunkctl config init",
+            )
+        )
 
     # --- 1. REST connection ---
     click.echo("[Connection]", err=True)

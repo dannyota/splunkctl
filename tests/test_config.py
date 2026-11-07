@@ -183,8 +183,10 @@ def test_explicit_foreign_read_refused(reader: str) -> None:
         getattr(config, reader)(config.DEFAULT_PATH)
     assert caught.value.path == config.DEFAULT_PATH
     assert (
-        str(caught.value) == f"Splunk-format config at {config.DEFAULT_PATH}. "
-        "Use --config to select another file."
+        str(caught.value)
+        == f"Splunk-format config at {config.DEFAULT_PATH}: this is a flat host/token "
+        "file written by Splunk's splunkctl. Pass a profiles file with --config, "
+        "or create one with: splunkctl config init --path FILE"
     )
 
 

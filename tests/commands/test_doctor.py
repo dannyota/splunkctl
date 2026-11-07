@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
 from click.testing import CliRunner
 
 from splunkctl import config as cfg_mod
@@ -192,6 +193,8 @@ def test_doctor_json_includes_hints(mock_gc: MagicMock, mock_urllib: MagicMock) 
 
 @patch(_PATCH)
 def test_doctor_config_pass(mock_gc: MagicMock) -> None:
+    cfg_mod.DEFAULT_PATH.parent.mkdir(parents=True)
+    cfg_mod.DEFAULT_PATH.write_text("profiles: {}\n")
     type(mock_gc.return_value).service = property(
         lambda self: (_ for _ in ()).throw(ConnectionError("offline"))
     )
@@ -208,6 +211,7 @@ def test_doctor_config_pass(mock_gc: MagicMock) -> None:
 def test_doctor_config_fallback(mock_gc: MagicMock) -> None:
     cfg_mod.DEFAULT_PATH.parent.mkdir(parents=True)
     cfg_mod.DEFAULT_PATH.write_text("token: foreign-secret\n")
+    cfg_mod.FALLBACK_PATH.write_text("profiles: {}\n")
     type(mock_gc.return_value).service = property(
         lambda self: (_ for _ in ()).throw(ConnectionError("offline"))
     )
@@ -236,8 +240,64 @@ def test_doctor_foreign_strict_json_no_network(
             "check": "Config",
             "status": "FAIL",
             "detail": (
-                f"Splunk-format config at {dest}. Use --config to select another file."
+                f"Splunk-format config at {dest}: this is a flat host/token file "
+                "written by Splunk's splunkctl. Pass a profiles file with --config, "
+                "or create one with: splunkctl config init --path FILE"
             ),
             "hint": "Run splunkctl config init --path ~/.splunkctl/profiles.yaml",
         }
     ]
+
+
+@pytest.mark.parametrize("strict", [False, True])
+@pytest.mark.parametrize("mode", ["default", "explicit", "fallback"])
+@patch("splunkctl.commands.doctor.urllib.request")
+@patch(_PATCH)
+def test_doctor_missing_config_warns_and_continues(
+    mock_gc: MagicMock,
+    mock_urllib: MagicMock,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    strict: bool,
+    mode: str,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".mcp.json").write_text('{"mcpServers": {"splunkctl": {}}}')
+    svc = _mock_service()
+    svc.get.return_value.body.read.return_value = json.dumps(
+        {"entry": [{"content": {"health": "green", "current": {"status": "ready"}}}]}
+    ).encode()
+    mock_gc.return_value.service = svc
+    mock_urllib.build_opener.return_value.open.return_value.status = 200
+    config_path = cfg_mod.DEFAULT_PATH
+    args = ["--json"]
+    if mode == "explicit":
+        config_path = tmp_path / "missing.yaml"
+        args += ["--config", str(config_path)]
+    elif mode == "fallback":
+        cfg_mod.DEFAULT_PATH.parent.mkdir(parents=True)
+        cfg_mod.DEFAULT_PATH.write_text("token: foreign-secret\n")
+        config_path = cfg_mod.FALLBACK_PATH
+    args += ["doctor"]
+    if strict:
+        args += ["--strict"]
+
+    result = CliRunner().invoke(cli, args)
+
+    assert result.exit_code == (1 if strict else 0), result.output
+    rows = json.loads(result.stdout)
+    assert rows[0] == {
+        "check": "Config",
+        "status": "WARN",
+        "detail": (
+            f"{config_path} (not found; using defaults and environment variables)"
+        ),
+        "hint": "Run splunkctl config init",
+    }
+    assert "WARN  Config" in result.stderr
+    assert "PASS  Config" not in result.stderr
+    assert "hint: Run splunkctl config init" in result.stderr
+    assert "PASS  REST API reachable" in result.stderr
+    assert "1 warnings, 0 failures" in result.stderr
+    assert rows[-1]["check"] == "MCP registered"
+    assert not config_path.exists()

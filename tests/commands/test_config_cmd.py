@@ -259,7 +259,9 @@ def test_explicit_foreign_command_error(tmp_path: Path, command: list[str]) -> N
     assert err["http_status"] is None
     assert (
         err["message"]
-        == f"Splunk-format config at {dest}. Use --config to select another file."
+        == f"Splunk-format config at {dest}: this is a flat host/token file "
+        "written by Splunk's splunkctl. Pass a profiles file with --config, "
+        "or create one with: splunkctl config init --path FILE"
     )
     assert "foreign-secret" not in result.output
     assert "foreign.example" not in result.output

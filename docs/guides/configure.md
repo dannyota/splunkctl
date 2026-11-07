@@ -114,7 +114,7 @@ URL) and `token`. This tool never rewrites that file.
   `config init` is enough on a host that already has Splunk's tool.
 - An explicit `--config FILE` is never redirected. If that file is in
   Splunk's format, the command fails with
-  `Splunk-format config at FILE. Use --config to select another file.`
+  `Splunk-format config at FILE: this is a flat host/token file written by Splunk's splunkctl. Pass a profiles file with --config, or create one with: splunkctl config init --path FILE`
 - `splunkctl doctor` reports the config file in use as its first check.
 - A hand-written file of this tool's own legacy flat format that contains
   only `host` and `token` is indistinguishable from Splunk's format and is

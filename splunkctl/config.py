@@ -68,7 +68,9 @@ class ForeignConfigError(Exception):
         """Store the foreign file path without exposing its contents."""
         self.path = path
         super().__init__(
-            f"Splunk-format config at {path}. Use --config to select another file."
+            f"Splunk-format config at {path}: this is a flat host/token file "
+            "written by Splunk's splunkctl. Pass a profiles file with --config, "
+            "or create one with: splunkctl config init --path FILE"
         )
 
 
