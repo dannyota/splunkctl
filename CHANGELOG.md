@@ -1,9 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.14.0
 
 Coexistence with Splunk's own `splunkctl` Go CLI, which shares our command
-name and config path, plus a green typecheck on current MCP releases.
+name and config path; security fixes for TLS verification, flag hoisting,
+and write SPL; a docs site rebuilt for security operations engineers and
+AI readers; green CI on current MCP releases.
 
 ### Added
 
