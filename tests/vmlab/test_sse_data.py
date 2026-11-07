@@ -24,23 +24,42 @@ from sse_data import (  # noqa: E402
 )
 
 
-def build_package(tmp_path: Path, *, bad_password_time: bool = False) -> Path:
+def build_package(
+    tmp_path: Path,
+    *,
+    bad_password_time: bool = False,
+    out_of_range_embedded_time: bool = False,
+    out_of_range_temporal_time: bool = False,
+) -> Path:
+    """Build the SSE mini package, optionally corrupting one temporal cell.
+
+    ``bad_password_time`` puts a non-timestamp in a temporal cell;
+    ``out_of_range_embedded_time`` puts an impossible date in a
+    non-temporal cell; ``out_of_range_temporal_time`` puts one in a
+    temporal cell.
+    """
+    edits: dict[str, tuple[str, str]] = {}
+    if bad_password_time:
+        edits["sample_epoch.csv"] = ("01/01/2010 2:03:04 PM", "not-a-timestamp")
+    if out_of_range_embedded_time:
+        edits["sample_text.csv"] = ("unchanged", "2026-02-30T10:00:00")
+    if out_of_range_temporal_time:
+        edits["sample_text.csv"] = ("20161117075431.0Z", "2026-02-30T10:00:00")
     package = tmp_path / "sse.tgz"
     with tarfile.open(package, "w:gz") as archive:
         for source in sorted(FIXTURE.rglob("*")):
             if not source.is_file():
                 continue
             arcname = source.relative_to(FIXTURE)
-            if bad_password_time and source.name == "sample_epoch.csv":
-                content = source.read_text().replace(
-                    "01/01/2010 2:03:04 PM", "not-a-timestamp", 1
-                )
-                data = content.encode()
-                info = tarfile.TarInfo(str(arcname))
-                info.size = len(data)
-                archive.addfile(info, io.BytesIO(data))
-            else:
+            edit = edits.get(source.name)
+            if edit is None:
                 archive.add(source, arcname=arcname)
+                continue
+            old, new = edit
+            data = source.read_text().replace(old, new, 1).encode()
+            info = tarfile.TarInfo(str(arcname))
+            info.size = len(data)
+            archive.addfile(info, io.BytesIO(data))
     return package
 
 
@@ -79,6 +98,29 @@ def test_format_shifted_preserves_source_style(value: str, expected: str) -> Non
 
     assert parsed is not None
     assert format_shifted(parsed, one_day) == expected
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "2026-02-30T10:00:00",
+        "2026-13-01T10:00:00",
+        "2026-01-01T25:00:00",
+        "2026-01-01T10:00:00+9999",
+        "2026-01-01T10:00:00-9999",
+        "02/30/2026 10:00:00 AM",
+        "01/01/2026 13:00:00 PM",
+        "99999999999999Z",
+        "00000000000000Z",
+    ],
+)
+def test_parse_returns_none_for_out_of_range_timestamps(value: str) -> None:
+    """A value can match a timestamp's shape and still be impossible.
+
+    Such a value is unparseable data, not an error: ``parse_timestamp``
+    reports it the same way it reports any other non-timestamp.
+    """
+    assert parse_timestamp(value) is None
 
 
 def test_scan_uses_the_manifest_as_dataset_scope(tmp_path: Path) -> None:
@@ -175,6 +217,42 @@ def test_prepare_fails_closed_for_bad_temporal_value(tmp_path: Path) -> None:
         )
 
 
+def test_prepare_fails_closed_for_out_of_range_temporal_value(
+    tmp_path: Path,
+) -> None:
+    """An impossible date in a temporal cell fails closed, not with a traceback."""
+    package = build_package(tmp_path, out_of_range_temporal_time=True)
+
+    with pytest.raises(PreparationError, match="unsupported temporal values"):
+        prepare_package(
+            PreparationOptions(
+                package=package,
+                output_dir=tmp_path / "prepared",
+                index="sse_lab",
+                anchor=datetime(2026, 8, 15, 12, 0, tzinfo=UTC),
+                dry_run=False,
+            )
+        )
+
+
+def test_prepare_fails_closed_for_out_of_range_embedded_timestamp(
+    tmp_path: Path,
+) -> None:
+    """An impossible date inside a non-temporal cell fails closed too."""
+    package = build_package(tmp_path, out_of_range_embedded_time=True)
+
+    with pytest.raises(PreparationError, match="cannot parse embedded timestamp"):
+        prepare_package(
+            PreparationOptions(
+                package=package,
+                output_dir=tmp_path / "prepared",
+                index="sse_lab",
+                anchor=datetime(2026, 8, 15, 12, 0, tzinfo=UTC),
+                dry_run=False,
+            )
+        )
+
+
 def test_prepared_csv_fields_remain_structured_json(tmp_path: Path) -> None:
     package = build_package(tmp_path)
     output = tmp_path / "prepared"
@@ -228,3 +306,35 @@ def test_prepare_cli_prints_a_dry_run_summary(tmp_path: Path) -> None:
     assert summary["shifted_max"] == "2026-08-15T12:00:00Z"
     assert summary["dry_run"] is True
     assert not output.exists()
+
+
+def test_prepare_cli_reports_out_of_range_timestamps_without_a_traceback(
+    tmp_path: Path,
+) -> None:
+    """The CLI reports the bad value, it does not crash with a traceback."""
+    package = build_package(tmp_path, out_of_range_temporal_time=True)
+
+    result = subprocess.run(  # noqa: S603
+        [
+            sys.executable,
+            str(VMLAB / "prepare-sse-data.py"),
+            "--package",
+            str(package),
+            "--output-dir",
+            str(tmp_path / "prepared"),
+            "--index",
+            "sse_lab",
+            "--anchor",
+            "2026-08-15T12:00:00Z",
+            "--dry-run",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 1
+    assert "Traceback" not in result.stderr
+    assert "prepare-sse-data:" in result.stderr
+    assert "unsupported temporal values" in result.stderr
+    assert "2026-02-30T10:00:00" in result.stderr
