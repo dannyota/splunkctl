@@ -11,7 +11,7 @@
 
 ## Get started
 
-- [Install](https://splunkctl.danny.vn/guides/install.md): Install splunkctl from PyPI on Python 3.12 or newer, add the optional SDK fork and browser extra when you need them, and verify the install with doctor.
+- [Install](https://splunkctl.danny.vn/guides/install.md): Install splunkctl from PyPI on Python 3.12 or newer, add the browser extra when you need it, and verify the install with doctor.
 - [Configure](https://splunkctl.danny.vn/guides/configure.md): Set up splunkctl profiles for development, UAT, and production, and override them with environment variables or flags.
 
 ## Investigate

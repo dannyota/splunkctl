@@ -32,6 +32,7 @@ def test_get_auth_error_not_swallowed(mock_gc: MagicMock) -> None:
     mock_svc = MagicMock()
     mock_svc.dashboards.list.side_effect = _http_401()
     mock_gc.return_value.service = mock_svc
+    mock_gc.return_value.dashboards = mock_svc.dashboards
 
     result = CliRunner().invoke(cli, ["--json", "dashboards", "get", "test_dash"])
     assert "not_found" not in result.stderr
@@ -43,6 +44,7 @@ def test_delete_auth_error_not_swallowed(mock_gc: MagicMock) -> None:
     mock_svc = MagicMock()
     mock_svc.dashboards.list.side_effect = _http_401()
     mock_gc.return_value.service = mock_svc
+    mock_gc.return_value.dashboards = mock_svc.dashboards
 
     result = CliRunner().invoke(
         cli, ["--yes", "--json", "dashboards", "delete", "test_dash"]
@@ -56,6 +58,7 @@ def test_export_auth_error_not_swallowed(mock_gc: MagicMock) -> None:
     mock_svc = MagicMock()
     mock_svc.dashboards.list.side_effect = _http_401()
     mock_gc.return_value.service = mock_svc
+    mock_gc.return_value.dashboards = mock_svc.dashboards
 
     result = CliRunner().invoke(cli, ["--json", "dashboards", "export", "test_dash"])
     assert "not_found" not in result.stderr
@@ -67,6 +70,7 @@ def test_share_auth_error_not_swallowed(mock_gc: MagicMock) -> None:
     mock_svc = MagicMock()
     mock_svc.dashboards.list.side_effect = _http_401()
     mock_gc.return_value.service = mock_svc
+    mock_gc.return_value.dashboards = mock_svc.dashboards
 
     result = CliRunner().invoke(
         cli,

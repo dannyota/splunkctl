@@ -31,7 +31,7 @@ def list_hec(
     """List HEC tokens."""
     client = get_client(ctx)
     items = fetch_page(
-        client.service.hec_tokens.list,
+        client.hec_tokens.list,
         limit=limit,
         offset=offset,
         name_filter=name_filter,
@@ -56,7 +56,7 @@ def get_hec(ctx: click.Context, name: str) -> None:
     """Get HEC token details."""
     client = get_client(ctx)
     try:
-        token = client.service.hec_tokens[name]
+        token = client.hec_tokens[name]
     except KeyError:
         output.error(f"HEC token '{name}' not found.", kind="not_found")
         ctx.exit(1)
@@ -107,7 +107,7 @@ def create_hec(
         return
     client = get_client(ctx)
     try:
-        client.service.hec_tokens.create(name, **kwargs)
+        client.hec_tokens.create(name, **kwargs)
     except Exception as exc:
         output.error(f"Create failed: {exc}")
         ctx.exit(1)
@@ -125,7 +125,7 @@ def delete_hec(ctx: click.Context, name: str) -> None:
         return
     client = get_client(ctx)
     try:
-        client.service.hec_tokens[name].delete()
+        client.hec_tokens[name].delete()
     except KeyError:
         output.error(f"HEC token '{name}' not found.", kind="not_found")
         ctx.exit(1)
@@ -147,7 +147,7 @@ def enable_hec(ctx: click.Context, name: str) -> None:
         return
     client = get_client(ctx)
     try:
-        client.service.hec_tokens[name].enable()
+        client.hec_tokens[name].enable()
     except KeyError:
         output.error(f"HEC token '{name}' not found.", kind="not_found")
         ctx.exit(1)
@@ -165,7 +165,7 @@ def disable_hec(ctx: click.Context, name: str) -> None:
         return
     client = get_client(ctx)
     try:
-        client.service.hec_tokens[name].disable()
+        client.hec_tokens[name].disable()
     except KeyError:
         output.error(f"HEC token '{name}' not found.", kind="not_found")
         ctx.exit(1)
@@ -226,7 +226,7 @@ def hec_send(
     client = get_client(ctx)
     svc = client.service
     try:
-        token_entity = svc.hec_tokens[name]
+        token_entity = client.hec_tokens[name]
     except KeyError:
         output.error(f"HEC token '{name}' not found.", kind="not_found")
         ctx.exit(1)

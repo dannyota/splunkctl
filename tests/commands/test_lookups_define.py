@@ -68,7 +68,7 @@ def test_define_rejects_both_file_and_collection() -> None:
 def test_define_dry_run_names_transforms_and_stanza(mock_gc: MagicMock) -> None:
     conf = _conf(mock_gc)
     conf.__getitem__.side_effect = KeyError("agenttest_h4_def")
-    mock_gc.return_value.service.lookup_table_files.list.return_value = [MagicMock()]
+    mock_gc.return_value.lookup_table_files.list.return_value = [MagicMock()]
 
     result = CliRunner().invoke(
         cli,
@@ -112,7 +112,7 @@ def test_define_collection_builds_kvstore_kv_in_diff(mock_gc: MagicMock) -> None
 def test_define_dry_run_includes_optional_keys(mock_gc: MagicMock) -> None:
     conf = _conf(mock_gc)
     conf.__getitem__.side_effect = KeyError("agenttest_h4_def")
-    mock_gc.return_value.service.lookup_table_files.list.return_value = [MagicMock()]
+    mock_gc.return_value.lookup_table_files.list.return_value = [MagicMock()]
 
     result = CliRunner().invoke(
         cli,
@@ -145,7 +145,7 @@ def test_define_dry_run_includes_optional_keys(mock_gc: MagicMock) -> None:
 def test_define_warns_when_file_not_found(mock_gc: MagicMock) -> None:
     conf = _conf(mock_gc)
     conf.__getitem__.side_effect = KeyError("agenttest_h4_def")
-    mock_gc.return_value.service.lookup_table_files.list.return_value = []
+    mock_gc.return_value.lookup_table_files.list.return_value = []
 
     result = CliRunner().invoke(
         cli,
@@ -162,7 +162,7 @@ def test_define_warns_when_file_not_found(mock_gc: MagicMock) -> None:
 def test_define_no_warning_when_file_exists(mock_gc: MagicMock) -> None:
     conf = _conf(mock_gc)
     conf.__getitem__.side_effect = KeyError("agenttest_h4_def")
-    mock_gc.return_value.service.lookup_table_files.list.return_value = [MagicMock()]
+    mock_gc.return_value.lookup_table_files.list.return_value = [MagicMock()]
 
     result = CliRunner().invoke(
         cli,
@@ -178,9 +178,7 @@ def test_define_file_check_failure_never_blocks(mock_gc: MagicMock) -> None:
     only, never a hard failure for `define`."""
     conf = _conf(mock_gc)
     conf.__getitem__.side_effect = KeyError("agenttest_h4_def")
-    mock_gc.return_value.service.lookup_table_files.list.side_effect = RuntimeError(
-        "boom"
-    )
+    mock_gc.return_value.lookup_table_files.list.side_effect = RuntimeError("boom")
 
     result = CliRunner().invoke(
         cli, ["lookups", "define", "agenttest_h4_def", "--file", "agenttest_h4.csv"]
@@ -196,7 +194,7 @@ def test_define_file_check_failure_never_blocks(mock_gc: MagicMock) -> None:
 def test_define_file_delegates_to_conf_ops_set_keys(mock_gc: MagicMock) -> None:
     conf = _conf(mock_gc)
     conf.__getitem__.side_effect = KeyError("agenttest_h4_def")
-    mock_gc.return_value.service.lookup_table_files.list.return_value = [MagicMock()]
+    mock_gc.return_value.lookup_table_files.list.return_value = [MagicMock()]
 
     with patch("splunkctl.commands.lookups.conf_ops.set_keys") as mock_set_keys:
         mock_set_keys.return_value = (MagicMock(), True)
@@ -254,7 +252,7 @@ def test_define_collection_delegates_to_conf_ops_set_keys(mock_gc: MagicMock) ->
 def test_define_app_option_scopes_lookup_and_set_keys(mock_gc: MagicMock) -> None:
     conf = _conf(mock_gc)
     conf.__getitem__.side_effect = KeyError("agenttest_h4_def")
-    mock_gc.return_value.service.lookup_table_files.list.return_value = [MagicMock()]
+    mock_gc.return_value.lookup_table_files.list.return_value = [MagicMock()]
 
     with patch("splunkctl.commands.lookups.conf_ops.set_keys") as mock_set_keys:
         mock_set_keys.return_value = (MagicMock(), True)
@@ -290,7 +288,7 @@ def test_define_app_option_scopes_lookup_and_set_keys(mock_gc: MagicMock) -> Non
 def test_define_requires_yes_to_apply(mock_gc: MagicMock) -> None:
     conf = _conf(mock_gc)
     conf.__getitem__.side_effect = KeyError("agenttest_h4_def")
-    mock_gc.return_value.service.lookup_table_files.list.return_value = [MagicMock()]
+    mock_gc.return_value.lookup_table_files.list.return_value = [MagicMock()]
 
     with patch("splunkctl.commands.lookups.conf_ops.set_keys") as mock_set_keys:
         result = CliRunner().invoke(

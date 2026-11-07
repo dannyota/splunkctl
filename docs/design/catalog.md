@@ -105,13 +105,14 @@ that are not SDK list surfaces (e.g. `audit rbac`) are exempt by design.
 | JSON error envelope | ✅ built | `--json`/`--format json` errors as one `jq`-able stderr line: kind + http_status + message |
 | Multi-instance profiles | ✅ built | `profiles:`/`current:` config schema v2, `--profile` global flag, guard banner (`profile`/`env`/`flags` source) on every dry-run and `--yes` confirmation, no network I/O |
 
-## SDK fork status
+## Local REST adapters
 
-Gaps to fill in `dannyota/splunk-sdk-python`:
+`splunkctl/rest_adapters.py` supports upstream `splunk-sdk` without extensions.
 
-| Gap | Status | Target |
+| Entity | Collection | Endpoint |
 |---|---|---|
-| Dashboards | ✅ built | `Dashboard`/`Dashboards` on `splunkctl` branch |
-| Lookup tables | ✅ built | `LookupTableFile`/`LookupTableFiles` on `splunkctl` branch |
-| HEC tokens | ✅ built | `HECToken`/`HECTokens` on `splunkctl` branch |
-| Alert actions | not needed | Shipped as first-class CLI flags over `--set action.*` (Wave 25); no SDK entity required |
+| `Dashboard` | `Dashboards` | `data/ui/views` |
+| `LookupTableFile` | `LookupTableFiles` | `data/lookup-table-files` |
+| `HECToken` | `HECTokens` | `data/inputs/http` |
+
+Alert actions use CLI flags over `--set action.*`.

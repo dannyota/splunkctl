@@ -14,7 +14,7 @@ splunkctl config init
 splunkctl doctor
 ```
 
-`config init` writes `~/.splunkctl/config.yaml`. `doctor` checks the connection, authentication, server health, and your permissions. See [Install](guides/install.md) for the optional SDK fork and shell completion, and [Configure](guides/configure.md) for profiles and environment variables.
+`config init` writes `~/.splunkctl/config.yaml`. `doctor` checks the connection, authentication, server health, and your permissions. See [Install](guides/install.md) for shell completion, and [Configure](guides/configure.md) for profiles and environment variables.
 
 ## Safety
 

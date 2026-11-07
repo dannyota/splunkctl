@@ -6,7 +6,7 @@ hash comparison (``state_types._hash_drift``), not a per-field diff.
 Lookups apply via ``client.upload_lookup`` (the same Web-UI-backed path
 `lookups upload`/`update` use) after a fresh oneshot ``| inputlookup``
 read, exactly like `lookups download`. Dashboards are pull+diff ONLY —
-no import path exists in the SDK fork or the CLI, so there is no
+no apply path exists in the CLI, so there is no
 ``apply_dashboards`` here; ``state_io.APPLY_FNS`` has no "dashboards"
 entry and callers must not attempt to write them.
 """
@@ -42,7 +42,7 @@ def pull_lookups(client: Any, dir_path: Path, app: str | None) -> int:
     out_dir = dir_path / "lookups"
     out_dir.mkdir(parents=True, exist_ok=True)
     count = 0
-    for lk in svc.lookup_table_files.list(app=app or "-", owner="-"):
+    for lk in client.lookup_table_files.list(app=app or "-", owner="-"):
         content = _download_csv(svc, lk.name, lk.access.app)
         (out_dir / lk.name).write_bytes(content)
         count += 1
@@ -56,7 +56,7 @@ def diff_lookups(client: Any, dir_path: Path, app: str | None) -> list[DriftEntr
     local_files = {p.name: p for p in local_dir.glob("*")} if local_dir.is_dir() else {}
     entries: list[DriftEntry] = []
     seen: set[str] = set()
-    for lk in svc.lookup_table_files.list(app=app or "-", owner="-"):
+    for lk in client.lookup_table_files.list(app=app or "-", owner="-"):
         seen.add(lk.name)
         remote = _download_csv(svc, lk.name, lk.access.app)
         local_path = local_files.get(lk.name)
@@ -75,7 +75,7 @@ def apply_lookups(client: Any, dir_path: Path, app: str | None) -> list[ChangeRe
     if not local_dir.is_dir():
         return []
     remote = {
-        lk.name: lk for lk in svc.lookup_table_files.list(app=app or "-", owner="-")
+        lk.name: lk for lk in client.lookup_table_files.list(app=app or "-", owner="-")
     }
     records: list[ChangeRecord] = []
     for path in sorted(local_dir.glob("*")):
@@ -108,11 +108,10 @@ def _is_dashboard(d: Any) -> bool:
 
 def pull_dashboards(client: Any, dir_path: Path, app: str | None) -> int:
     """Export every dashboard's XML to ``<dir>/dashboards/<name>.xml``."""
-    svc = client.service
     out_dir = dir_path / "dashboards"
     out_dir.mkdir(parents=True, exist_ok=True)
     count = 0
-    for d in svc.dashboards.list(app=app or "-", owner="-"):
+    for d in client.dashboards.list(app=app or "-", owner="-"):
         if not _is_dashboard(d):
             continue
         (out_dir / f"{d.name}.xml").write_text(d.export(), encoding="utf-8")
@@ -122,14 +121,13 @@ def pull_dashboards(client: Any, dir_path: Path, app: str | None) -> int:
 
 def diff_dashboards(client: Any, dir_path: Path, app: str | None) -> list[DriftEntry]:
     """Hash-compare every live dashboard's XML against its on-disk file."""
-    svc = client.service
     local_dir = dir_path / "dashboards"
     local_files = (
         {p.stem: p for p in local_dir.glob("*.xml")} if local_dir.is_dir() else {}
     )
     entries: list[DriftEntry] = []
     seen: set[str] = set()
-    for d in svc.dashboards.list(app=app or "-", owner="-"):
+    for d in client.dashboards.list(app=app or "-", owner="-"):
         if not _is_dashboard(d):
             continue
         seen.add(d.name)

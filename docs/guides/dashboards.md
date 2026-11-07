@@ -6,12 +6,6 @@ When to use: you want dashboard XML or Studio JSON in version control, need to c
 
 ## Prerequisites
 
-- The optional SDK fork, because dashboard commands use its `Dashboard` entity classes:
-
-  ```bash
-  python -m pip install git+https://github.com/dannyota/splunk-sdk-python@splunkctl
-  ```
-
 - A Splunk account with write access to the target app (for example the `admin` or `power` role in `search`).
 
 ## Synopsis
@@ -95,7 +89,6 @@ splunkctl dashboards delete old_dash --app search --yes
 
 ## Troubleshooting
 
-- `ImportError` or a message about missing `Dashboard` classes: install the SDK fork listed under Prerequisites.
 - `not_found` on `get` or `update`: pass `--app`; the dashboard may live outside `search`.
 - `--definition` errors: the dashboard is Classic XML, not Studio.
 - `permission` on create or share: the account lacks write access to the app, or `global` sharing needs the `admin_all_objects` capability.

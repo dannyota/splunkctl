@@ -54,6 +54,7 @@ def test_pull_writes_tree_and_manifest(mock_gc: MagicMock, tmp_path: Path) -> No
     svc = _base_svc()
     svc.saved_searches.list.return_value = [_mock_ss("det1")]
     mock_gc.return_value.service = svc
+    mock_gc.return_value.dashboards = svc.dashboards
 
     target = tmp_path / "snap"
     result = CliRunner().invoke(
@@ -71,6 +72,7 @@ def test_pull_writes_tree_and_manifest(mock_gc: MagicMock, tmp_path: Path) -> No
 def test_pull_types_filter_skips_others(mock_gc: MagicMock, tmp_path: Path) -> None:
     svc = _base_svc()
     mock_gc.return_value.service = svc
+    mock_gc.return_value.dashboards = svc.dashboards
 
     target = tmp_path / "snap"
     result = CliRunner().invoke(
@@ -104,6 +106,7 @@ def test_diff_json_array_payload(mock_gc: MagicMock, tmp_path: Path) -> None:
     svc.saved_searches.__getitem__.side_effect = _getitem_from({"det1": ss})
     svc.saved_searches.list.return_value = [ss]
     mock_gc.return_value.service = svc
+    mock_gc.return_value.dashboards = svc.dashboards
 
     result = CliRunner().invoke(
         cli, ["--json", "state", "diff", "--dir", str(target), "--types", "rules"]
@@ -129,6 +132,7 @@ def test_diff_exits_zero_with_drift(mock_gc: MagicMock, tmp_path: Path) -> None:
     svc = _base_svc()
     svc.saved_searches.list.return_value = [_mock_ss("only_live")]
     mock_gc.return_value.service = svc
+    mock_gc.return_value.dashboards = svc.dashboards
 
     result = CliRunner().invoke(
         cli, ["state", "diff", "--dir", str(target), "--types", "rules"]
@@ -148,6 +152,7 @@ def test_push_dry_run_writes_report_applied_false(
     svc = _base_svc()
     svc.saved_searches.__getitem__.side_effect = KeyError("new_rule")
     mock_gc.return_value.service = svc
+    mock_gc.return_value.dashboards = svc.dashboards
 
     report = tmp_path / "r.json"
     result = CliRunner().invoke(
@@ -189,6 +194,7 @@ def test_push_yes_applies_and_writes_report_true(
     svc = _base_svc()
     svc.saved_searches.__getitem__.side_effect = KeyError("new_rule")
     mock_gc.return_value.service = svc
+    mock_gc.return_value.dashboards = svc.dashboards
 
     report = tmp_path / "r.json"
     result = CliRunner().invoke(
@@ -222,6 +228,7 @@ def test_push_without_report_flag_writes_nothing(
     (target / "rules.yml").write_text(yaml.dump([]))
     svc = _base_svc()
     mock_gc.return_value.service = svc
+    mock_gc.return_value.dashboards = svc.dashboards
 
     result = CliRunner().invoke(
         cli, ["state", "push", "--dir", str(target), "--types", "rules"]
@@ -239,6 +246,7 @@ def test_push_never_deletes_removed_object(mock_gc: MagicMock, tmp_path: Path) -
     live_only = _mock_ss("only_live")
     svc.saved_searches.list.return_value = [live_only]
     mock_gc.return_value.service = svc
+    mock_gc.return_value.dashboards = svc.dashboards
 
     result = CliRunner().invoke(
         cli, ["--yes", "state", "push", "--dir", str(target), "--types", "rules"]
@@ -266,6 +274,7 @@ def test_push_dashboards_apply_unsupported_no_error(
     d.export.return_value = "<a/>"
     svc.dashboards.list.return_value = [d]
     mock_gc.return_value.service = svc
+    mock_gc.return_value.dashboards = svc.dashboards
 
     result = CliRunner().invoke(
         cli, ["--yes", "state", "push", "--dir", str(target), "--types", "dashboards"]

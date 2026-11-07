@@ -8,7 +8,7 @@ When to use: an allowlist, a threat-intel feed, or an enrichment table lives in 
 
 - A profile that passes `splunkctl doctor` with the `KV Store` check at `ready`; `splunkctl server kvstore` shows the status on its own.
 - Write access to the target app (`--app`, default `search`); collection ownership is always `nobody`, the KV store convention, so every command addresses `servicesNS/nobody/<app>/storage/collections/{config|data}/...`.
-- No SDK fork is needed: every command is a thin, typed wrapper around raw `GET`, `POST`, and `DELETE` calls.
+- Every command is a thin, typed wrapper around raw `GET`, `POST`, and `DELETE` calls.
 
 ## Synopsis
 

@@ -8,7 +8,7 @@ When to use: your detections run on accelerated CIM data models through `| tstat
 
 - A profile that passes `splunkctl doctor` (see [Configure](configure.md)).
 - Read access to data models for `list`, `get`, and `acceleration`; write access to the model's app (for example `Splunk_SA_CIM`) for `rebuild`.
-- No SDK fork is needed: every command is a thin, typed wrapper around the `datamodel/model` and `admin/summarization` REST collections.
+- Every command is a thin, typed wrapper around the `datamodel/model` and `admin/summarization` REST collections.
 
 ## Synopsis
 

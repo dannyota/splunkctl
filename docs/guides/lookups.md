@@ -6,12 +6,6 @@ When to use: a detection needs enrichment from a table you control, such as a th
 
 ## Prerequisites
 
-- The optional SDK fork, because table-file commands use its `LookupTableFile` entity classes:
-
-  ```bash
-  python -m pip install git+https://github.com/dannyota/splunk-sdk-python@splunkctl
-  ```
-
 - A profile that passes `splunkctl doctor` including `Web UI reachable`: `upload` and `update` go through the Splunk Web form handler because the REST API requires a server-side path.
 - Write access to the target app (`--app`, default `search` for `upload`, `update`, `delete`, and `download`).
 
@@ -104,7 +98,6 @@ splunkctl lookups delete old_table.csv --app search --yes
 
 ## Troubleshooting
 
-- `ImportError` mentioning `LookupTableFile`: install the SDK fork listed under Prerequisites.
 - `Lookup upload failed` or a `web` error: Splunk Web is not reachable from this machine; check `Web UI reachable` in `splunkctl doctor`.
 - `not_found` from `get`, `download`, or `delete`: the file is in another app; `list` spans all apps but `download` and `delete` default to `search`, so pass `--app`.
 - `upload` fails because the file exists: use `update` to overwrite.

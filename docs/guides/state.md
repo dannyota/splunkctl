@@ -7,7 +7,6 @@ When to use: your change process needs an audit trail for detection content: pul
 ## Prerequisites
 
 - A Splunk profile that passes `splunkctl doctor`; the account needs write access to every app you intend to push to.
-- For the `dashboards` type: the optional SDK fork (`python -m pip install git+https://github.com/dannyota/splunk-sdk-python@splunkctl`, see [Manage dashboards](dashboards.md)).
 - For `soar-playbooks`, `soar-lists`, and `soar-assets`: SOAR credentials in the profile (`splunkctl config init --soar` or `SOAR_HOST`). Mixed SIEM and SOAR types in one command work; each type is routed to its own client.
 - The same `--app` scope (or none) on `pull`, `diff`, and `push` when lookups or dashboards are involved (see "Pull a snapshot").
 
@@ -179,7 +178,6 @@ Expected result: a plan artifact for approval and an applied artifact as the rec
 ## Troubleshooting
 
 - Usage error "No SOAR host configured" when a SOAR type is requested: run `splunkctl config init --soar` or set `SOAR_HOST`.
-- `ImportError` or missing `Dashboard` classes on `pull --types dashboards`: install the SDK fork listed under Prerequisites, or leave `dashboards` out of `--types`.
 - A lookup or dashboard shows `added` although it exists: `--app` differs between `pull` and `diff` or `push`; rerun all three with the same scope.
 - `permission` on `push`: the account cannot write to the app that owns the object; narrow the run with `--types` or `--app` and fix the role.
 - `push` printed "not deleted (push never deletes)": expected; delete with the type's own `delete` command if that is intended.

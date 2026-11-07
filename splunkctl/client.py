@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import re
 import urllib.parse
+from functools import cached_property
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +20,7 @@ import urllib3
 
 from splunkctl import config as cfg_mod
 from splunkctl.errors import WebSessionError
+from splunkctl.rest_adapters import Dashboards, HECTokens, LookupTableFiles
 
 _tls_warned: bool = False
 
@@ -117,6 +119,21 @@ class SplunkClient:
 
         return self._service
 
+    @cached_property
+    def dashboards(self) -> Dashboards:
+        """Return local dashboard REST adapters."""
+        return Dashboards(self.service)
+
+    @cached_property
+    def lookup_table_files(self) -> LookupTableFiles:
+        """Return local lookup metadata REST adapters."""
+        return LookupTableFiles(self.service)
+
+    @cached_property
+    def hec_tokens(self) -> HECTokens:
+        """Return local HEC REST adapters."""
+        return HECTokens(self.service)
+
     def _siem_auth(self, cfg: dict[str, Any], connect_args: dict[str, Any]) -> None:
         """Populate SIEM auth into ``connect_args``.
 
@@ -187,6 +204,7 @@ class SplunkClient:
                 verify=bool(cfg.get("verify", True)),
                 debug=self._debug,
                 timeout=self._timeout or 30,
+                web_url=cfg.get("web_url"),
             )
         return self._web_session
 
@@ -241,8 +259,12 @@ class _WebSession:
         verify: bool = True,
         debug: bool = False,
         timeout: int = 30,
+        web_url: str | None = None,
     ) -> None:
         self._host: str = service.host
+        # A configured web_url wins over the server's httpport: port-mapped
+        # containers and proxies serve Splunk Web on a different address.
+        self._web_base_override: str | None = web_url.rstrip("/") if web_url else None
         self._username: str = service.username
         self._password: str = service.password
         if not self._username or not self._password:
@@ -269,6 +291,8 @@ class _WebSession:
 
     @property
     def _base_url(self) -> str:
+        if self._web_base_override:
+            return self._web_base_override
         scheme = "https" if self._web_ssl else "http"
         return f"{scheme}://{self._host}:{self._web_port}"
 

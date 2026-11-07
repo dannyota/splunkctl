@@ -37,6 +37,7 @@ def test_list_lookups(mock_gc: MagicMock) -> None:
         _mock_lookup(name="other.csv", app="SA-Utils", owner="nobody"),
     ]
     mock_gc.return_value.service = mock_svc
+    mock_gc.return_value.lookup_table_files = mock_svc.lookup_table_files
 
     result = CliRunner().invoke(cli, ["--json", "lookups", "list"])
     assert result.exit_code == 0
@@ -51,6 +52,7 @@ def test_list_lookups_with_app(mock_gc: MagicMock) -> None:
     mock_svc = MagicMock()
     mock_svc.lookup_table_files.list.return_value = [_mock_lookup()]
     mock_gc.return_value.service = mock_svc
+    mock_gc.return_value.lookup_table_files = mock_svc.lookup_table_files
 
     result = CliRunner().invoke(cli, ["--json", "lookups", "list", "--app", "search"])
     assert result.exit_code == 0
@@ -62,6 +64,7 @@ def test_list_lookups_empty(mock_gc: MagicMock) -> None:
     mock_svc = MagicMock()
     mock_svc.lookup_table_files.list.return_value = []
     mock_gc.return_value.service = mock_svc
+    mock_gc.return_value.lookup_table_files = mock_svc.lookup_table_files
 
     result = CliRunner().invoke(cli, ["--json", "lookups", "list"])
     assert result.exit_code == 0
@@ -77,6 +80,7 @@ def test_get_lookup(mock_gc: MagicMock) -> None:
     mock_svc = MagicMock()
     mock_svc.lookup_table_files.list.return_value = [_mock_lookup()]
     mock_gc.return_value.service = mock_svc
+    mock_gc.return_value.lookup_table_files = mock_svc.lookup_table_files
 
     result = CliRunner().invoke(cli, ["--json", "lookups", "get", "test_lookup.csv"])
     assert result.exit_code == 0
@@ -90,6 +94,7 @@ def test_get_lookup_not_found(mock_gc: MagicMock) -> None:
     mock_svc = MagicMock()
     mock_svc.lookup_table_files.list.return_value = []
     mock_gc.return_value.service = mock_svc
+    mock_gc.return_value.lookup_table_files = mock_svc.lookup_table_files
 
     result = CliRunner().invoke(cli, ["--json", "lookups", "get", "nope.csv"])
     assert "not found" in result.stderr
@@ -164,6 +169,7 @@ def test_delete_with_yes(mock_gc: MagicMock) -> None:
     lk = _mock_lookup()
     mock_svc.lookup_table_files.list.return_value = [lk]
     mock_gc.return_value.service = mock_svc
+    mock_gc.return_value.lookup_table_files = mock_svc.lookup_table_files
 
     result = CliRunner().invoke(cli, ["--yes", "lookups", "delete", "my.csv"])
     assert result.exit_code == 0
@@ -177,6 +183,7 @@ def test_download_to_stdout(mock_gc: MagicMock) -> None:
     csv_bytes = b"host,ip\nweb01,10.0.0.1\n"
     mock_svc.jobs.oneshot.return_value.read.return_value = csv_bytes
     mock_gc.return_value.service = mock_svc
+    mock_gc.return_value.lookup_table_files = mock_svc.lookup_table_files
 
     result = CliRunner().invoke(cli, ["lookups", "download", "test_lookup.csv"])
     assert result.exit_code == 0
@@ -190,6 +197,7 @@ def test_download_to_file(mock_gc: MagicMock, tmp_path: Path) -> None:
     csv_bytes = b"host,ip\nweb01,10.0.0.1\n"
     mock_svc.jobs.oneshot.return_value.read.return_value = csv_bytes
     mock_gc.return_value.service = mock_svc
+    mock_gc.return_value.lookup_table_files = mock_svc.lookup_table_files
 
     out_file = tmp_path / "out.csv"
     result = CliRunner().invoke(
@@ -207,6 +215,7 @@ def test_download_missing_lookup_fails(mock_gc: MagicMock, tmp_path) -> None:
     mock_svc = MagicMock()
     mock_svc.lookup_table_files.list.return_value = []
     mock_gc.return_value.service = mock_svc
+    mock_gc.return_value.lookup_table_files = mock_svc.lookup_table_files
 
     out = tmp_path / "x.csv"
     result = CliRunner().invoke(
@@ -232,6 +241,7 @@ def test_download_quotes_name_in_spl(mock_gc: MagicMock) -> None:
     ]
     mock_svc.jobs.oneshot.return_value.read.return_value = b"a,b\n1,2\n"
     mock_gc.return_value.service = mock_svc
+    mock_gc.return_value.lookup_table_files = mock_svc.lookup_table_files
 
     result = CliRunner().invoke(cli, ["lookups", "download", "foo | delete index=main"])
     assert result.exit_code == 0
@@ -248,6 +258,7 @@ def test_download_quotes_embedded_quotes(mock_gc: MagicMock) -> None:
     mock_svc.lookup_table_files.list.return_value = [_mock_lookup(name=name)]
     mock_svc.jobs.oneshot.return_value.read.return_value = b"x\n"
     mock_gc.return_value.service = mock_svc
+    mock_gc.return_value.lookup_table_files = mock_svc.lookup_table_files
 
     result = CliRunner().invoke(cli, ["lookups", "download", name])
     assert result.exit_code == 0
@@ -262,6 +273,7 @@ def test_download_rejects_newline_name(mock_gc: MagicMock) -> None:
     name = "bad\nname"
     mock_svc.lookup_table_files.list.return_value = [_mock_lookup(name=name)]
     mock_gc.return_value.service = mock_svc
+    mock_gc.return_value.lookup_table_files = mock_svc.lookup_table_files
 
     result = CliRunner().invoke(cli, ["lookups", "download", name])
     assert result.exit_code != 0
@@ -321,7 +333,38 @@ def test_get_lookup_auth_error_propagates(mock_gc: MagicMock) -> None:
     )
     mock_svc.lookup_table_files.list.side_effect = HTTPError(resp)
     mock_gc.return_value.service = mock_svc
+    mock_gc.return_value.lookup_table_files = mock_svc.lookup_table_files
 
     result = CliRunner().invoke(cli, ["--json", "lookups", "get", "test.csv"])
     # Should NOT say "not found"
     assert "not_found" not in result.stderr
+
+
+def test_download_strips_leading_blank_line(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Splunk's CSV export starts with a newline; the saved file must not."""
+    from io import BytesIO
+
+    class _Jobs:
+        def oneshot(self, *_a: object, **_k: object) -> BytesIO:
+            return BytesIO(b"\nip,label\n10.0.0.1,a\n")
+
+    class _Svc:
+        jobs = _Jobs()
+
+    class _Files:
+        def list(self, **_k: object) -> list[object]:
+            return [object()]
+
+    class _Client:
+        service = _Svc()
+        lookup_table_files = _Files()
+
+    monkeypatch.setattr("splunkctl.commands.lookups.get_client", lambda _ctx: _Client())
+    out = tmp_path / "dl.csv"
+    result = CliRunner().invoke(
+        cli, ["lookups", "download", "x.csv", "--out", str(out)]
+    )
+    assert result.exit_code == 0, result.output
+    assert out.read_text() == "ip,label\n10.0.0.1,a\n"

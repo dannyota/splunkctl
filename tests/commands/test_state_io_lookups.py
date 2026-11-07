@@ -34,6 +34,8 @@ def _mock_dashboard(
 def _client(svc: MagicMock) -> MagicMock:
     client = MagicMock()
     client.service = svc
+    client.dashboards = svc.dashboards
+    client.lookup_table_files = svc.lookup_table_files
     return client
 
 

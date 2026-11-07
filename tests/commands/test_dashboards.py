@@ -43,6 +43,7 @@ def test_list_dashboards(mock_gc: MagicMock) -> None:
     mock_svc = MagicMock()
     mock_svc.dashboards.list.return_value = [_mock_dashboard()]
     mock_gc.return_value.service = mock_svc
+    mock_gc.return_value.dashboards = mock_svc.dashboards
 
     result = CliRunner().invoke(cli, ["--json", "dashboards", "list"])
     assert result.exit_code == 0
@@ -56,6 +57,7 @@ def test_list_dashboards_with_app(mock_gc: MagicMock) -> None:
     mock_svc = MagicMock()
     mock_svc.dashboards.list.return_value = [_mock_dashboard()]
     mock_gc.return_value.service = mock_svc
+    mock_gc.return_value.dashboards = mock_svc.dashboards
 
     result = CliRunner().invoke(
         cli,
@@ -73,6 +75,7 @@ def test_list_type_column(mock_gc: MagicMock) -> None:
         _mock_dashboard("studio_dash", xml=STUDIO_XML),
     ]
     mock_gc.return_value.service = mock_svc
+    mock_gc.return_value.dashboards = mock_svc.dashboards
 
     result = CliRunner().invoke(cli, ["--json", "dashboards", "list"])
     assert result.exit_code == 0
@@ -86,6 +89,7 @@ def test_get_dashboard(mock_gc: MagicMock) -> None:
     mock_svc = MagicMock()
     mock_svc.dashboards.list.return_value = [_mock_dashboard()]
     mock_gc.return_value.service = mock_svc
+    mock_gc.return_value.dashboards = mock_svc.dashboards
 
     result = CliRunner().invoke(cli, ["--json", "dashboards", "get", "test_dash"])
     assert result.exit_code == 0
@@ -100,6 +104,7 @@ def test_get_definition_studio(mock_gc: MagicMock) -> None:
     d = _mock_dashboard("studio_dash", xml=STUDIO_XML)
     mock_svc.dashboards.list.return_value = [d]
     mock_gc.return_value.service = mock_svc
+    mock_gc.return_value.dashboards = mock_svc.dashboards
 
     result = CliRunner().invoke(
         cli,
@@ -115,6 +120,7 @@ def test_get_definition_classic_errors(mock_gc: MagicMock) -> None:
     mock_svc = MagicMock()
     mock_svc.dashboards.list.return_value = [_mock_dashboard()]
     mock_gc.return_value.service = mock_svc
+    mock_gc.return_value.dashboards = mock_svc.dashboards
 
     result = CliRunner().invoke(
         cli,
@@ -129,6 +135,7 @@ def test_get_dashboard_not_found(mock_gc: MagicMock) -> None:
     mock_svc = MagicMock()
     mock_svc.dashboards.list.return_value = []
     mock_gc.return_value.service = mock_svc
+    mock_gc.return_value.dashboards = mock_svc.dashboards
 
     result = CliRunner().invoke(cli, ["dashboards", "get", "missing"])
     assert result.exit_code != 0
@@ -140,6 +147,7 @@ def test_get_dashboard_not_found_json_envelope(mock_gc: MagicMock) -> None:
     mock_svc = MagicMock()
     mock_svc.dashboards.list.return_value = []
     mock_gc.return_value.service = mock_svc
+    mock_gc.return_value.dashboards = mock_svc.dashboards
 
     result = CliRunner().invoke(cli, ["--json", "dashboards", "get", "missing"])
     assert result.exit_code == 1
@@ -188,6 +196,7 @@ def test_create_studio_wraps_json(mock_gc: MagicMock, tmp_path: Path) -> None:
     f.write_text('{"viz": "pie"}')
     mock_svc = MagicMock()
     mock_gc.return_value.service = mock_svc
+    mock_gc.return_value.dashboards = mock_svc.dashboards
 
     result = CliRunner().invoke(
         cli,
@@ -205,7 +214,7 @@ def test_create_with_sharing(mock_gc: MagicMock, tmp_path: Path) -> None:
     f = tmp_path / "dash.xml"
     f.write_text(SAMPLE_XML)
     client = mock_gc.return_value
-    client.service.dashboards.create.return_value = MagicMock()
+    client.dashboards.create.return_value = MagicMock()
 
     result = CliRunner().invoke(
         cli,
@@ -237,7 +246,7 @@ def test_create_dry_run(mock_gc: MagicMock, tmp_path: Path) -> None:
     )
     assert result.exit_code == 0
     assert "[DRY RUN]" in result.stderr
-    mock_gc.return_value.service.dashboards.create.assert_not_called()
+    mock_gc.return_value.dashboards.create.assert_not_called()
 
 
 @patch(_PATCH)
@@ -246,6 +255,7 @@ def test_create_confirmed(mock_gc: MagicMock, tmp_path: Path) -> None:
     xml_file.write_text(SAMPLE_XML)
     mock_svc = MagicMock()
     mock_gc.return_value.service = mock_svc
+    mock_gc.return_value.dashboards = mock_svc.dashboards
 
     result = CliRunner().invoke(
         cli,
@@ -276,6 +286,7 @@ def test_update_shows_diff(mock_gc: MagicMock, tmp_path: Path) -> None:
     d = _mock_dashboard()
     mock_svc.dashboards.list.return_value = [d]
     mock_gc.return_value.service = mock_svc
+    mock_gc.return_value.dashboards = mock_svc.dashboards
 
     result = CliRunner().invoke(
         cli,
@@ -293,6 +304,7 @@ def test_update_confirmed(mock_gc: MagicMock, tmp_path: Path) -> None:
     dash = _mock_dashboard()
     mock_svc.dashboards.list.return_value = [dash]
     mock_gc.return_value.service = mock_svc
+    mock_gc.return_value.dashboards = mock_svc.dashboards
 
     result = CliRunner().invoke(
         cli,
@@ -315,6 +327,7 @@ def test_delete_confirmed(mock_gc: MagicMock) -> None:
     dash = _mock_dashboard()
     mock_svc.dashboards.list.return_value = [dash]
     mock_gc.return_value.service = mock_svc
+    mock_gc.return_value.dashboards = mock_svc.dashboards
 
     result = CliRunner().invoke(
         cli,
@@ -329,6 +342,7 @@ def test_export_stdout(mock_gc: MagicMock) -> None:
     mock_svc = MagicMock()
     mock_svc.dashboards.list.return_value = [_mock_dashboard()]
     mock_gc.return_value.service = mock_svc
+    mock_gc.return_value.dashboards = mock_svc.dashboards
 
     result = CliRunner().invoke(cli, ["dashboards", "export", "test_dash"])
     assert result.exit_code == 0
@@ -340,6 +354,7 @@ def test_export_to_file(mock_gc: MagicMock, tmp_path: Path) -> None:
     mock_svc = MagicMock()
     mock_svc.dashboards.list.return_value = [_mock_dashboard()]
     mock_gc.return_value.service = mock_svc
+    mock_gc.return_value.dashboards = mock_svc.dashboards
 
     out_file = tmp_path / "exported.xml"
     result = CliRunner().invoke(
@@ -356,6 +371,7 @@ def test_export_definition(mock_gc: MagicMock) -> None:
     d = _mock_dashboard("studio", xml=STUDIO_XML)
     mock_svc.dashboards.list.return_value = [d]
     mock_gc.return_value.service = mock_svc
+    mock_gc.return_value.dashboards = mock_svc.dashboards
 
     result = CliRunner().invoke(
         cli,
@@ -371,6 +387,7 @@ def test_export_not_found(mock_gc: MagicMock) -> None:
     mock_svc = MagicMock()
     mock_svc.dashboards.list.return_value = []
     mock_gc.return_value.service = mock_svc
+    mock_gc.return_value.dashboards = mock_svc.dashboards
 
     result = CliRunner().invoke(cli, ["dashboards", "export", "missing"])
     assert result.exit_code != 0
@@ -385,6 +402,7 @@ def test_export_all_writes_files(mock_gc: MagicMock, tmp_path: Path) -> None:
         _mock_dashboard("d2", app="myapp"),
     ]
     mock_gc.return_value.service = mock_svc
+    mock_gc.return_value.dashboards = mock_svc.dashboards
 
     out_dir = tmp_path / "export"
     result = CliRunner().invoke(
@@ -408,7 +426,7 @@ def test_export_all_needs_dir(mock_gc: MagicMock) -> None:
 def test_share_dashboard(mock_gc: MagicMock) -> None:
     client = mock_gc.return_value
     d = _mock_dashboard()
-    client.service.dashboards.list.return_value = [d]
+    client.dashboards.list.return_value = [d]
 
     result = CliRunner().invoke(
         cli,
@@ -426,6 +444,7 @@ def test_list_app_filters_rows(mock_gc: MagicMock) -> None:
         _mock_dashboard("alert_view", app="system"),
     ]
     mock_gc.return_value.service = mock_svc
+    mock_gc.return_value.dashboards = mock_svc.dashboards
 
     result = CliRunner().invoke(
         cli,
@@ -443,6 +462,7 @@ def test_list_excludes_non_dashboards_by_default(mock_gc: MagicMock) -> None:
     mock_svc = MagicMock()
     mock_svc.dashboards.list.return_value = [_mock_dashboard("real"), view]
     mock_gc.return_value.service = mock_svc
+    mock_gc.return_value.dashboards = mock_svc.dashboards
 
     result = CliRunner().invoke(cli, ["--json", "dashboards", "list"])
     assert [d["name"] for d in json.loads(result.output)] == ["real"]

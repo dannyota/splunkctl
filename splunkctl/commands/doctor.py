@@ -255,6 +255,11 @@ def doctor_cmd(ctx: click.Context, *, strict: bool = False) -> None:
         web_ssl = str(web_conf.content.get("enableSplunkWebSSL", "0")) == "1"
         scheme = "https" if web_ssl else "http"
         web_url = f"{scheme}://{svc.host}:{web_port}"
+        configured = cfg_mod.load(config_path, profile=obj.get("profile")).get(
+            "web_url"
+        )
+        if configured:
+            web_url = str(configured).rstrip("/")
 
         ctx_ssl = ssl.create_default_context()
         ctx_ssl.check_hostname = False
@@ -269,7 +274,7 @@ def doctor_cmd(ctx: click.Context, *, strict: bool = False) -> None:
             _check(
                 "Web UI reachable",
                 resp.status == 200,
-                f"{web_url} (port {web_port})",
+                web_url,
             )
         )
     except Exception as exc:
@@ -277,7 +282,7 @@ def doctor_cmd(ctx: click.Context, *, strict: bool = False) -> None:
             _check(
                 "Web UI reachable",
                 False,
-                f"port {web_port}: {exc}" if "web_port" in dir() else str(exc),
+                f"{web_url}: {exc}" if "web_url" in dir() else str(exc),
                 warn=True,
             )
         )
