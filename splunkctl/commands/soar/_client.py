@@ -21,7 +21,7 @@ def get_soar_client(ctx: click.Context) -> SOARClient:
     obj: dict[str, Any] = ctx.obj or {}
     cfg_path = obj.get("config")
     profile = obj.get("profile")
-    config_path = Path(cfg_path) if cfg_path else None
+    config_path = Path(cfg_path) if cfg_path else cfg_mod.DEFAULT_PATH
     cfg = cfg_mod.resolve_soar(config_path, profile=profile)
 
     host = cfg.get("host")

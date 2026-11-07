@@ -79,7 +79,7 @@ splunkctl parsers get [OPTIONS] SOURCETYPE
 |---|---|---|---|
 | `--conf` | choice: props, transforms | props | Conf file to read (default props). |
 | `--app` | text | search | App namespace for --explicit (default search). |
-| `--explicit` | flag | false | Show only explicitly set stanza keys, not the merged view. |
+| `--explicit` | flag | - | Show only explicitly set stanza keys, not the merged view. |
 
 ## parsers import
 

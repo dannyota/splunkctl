@@ -5,9 +5,11 @@ import stat
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
 import yaml
 from click.testing import CliRunner
 
+from splunkctl import config as cfg_mod
 from splunkctl.main import cli
 
 
@@ -168,7 +170,7 @@ def test_config_show_explicit_profile_flag(tmp_path: Path) -> None:
 
 def test_config_show_legacy_file_presents_as_default(tmp_path: Path) -> None:
     cfg = tmp_path / "config.yaml"
-    cfg.write_text("host: legacy-host\n")
+    cfg.write_text("host: legacy-host\nport: 8089\n")
     runner = CliRunner()
     result = runner.invoke(cli, ["--json", "--config", str(cfg), "config", "show"])
     assert result.exit_code == 0
@@ -469,3 +471,95 @@ def test_config_init_always_writes_explicit_verify(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.output
     raw = yaml.safe_load(cfg.read_text())
     assert "verify" in raw
+
+
+@pytest.mark.parametrize("soar", [False, True])
+def test_init_honors_global_config(tmp_path: Path, soar: bool) -> None:
+    dest = tmp_path / "chosen.yaml"
+    args = ["--config", str(dest), "config", "init"]
+    if soar:
+        args += ["--soar"]
+    result = CliRunner().invoke(
+        cli,
+        args,
+        input=(
+            "soar\n8443\ntoken\n\n\n\n\n" if soar else "ours\n8089\nadmin\nsecret\ny\n"
+        ),
+    )
+    assert result.exit_code == 0, result.output
+    assert dest.exists()
+    assert not cfg_mod.DEFAULT_PATH.exists()
+
+
+def test_init_foreign_default_uses_fallback() -> None:
+    cfg_mod.DEFAULT_PATH.parent.mkdir(parents=True)
+    cfg_mod.DEFAULT_PATH.write_text("token: foreign-secret\n")
+    result = CliRunner().invoke(
+        cli, ["config", "init"], input="ours\n8089\nadmin\nsecret\ny\n"
+    )
+    assert result.exit_code == 0, result.output
+    assert cfg_mod.FALLBACK_PATH.exists()
+    notice = (
+        f"Splunk-format config at {cfg_mod.DEFAULT_PATH}; using {cfg_mod.FALLBACK_PATH}"
+    )
+    assert result.stderr.count(notice) == 1
+    assert f"Config saved to {cfg_mod.FALLBACK_PATH}" in result.output
+    assert cfg_mod.DEFAULT_PATH.read_text() == "token: foreign-secret\n"
+
+
+@pytest.mark.parametrize("soar", [False, True])
+def test_init_foreign_path_refuses_before_prompt(tmp_path: Path, soar: bool) -> None:
+    dest = tmp_path / "foreign.yaml"
+    dest.write_text("token: foreign-secret\n")
+    args = ["config", "init", "--path", str(dest), "--web-url", "https://example"]
+    if soar:
+        args += ["--soar"]
+    with patch("splunkctl.auth.detector.probe") as probe:
+        result = CliRunner().invoke(cli, args)
+    assert result.exit_code == 1
+    assert (
+        f"Refusing to write Splunk-format config at {dest}. "
+        "Choose another file with --path or --config." in result.output
+    )
+    assert "Host:" not in result.output
+    assert "SOAR host:" not in result.output
+    probe.assert_not_called()
+
+
+@pytest.mark.parametrize("command", [["show"], ["use", "default"], ["test"]])
+def test_explicit_foreign_command_error(tmp_path: Path, command: list[str]) -> None:
+    dest = tmp_path / "foreign.yaml"
+    dest.write_text("host: https://foreign.example\ntoken: foreign-secret\n")
+    result = CliRunner().invoke(
+        cli, ["--json", "--config", str(dest), "config", *command]
+    )
+    assert result.exit_code == 1
+    err = json.loads(result.stderr)["error"]
+    assert err["kind"] == "config"
+    assert err["http_status"] is None
+    assert (
+        err["message"]
+        == f"Splunk-format config at {dest}. Use --config to select another file."
+    )
+    assert "foreign-secret" not in result.output
+    assert "foreign.example" not in result.output
+
+
+def test_fallback_show_redacts() -> None:
+    cfg_mod.DEFAULT_PATH.parent.mkdir(parents=True)
+    cfg_mod.DEFAULT_PATH.write_text("token: foreign-secret\n")
+    cfg_mod.FALLBACK_PATH.write_text("host: ours\nport: 8089\ntoken: our-secret\n")
+    result = CliRunner().invoke(cli, ["--json", "config", "show"])
+    assert result.exit_code == 0
+    assert json.loads(result.stdout)[0]["token"] == "****"
+    assert "our-secret" not in result.output
+    assert "foreign-secret" not in result.output
+
+
+@pytest.mark.parametrize("args", [["--version"], ["completion", "bash"], ["commands"]])
+def test_offline_commands_with_foreign_default(args: list[str]) -> None:
+    cfg_mod.DEFAULT_PATH.parent.mkdir(parents=True)
+    cfg_mod.DEFAULT_PATH.write_text("token: foreign-secret\n")
+    result = CliRunner().invoke(cli, args)
+    assert result.exit_code == 0, result.output
+    assert "foreign-secret" not in result.output

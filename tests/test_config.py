@@ -35,7 +35,7 @@ def test_load_from_file(tmp_path: Path) -> None:
 
 def test_load_env_overlay(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     p = tmp_path / "config.yaml"
-    p.write_text(yaml.dump({"host": "file-host"}))
+    p.write_text(yaml.dump({"host": "file-host", "port": 8089}))
     monkeypatch.setenv("SPLUNK_HOST", "env-host")
     monkeypatch.setenv("SPLUNK_PORT", "1234")
     monkeypatch.setenv("SPLUNK_VERIFY", "true")
@@ -131,14 +131,14 @@ def test_load_v2_missing_profile_raises_not_found(tmp_path: Path) -> None:
 
 def test_load_legacy_file_as_implicit_default(tmp_path: Path) -> None:
     p = tmp_path / "config.yaml"
-    p.write_text(yaml.dump({"host": "legacy-host"}))
+    p.write_text(yaml.dump({"host": "legacy-host", "port": 8089}))
     cfg = config.load(p, profile="default")
     assert cfg["host"] == "legacy-host"
 
 
 def test_load_legacy_file_requesting_other_profile_raises(tmp_path: Path) -> None:
     p = tmp_path / "config.yaml"
-    p.write_text(yaml.dump({"host": "legacy-host"}))
+    p.write_text(yaml.dump({"host": "legacy-host", "port": 8089}))
     with pytest.raises(config.ProfileNotFoundError):
         config.load(p, profile="uat")
 
@@ -206,7 +206,7 @@ def test_profile_names_v2(tmp_path: Path) -> None:
 
 def test_profile_names_legacy(tmp_path: Path) -> None:
     p = tmp_path / "config.yaml"
-    p.write_text(yaml.dump({"host": "h"}))
+    p.write_text(yaml.dump({"host": "h", "port": 8089}))
     assert config.profile_names(p) == ["default"]
 
 
@@ -233,7 +233,7 @@ def test_save_profile_upgrades_legacy_preserving_default(tmp_path: Path) -> None
 
 def test_save_profile_preserves_0600(tmp_path: Path) -> None:
     p = tmp_path / "config.yaml"
-    p.write_text(yaml.dump({"host": "legacy-host"}))
+    p.write_text(yaml.dump({"host": "legacy-host", "port": 8089}))
     config.save_profile({"host": "uat-host"}, "uat", p)
     mode = p.stat().st_mode
     assert mode & 0o777 == 0o600
@@ -498,3 +498,129 @@ def test_soar_profile_explicit_verify_false(tmp_path: Path) -> None:
         current="lab",
     )
     assert config.resolve_soar(p)["verify"] is False
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ({"host": "https://splunk.example:8089", "extra": 1}, True),
+        ({"host": "bare", "token": "secret"}, True),
+        ({"token": "secret"}, True),
+        ({"host": "bare"}, True),
+        ({"host": "", "token": ""}, True),
+        ({"profiles": {}, "host": "https://example"}, False),
+        ({"host": "bare", "port": 8089}, False),
+        ({"host": "bare", "scheme": "https"}, False),
+        ({"username": "admin"}, False),
+        ({"password": "secret"}, False),
+        ({"token": 123}, False),
+        ({}, False),
+    ],
+)
+def test_foreign_detection(raw: dict[str, Any], expected: bool) -> None:
+    assert config.is_foreign(raw) is expected
+
+
+def _foreign_default() -> None:
+    config.DEFAULT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    config.DEFAULT_PATH.write_text(
+        "host: https://foreign.example:8089\ntoken: secret-value\n"
+    )
+
+
+def test_effective_path_explicit_never_redirects() -> None:
+    _foreign_default()
+    assert config.effective_path(config.DEFAULT_PATH) == (config.DEFAULT_PATH, False)
+
+
+def test_effective_path_implicit_fallback() -> None:
+    _foreign_default()
+    assert config.effective_path(None) == (config.FALLBACK_PATH, True)
+
+
+def test_effective_path_missing_default() -> None:
+    assert config.effective_path(None) == (config.DEFAULT_PATH, False)
+
+
+def test_effective_path_invalid_yaml_never_raises() -> None:
+    config.DEFAULT_PATH.parent.mkdir(parents=True)
+    config.DEFAULT_PATH.write_text("[invalid")
+    assert config.effective_path(None) == (config.DEFAULT_PATH, False)
+
+
+@pytest.mark.parametrize(
+    "reader", ["resolve", "resolve_soar", "load", "profile_names", "is_v2_file"]
+)
+def test_explicit_foreign_read_refused(reader: str) -> None:
+    _foreign_default()
+    with pytest.raises(config.ForeignConfigError) as caught:
+        getattr(config, reader)(config.DEFAULT_PATH)
+    assert caught.value.path == config.DEFAULT_PATH
+    assert (
+        str(caught.value) == f"Splunk-format config at {config.DEFAULT_PATH}. "
+        "Use --config to select another file."
+    )
+
+
+def test_implicit_missing_fallback_defaults() -> None:
+    _foreign_default()
+    assert config.load() == config.defaults()
+    assert config.resolve_soar() == config.soar_defaults()
+    assert config.profile_names() == ["default"]
+    assert not config.is_v2_file()
+
+
+def test_implicit_fallback_overlay(monkeypatch: pytest.MonkeyPatch) -> None:
+    _foreign_default()
+    config.FALLBACK_PATH.write_text(
+        "host: fallback\nport: 9000\nsoar:\n  host: soar-fallback\n"
+    )
+    monkeypatch.setenv("SPLUNK_HOST", "env-host")
+    monkeypatch.setenv("SOAR_TOKEN", "env-token")
+    assert config.resolve()["cfg"]["host"] == "env-host"
+    assert config.load()["port"] == 9000
+    assert config.resolve_soar()["host"] == "soar-fallback"
+    assert config.resolve_soar()["token"] == "env-token"
+
+
+@pytest.mark.parametrize("writer", ["save", "save_profile", "use_profile"])
+def test_foreign_write_preserves_bytes_and_mode(writer: str) -> None:
+    _foreign_default()
+    config.DEFAULT_PATH.chmod(0o640)
+    before = config.DEFAULT_PATH.read_bytes()
+    with pytest.raises(config.ForeignConfigError):
+        _write_config(writer, config.DEFAULT_PATH)
+    assert config.DEFAULT_PATH.read_bytes() == before
+    assert config.DEFAULT_PATH.stat().st_mode & 0o777 == 0o640
+
+
+def _write_config(writer: str, path: Path | None) -> None:
+    if writer == "save":
+        config.save({"host": "ours", "port": 8089}, path)
+    elif writer == "save_profile":
+        config.save_profile({"host": "ours"}, "new", path)
+    else:
+        config.use_profile("default", path)
+
+
+@pytest.mark.parametrize("writer", ["save", "save_profile", "use_profile"])
+def test_fallback_write_permissions(writer: str) -> None:
+    _foreign_default()
+    if writer == "use_profile":
+        config.save_profile({"port": 8089}, "other")
+        config.save_profile({"port": 9090}, "default")
+        config.use_profile("other")
+    _write_config(writer, None)
+    assert config.FALLBACK_PATH.stat().st_mode & 0o777 == 0o600
+    assert "secret-value" in config.DEFAULT_PATH.read_text()
+
+
+@pytest.mark.parametrize("operation", ["load", "save", "save_profile", "use_profile"])
+def test_foreign_fallback_refused(operation: str) -> None:
+    _foreign_default()
+    config.FALLBACK_PATH.write_text("token: foreign-fallback\n")
+    with pytest.raises(config.ForeignConfigError):
+        if operation == "load":
+            config.load()
+        else:
+            _write_config(operation, None)

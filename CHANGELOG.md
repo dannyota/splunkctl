@@ -1,5 +1,36 @@
 # Changelog
 
+## Unreleased
+
+Coexistence with Splunk's own `splunkctl` Go CLI, which shares our command
+name and config path, plus a green typecheck on current MCP releases.
+
+### Added
+
+- **`splunkctl-py` executable** — a second entry point for hosts where
+  Splunk's `splunkctl` binary shadows ours on `PATH`.
+- **Config coexistence** — when `~/.splunkctl/config.yaml` is in Splunk's
+  flat `host`/`token` format, this tool leaves it untouched, uses
+  `~/.splunkctl/profiles.yaml` instead, and prints one notice on standard
+  error. An explicit `--config FILE` in Splunk's format is refused with a
+  `config` error rather than redirected. `doctor` reports the config file
+  in use as its first check.
+- README section comparing this project with `splunk/splunkctl`, and a
+  ROADMAP note recording the decision to keep the name.
+
+### Changed
+
+- `config init` now honors the global `--config` flag as its destination
+  when `--path` is not given.
+- Require `mcp>=2.3` to match the `MCPServer` Streamable HTTP signature the
+  server subclasses.
+
+### Fixed
+
+- Typecheck against MCP 2.3 and click 8.5 (raw tgz exports write through
+  `sys.stdout.buffer`).
+- Script tests resolve `bash` from `PATH` and run on macOS.
+
 ## 0.13.0
 
 Browser SAML single sign-on for SIEM and SOAR, plus a reusable Keycloak lab.

@@ -464,7 +464,7 @@ def get_client(ctx: click.Context) -> SplunkClient:
     """Build a SplunkClient from Click context. Does not connect."""
     obj: dict[str, Any] = ctx.ensure_object(dict)
     return SplunkClient(
-        config_path=Path(obj["config"]) if obj.get("config") else None,
+        config_path=Path(obj.get("config") or cfg_mod.DEFAULT_PATH),
         profile=obj.get("profile"),
         timeout=obj.get("timeout", 30),
         debug=obj.get("debug", False),

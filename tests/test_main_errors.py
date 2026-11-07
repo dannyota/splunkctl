@@ -1,12 +1,13 @@
 """JSON error envelope — kind/http_status classification in _CLI.invoke()."""
 
 import json
+from pathlib import Path
 
 import click
 import requests
 from click.testing import CliRunner
 
-from splunkctl.config import ProfileNotFoundError
+from splunkctl.config import ForeignConfigError, ProfileNotFoundError
 from splunkctl.main import _CLI
 
 
@@ -165,3 +166,10 @@ def test_profile_not_found_maps_to_not_found() -> None:
     assert err["kind"] == "not_found"
     assert err["http_status"] is None
     assert "uat" in str(err["message"])
+
+
+def test_foreign_config_maps_to_config() -> None:
+    exit_code, err = _invoke_and_get_envelope(ForeignConfigError(Path("foreign.yaml")))
+    assert exit_code == 1
+    assert err["kind"] == "config"
+    assert err["http_status"] is None

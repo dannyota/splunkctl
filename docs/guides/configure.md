@@ -97,6 +97,31 @@ override the flat config today.
 2. Environment variables
 3. Profile (config file)
 
+## Coexistence with Splunk's splunkctl
+
+Splunk's own Go CLI, [`splunk/splunkctl`](https://github.com/splunk/splunkctl),
+also writes `~/.splunkctl/config.yaml`, as a flat file with `host` (a full
+URL) and `token`. This tool never rewrites that file.
+
+- When `~/.splunkctl/config.yaml` is in Splunk's format and no `--config`
+  is given, this tool reads and writes `~/.splunkctl/profiles.yaml`
+  instead and prints one notice on standard error:
+  `Splunk-format config at ~/.splunkctl/config.yaml; using ~/.splunkctl/profiles.yaml`.
+- `splunkctl config init` writes to the same fallback file, so a single
+  `config init` is enough on a host that already has Splunk's tool.
+- An explicit `--config FILE` is never redirected. If that file is in
+  Splunk's format, the command fails with
+  `Splunk-format config at FILE. Use --config to select another file.`
+- `splunkctl doctor` reports the config file in use as its first check.
+- A hand-written file of this tool's own legacy flat format that contains
+  only `host` and `token` is indistinguishable from Splunk's format and is
+  treated the same way. Add `port` or `scheme`, or run `config init`, to
+  keep using it.
+
+Both tools install an executable named `splunkctl`. This package also
+installs `splunkctl-py`, which runs the same CLI, for hosts where Splunk's
+binary comes first on `PATH`.
+
 ## Watch mode
 
 Re-run any read-only command at a fixed interval, clearing the screen

@@ -59,7 +59,7 @@ splunkctl soar actions run [OPTIONS]
 | `--param` | text | - | Action parameter key=value (repeatable). |
 | `--type` | text | investigate | Action type (default: investigate). |
 | `--name` | text | - | Run name (defaults to action name). |
-| `--wait` | flag | false | Poll until the action completes. |
+| `--wait` | flag | - | Poll until the action completes. |
 | `--timeout` | integer | 300 | Wait timeout in seconds (default: 300). |
 
 ## soar actions status
@@ -1131,7 +1131,7 @@ PLAYBOOK can be a numeric id or a playbook name.
 | `--container` | integer | - | Container id. [required] |
 | `--scope` | choice: all, new | all | Artifact scope (default: all). |
 | `--input` | text | - | Input key=value (repeatable). |
-| `--wait` | flag | false | Poll until terminal status. |
+| `--wait` | flag | - | Poll until terminal status. |
 | `--timeout` | integer | 300 | Wait timeout in seconds (default: 300). |
 
 ## soar playbooks runs cancel
@@ -1156,7 +1156,7 @@ splunkctl soar playbooks runs get [OPTIONS] RUN_ID
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--blocks` | flag | false | Show block results. |
+| `--blocks` | flag | - | Show block results. |
 
 ## soar playbooks runs list
 
@@ -1268,7 +1268,7 @@ splunkctl soar stats [OPTIONS]
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--widget` | text | - | Fetch a single widget by name. |
-| `--list` | flag | false | List all known widgets. |
+| `--list` | flag | - | List all known widgets. |
 
 ## soar test
 

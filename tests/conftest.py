@@ -19,5 +19,11 @@ def _isolate_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         cfg_mod, "DEFAULT_PATH", tmp_path / ".splunkctl" / "config.yaml"
     )
+    monkeypatch.setattr(
+        cfg_mod,
+        "FALLBACK_PATH",
+        tmp_path / ".splunkctl" / "profiles.yaml",
+        raising=False,
+    )
     for var in [*cfg_mod._ENV_MAP, *cfg_mod._SOAR_ENV_MAP]:
         monkeypatch.delenv(var, raising=False)

@@ -1,6 +1,7 @@
 """Click entry point and global flags."""
 
 import sys
+from pathlib import Path
 from typing import Any
 
 import click
@@ -234,7 +235,15 @@ def cli(
     ctx.obj["fields"] = fields
     ctx.obj["out"] = out
     ctx.obj["dry_run"] = not yes
-    ctx.obj["config"] = config
+    path, fell_back = cfg_mod.effective_path(Path(config) if config else None)
+    ctx.obj["config"] = str(path)
+    ctx.obj["config_fallback"] = fell_back
+    if fell_back:
+        click.echo(
+            f"Splunk-format config at {cfg_mod.DEFAULT_PATH}; "
+            f"using {cfg_mod.FALLBACK_PATH}",
+            err=True,
+        )
     ctx.obj["profile"] = profile
     ctx.obj["debug"] = debug
     ctx.obj["timeout"] = timeout

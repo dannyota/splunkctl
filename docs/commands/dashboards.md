@@ -54,8 +54,8 @@ splunkctl dashboards export [OPTIONS] [NAME]
 |---|---|---|---|
 | `--app` | text | - | Splunk app context. |
 | `--out` | path | - | Output file (single dashboard). |
-| `--definition` | flag | false | Extract Studio JSON definition. |
-| `--all` | flag | false | Export all dashboards to --dir. |
+| `--definition` | flag | - | Extract Studio JSON definition. |
+| `--all` | flag | - | Export all dashboards to --dir. |
 | `--dir` | path | - | Directory for --all bulk export. |
 
 ## dashboards get
@@ -71,7 +71,7 @@ splunkctl dashboards get [OPTIONS] NAME
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--app` | text | - | Splunk app context. |
-| `--definition` | flag | false | Extract Studio JSON definition (errors on classic). |
+| `--definition` | flag | - | Extract Studio JSON definition (errors on classic). |
 
 ## dashboards list
 
@@ -91,7 +91,7 @@ dashboard-type row filters.
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--app` | text | - | Only dashboards owned by this app. |
-| `--all` | flag | false | Include non-dashboard views. |
+| `--all` | flag | - | Include non-dashboard views. |
 | `--limit` | integer range | - | Return at most N entries (default: all). |
 | `--offset` | integer range | 0 | Skip the first N entries. |
 | `--filter` | text | - | Case-insensitive name substring; --limit/--offset then apply to the filtered set. |

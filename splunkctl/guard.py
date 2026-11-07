@@ -15,7 +15,7 @@ def soar_banner(ctx: click.Context) -> str:
     network I/O. Safe for dry-run previews and ``--yes`` confirmations.
     """
     obj: dict[str, Any] = ctx.obj or {}
-    config_path = Path(obj["config"]) if obj.get("config") else None
+    config_path = Path(obj.get("config") or cfg_mod.DEFAULT_PATH)
     cfg = cfg_mod.resolve_soar(config_path, profile=obj.get("profile"))
     host = cfg.get("host", "unknown")
     port = cfg.get("port", 8443)
@@ -56,7 +56,7 @@ def banner(ctx: click.Context, *, overrides: dict[str, Any] | None = None) -> st
             not exist.
     """
     obj: dict[str, Any] = ctx.obj or {}
-    config_path = Path(obj["config"]) if obj.get("config") else None
+    config_path = Path(obj.get("config") or cfg_mod.DEFAULT_PATH)
     resolved = cfg_mod.resolve(
         config_path, profile=obj.get("profile"), overrides=overrides
     )

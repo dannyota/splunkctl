@@ -48,6 +48,7 @@ browser = [
 
 [project.scripts]
 splunkctl = "splunkctl.main:cli"
+splunkctl-py = "splunkctl.main:cli"
 
 [project.urls]
 Homepage = "https://github.com/dannyota/splunkctl"

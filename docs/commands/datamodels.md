@@ -32,7 +32,7 @@ splunkctl datamodels get [OPTIONS] NAME
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--app` | text | - | Splunk app context. |
-| `--definition` | flag | false | Print the raw model definition (objects/fields/calculations) instead of the summary row. |
+| `--definition` | flag | - | Print the raw model definition (objects/fields/calculations) instead of the summary row. |
 
 ## datamodels list
 

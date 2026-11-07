@@ -86,6 +86,26 @@ def doctor_cmd(ctx: click.Context, *, strict: bool = False) -> None:
     click.echo("splunkctl doctor", err=True)
     click.echo("", err=True)
 
+    obj: dict[str, Any] = ctx.obj or {}
+    config_path = Path(obj["config"])
+    try:
+        cfg_mod.is_v2_file(config_path)
+    except cfg_mod.ForeignConfigError as exc:
+        results.append(
+            _check(
+                "Config",
+                False,
+                str(exc),
+                hint="Run splunkctl config init --path ~/.splunkctl/profiles.yaml",
+            )
+        )
+        _finish(ctx, results, strict=strict)
+        return
+    detail = str(config_path)
+    if obj.get("config_fallback"):
+        detail += " (fallback: Splunk-format config at ~/.splunkctl/config.yaml)"
+    results.append(_check("Config", True, detail))
+
     # --- 1. REST connection ---
     click.echo("[Connection]", err=True)
     client = get_client(ctx)
@@ -252,7 +272,7 @@ def _check_soar(ctx: click.Context, results: list[dict[str, str]]) -> None:
     obj: dict[str, Any] = ctx.obj or {}
     cfg_path = obj.get("config")
     profile = obj.get("profile")
-    config_path = Path(cfg_path) if cfg_path else None
+    config_path = Path(cfg_path) if cfg_path else cfg_mod.DEFAULT_PATH
     soar_cfg = cfg_mod.resolve_soar(config_path, profile=profile)
 
     host = soar_cfg.get("host")

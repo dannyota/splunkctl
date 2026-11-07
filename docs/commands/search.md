@@ -44,8 +44,8 @@ splunkctl search job [OPTIONS] SID
 |---|---|---|---|
 | `--offset` | integer | 0 | Result offset for paging. |
 | `--count` | integer | 0 | Max results (0=all). |
-| `--events` | flag | false | Fetch raw events. |
-| `--status-only` | flag | false | Show status without results. |
+| `--events` | flag | - | Fetch raw events. |
+| `--status-only` | flag | - | Show status without results. |
 
 ## search jobs
 
@@ -118,7 +118,7 @@ splunkctl search run [OPTIONS] SPL
 | `--latest` | text | - | Latest time (e.g. now). |
 | `--limit` | integer | 100 | Max results (default 100). |
 | `--app` | text | - | Splunk app context. |
-| `--detach` | flag | false | Submit job and exit without waiting. |
+| `--detach` | flag | - | Submit job and exit without waiting. |
 
 ## search upload
 

@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 
 from click.testing import CliRunner
 
+from splunkctl import config as cfg_mod
 from splunkctl.main import cli
 
 _PATCH = "splunkctl.commands.doctor.get_client"
@@ -473,3 +474,56 @@ def test_doctor_soar_basic_auth(
         result = CliRunner().invoke(cli, ["doctor"])
 
     assert "token=basic" in result.stderr
+
+
+@patch(_PATCH)
+def test_doctor_config_pass(mock_gc: MagicMock) -> None:
+    type(mock_gc.return_value).service = property(
+        lambda self: (_ for _ in ()).throw(ConnectionError("offline"))
+    )
+    result = CliRunner().invoke(cli, ["--json", "doctor"])
+    assert "PASS  Config" in result.stderr
+    assert json.loads(result.stdout)[0] == {
+        "check": "Config",
+        "status": "OK",
+        "detail": str(cfg_mod.DEFAULT_PATH),
+    }
+
+
+@patch(_PATCH)
+def test_doctor_config_fallback(mock_gc: MagicMock) -> None:
+    cfg_mod.DEFAULT_PATH.parent.mkdir(parents=True)
+    cfg_mod.DEFAULT_PATH.write_text("token: foreign-secret\n")
+    type(mock_gc.return_value).service = property(
+        lambda self: (_ for _ in ()).throw(ConnectionError("offline"))
+    )
+    result = CliRunner().invoke(cli, ["--json", "doctor"])
+    assert "PASS  Config" in result.stderr
+    assert (
+        f"{cfg_mod.FALLBACK_PATH} "
+        "(fallback: Splunk-format config at ~/.splunkctl/config.yaml)" in result.stderr
+    )
+
+
+@patch(_PATCH)
+def test_doctor_foreign_strict_json_no_network(
+    mock_gc: MagicMock, tmp_path: Path
+) -> None:
+    dest = tmp_path / "foreign.yaml"
+    dest.write_text("token: foreign-secret\n")
+    result = CliRunner().invoke(
+        cli, ["--json", "--config", str(dest), "doctor", "--strict"]
+    )
+    assert result.exit_code == 1
+    mock_gc.assert_not_called()
+    rows = json.loads(result.stdout)
+    assert rows == [
+        {
+            "check": "Config",
+            "status": "FAIL",
+            "detail": (
+                f"Splunk-format config at {dest}. Use --config to select another file."
+            ),
+            "hint": "Run splunkctl config init --path ~/.splunkctl/profiles.yaml",
+        }
+    ]
