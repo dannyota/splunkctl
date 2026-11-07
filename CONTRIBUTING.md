@@ -12,7 +12,7 @@ python -m pip install -e '.[dev]'
 git config core.hooksPath .githooks
 ```
 
-Python 3.13 or newer is required. The pre-commit hook runs the same checks
+Python 3.12 or newer is required. The pre-commit hook runs the same checks
 as CI.
 
 ## Before you open a pull request

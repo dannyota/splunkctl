@@ -9,6 +9,7 @@ drift from the CLI. Hidden: a maintainer/CI tool, not an operator surface.
 stale (the CI freshness gate).
 """
 
+import inspect
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -110,7 +111,9 @@ def _usage(e: _Entry) -> str:
 
 def _long_help(e: _Entry) -> str:
     r"""Body of the command help below the summary line, ``\b`` markers dropped."""
-    lines = (e.cmd.help or "").split("\n")[1:]
+    # Python 3.13 strips docstring indentation at compile time; 3.12 does
+    # not. Normalize so generated pages are identical on every version.
+    lines = inspect.cleandoc(e.cmd.help or "").split("\n")[1:]
     return "\n".join(ln for ln in lines if ln.strip() != "\b").strip()
 
 

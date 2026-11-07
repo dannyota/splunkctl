@@ -7,7 +7,7 @@ name = "splunkctl"
 dynamic = ["version"]
 description = "Open-source MCP server and CLI for Splunk Enterprise SIEM and Splunk SOAR."
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.12"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 authors = [{ name = "dannyota" }]
@@ -18,7 +18,9 @@ classifiers = [
     "Intended Audience :: System Administrators",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Security",
     "Topic :: System :: Systems Administration",
 ]
@@ -75,7 +77,7 @@ version = { attr = "splunkctl.__version__" }
 
 [tool.ruff]
 line-length = 88
-target-version = "py313"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = [
@@ -104,7 +106,7 @@ convention = "google"
 # --- mypy (strict) ---
 
 [tool.mypy]
-python_version = "3.13"
+python_version = "3.12"
 strict = true
 disallow_untyped_defs = true
 warn_return_any = true

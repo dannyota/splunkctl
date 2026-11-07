@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Support Python 3.12. The command reference generator normalizes help
+  text so generated pages are identical across Python versions.
+
 ## 0.14.0
 
 Coexistence with Splunk's own `splunkctl` Go CLI, which shares our command
