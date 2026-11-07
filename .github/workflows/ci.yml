@@ -80,7 +80,9 @@ jobs:
           package = Path(splunkctl.__file__).resolve()
           assert package.is_relative_to(userbase), (package, userbase)
           guides = load_guides()
-          assert len(guides) == 38, f"expected 38 packaged guides, found {len(guides)}"
+          expected = sorted(p.stem for p in Path("docs/guides").glob("*.md"))
+          found = sorted(g["slug"] for g in guides)
+          assert found == expected, f"packaged guides differ from docs/guides: {sorted(set(expected) ^ set(found))}"
           PY
 
   semgrep:
