@@ -1,6 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.15.0
+
+Python 3.12 support, no more SDK fork for dashboards, lookup files, and
+HEC tokens, and every guide rewritten to the task-based contract.
 
 ### Changed
 
