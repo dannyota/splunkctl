@@ -2,54 +2,54 @@
 
 # Run searches
 
-Run SPL queries against a remote Splunk instance from your laptop.
-This is the primary interface for threat hunting, incident response,
-and ad-hoc log analysis without opening Splunk Web.
+When to use: you want to run SPL against a remote Splunk instance from your terminal for hunting, incident response, or detection tuning, pull large result sets to a file, push a local file into an index, or check on and cancel long-running jobs.
 
-## Commands
+## Prerequisites
 
-```bash
-splunkctl search run '<SPL>'              # sync search, wait for results
-splunkctl search export '<SPL>'           # streaming export (large result sets)
-splunkctl search oneshot '<SPL>'          # fire-and-forget, small queries
-splunkctl search jobs                     # list running/recent search jobs
-splunkctl search job <sid>                # check status + fetch results by SID
-splunkctl search cancel <sid> --yes       # kill a running search
-splunkctl search upload --path file --yes # ingest a local file into Splunk
+- A profile that passes `splunkctl doctor` (see [Configure](configure.md)).
+- A role with search access to the indexes you query. `upload` needs permission to post data to the `receivers/simple` endpoint.
+- Always scope `--earliest`; unscoped searches scan all time.
+
+## Synopsis
+
+```text
+splunkctl search run <SPL> [--earliest TIME] [--latest TIME] [--limit N] [--app APP] [--detach] [--yes]
+splunkctl search export <SPL> [--earliest TIME] [--latest TIME] [--app APP] [--yes]
+splunkctl search oneshot <SPL> [--earliest TIME] [--latest TIME] [--limit N] [--app APP] [--yes]
+splunkctl search jobs [--filter SID_SUBSTRING] [--limit N] [--offset N]
+splunkctl search job <SID> [--offset N] [--count N] [--events] [--status-only]
+splunkctl search cancel <SID> [--yes]
+splunkctl search upload --path <FILE> [--index INDEX] [--sourcetype TYPE] [--source TEXT] [--host HOST] [--yes]
+splunkctl search metrics --index <INDEX> [--metric NAME] [--filter PREFIX] [--app APP]
 ```
 
-**run** creates a normal job, polls until done, returns results. Use for
-most interactive work -- detection tuning, hunting, triage queries.
+## Workflow
 
-**export** streams results without creating a job artifact. Use for bulk
-extraction (e.g. pulling a week of firewall logs into a local file for
-offline analysis). No result-count cap.
-
-**oneshot** is the fastest path for small, read-only queries. No job
-object, no poll loop. Good for counts, stats, and quick checks.
-
-SPL containing write commands requires `--yes`; refusal exits with code 1 and emits a `confirmation_required` error envelope in JSON output mode (including the non-TTY default).
-
-## Common options
-
-| Flag | Default | Notes |
-|---|---|---|
-| `--earliest` | none | Splunk time syntax: `-1h`, `-7d@d`, `2025-01-15T00:00:00` |
-| `--latest` | `now` | Use `@d` to snap to midnight boundaries |
-| `--limit` | 100 | Max rows returned (run/oneshot only; export has no cap) |
-| `--app` | none | App namespace context (e.g. `SplunkEnterpriseSecuritySuite`) |
-
-## Practical examples
-
-Threat hunting -- find brute-force SSH attempts in the last 24 hours:
+### Run an interactive search
 
 ```bash
 splunkctl search run \
     'index=auth sourcetype=linux_secure "Failed password" | stats count by src_ip | where count > 20' \
     --earliest -24h
+splunkctl search run \
+    'index=wineventlog EventCode=4625 | stats count by Account_Name, src_ip | where count > 10' \
+    --earliest -1d --limit 500
 ```
 
-Incident response -- pull all DNS queries to a suspect domain:
+Expected result: `run` creates a normal job, polls until it finishes, and prints up to `--limit` rows (default 100). Use it for most interactive work: detection tuning, hunting, triage queries. When more rows exist the output names the sid and the `search job <SID> --offset N` command that fetches the next page.
+
+| Flag | Default | Notes |
+|---|---|---|
+| `--earliest` | none | Splunk time syntax: `-1h`, `-7d@d`, `2025-01-15T00:00:00` |
+| `--latest` | `now` | Use `@d` to snap to midnight boundaries |
+| `--limit` | 100 | Max rows returned (`run` and `oneshot` only; `export` has no cap) |
+| `--app` | none | App namespace context (for example `SplunkEnterpriseSecuritySuite`) |
+
+Time-range tips: snap-to modifiers reduce bucket scanning (`-1d@d` is yesterday midnight, `-1h@h` the top of the previous hour). For exports over days or weeks, break the range into daily chunks to avoid timeouts on heavy indexes.
+
+Bare keywords get `search` prepended automatically. Pipe-leading queries and generating commands (`makeresults`, `inputlookup`, `tstats`, and others) pass through unchanged.
+
+### Export a large result set
 
 ```bash
 splunkctl search export \
@@ -57,52 +57,45 @@ splunkctl search export \
     --earliest -7d | jq . > dns_hits.json
 ```
 
-Detection tuning -- test a correlation search before saving it:
+Expected result: results stream to stdout without a job artifact and without a row cap. Use it for bulk extraction, for example a week of firewall logs for offline analysis.
 
-```bash
-splunkctl search run \
-    'index=wineventlog EventCode=4625 | stats count by Account_Name, src_ip | where count > 10' \
-    --earliest -1d --limit 500
-```
-
-Quick count -- how many events hit an index today:
+### Get a quick count
 
 ```bash
 splunkctl search oneshot 'index=main | stats count' --earliest '@d'
 ```
 
-## Time-range tips
+Expected result: the fastest path for small, read-only queries: no job object and no poll loop. Good for counts, stats, and quick checks.
 
-- Always scope `--earliest`. Unscoped searches scan all time and are slow.
-- Use snap-to modifiers: `-1d@d` = yesterday midnight, `-1h@h` = top of
-  the previous hour. Reduces bucket scanning.
-- For exports over days/weeks, break into daily chunks to avoid timeouts
-  on heavy indexes.
+### Run SPL that writes
 
-## Job management
-
-Long-running searches (stats over weeks, large tstats) run async. Check
-on them or kill stragglers:
+> **Safety:** Target is the Splunk host in the active profile. Impact: write commands such as `outputlookup` and `collect` change lookups or indexes on the instance. Preview by running the command without `--yes` and reading the refusal, apply by adding `--yes`, and verify with a read search (for example `| inputlookup suspicious_ips.csv`).
 
 ```bash
-splunkctl search jobs                     # see all active/recent jobs
-splunkctl search job 1719648000.12345     # poll a specific SID
+splunkctl search run 'index=auth action=failure | stats count by src_ip | outputlookup suspicious_ips.csv' --earliest -24h
+splunkctl search run 'index=auth action=failure | stats count by src_ip | outputlookup suspicious_ips.csv' --earliest -24h --yes
+```
+
+Expected result: without `--yes` the first command is refused before dispatch, exits 1, and in JSON output mode (including the non-TTY default) emits a `confirmation_required` error envelope. The refusal covers `outputlookup`, `collect`, `mcollect`, `meventcollect`, `sendalert`, `delete`, `outputcsv`, `outputtext`, `sendemail`, `runshellscript`, and `script`, in `run`, `export`, and `oneshot` alike. With `--yes` the search runs.
+
+### Manage long-running jobs
+
+> **Safety:** Target is the Splunk host in the active profile. Impact: `cancel` kills a running job and discards its results. Preview with `splunkctl search cancel 1719648000.12345`, apply by adding `--yes`, and verify with `splunkctl search jobs --filter 1719648000`.
+
+```bash
+splunkctl search run 'index=firewall | tstats count where index=firewall by sourcetype' --earliest -30d --detach
+splunkctl search jobs
+splunkctl search job 1719648000.12345 --status-only
+splunkctl search job 1719648000.12345 --offset 100 --count 100
+splunkctl search job 1719648000.12345 --events
 splunkctl search cancel 1719648000.12345 --yes
 ```
 
-## Upload -- ingest local files into remote Splunk
+Expected result: `--detach` submits the job and prints its sid; `jobs` lists running and recent jobs (`--filter` matches the sid); `job` shows status and pages results (`--count 0` fetches all, `--events` fetches raw events); `cancel` stops it.
 
-Your laptop has a CSV of threat intel IOCs or sample logs from a vendor.
-Splunk is remote. `upload` reads the local file and pushes it to the
-remote instance via the `receivers/simple` REST endpoint -- no SSH, no
-shared filesystem, no server-side path needed.
+### Upload a local file into an index
 
-Use cases:
-- Push a threat-intel CSV (STIX export, OSINT feed) into a `threat_intel`
-  index for correlation searches.
-- Ingest sample logs from a new data source to build parsing rules
-  (props/transforms) before onboarding the real feed.
-- Replay captured traffic or pcap summaries into Splunk for analysis.
+> **Safety:** Target is the Splunk host in the active profile. Impact: the file's lines are indexed as events in `--index` (default `main`) and cannot be unindexed without `delete` rights. Preview with `splunkctl search upload --path iocs.csv --index threat_intel --sourcetype csv`, apply by adding `--yes`, and verify with `splunkctl search oneshot 'index=threat_intel source="iocs.csv" | stats count'`.
 
 ```bash
 splunkctl search upload --path iocs.csv --index threat_intel --sourcetype csv --yes
@@ -110,39 +103,33 @@ splunkctl search upload --path sample_paloalto.log --index sandbox --sourcetype 
 splunkctl search upload --path captured.json --index main --host web-prod-03 --yes
 ```
 
-Options: `--index` (default `main`), `--sourcetype` (auto if omitted),
-`--source` (defaults to filename), `--host` (host metadata override).
-Dry-run by default; add `--yes` to execute.
+Expected result: the file is read on your laptop and pushed through the `receivers/simple` REST endpoint; no SSH, shared filesystem, or server-side path is needed. `--sourcetype` is auto-detected when omitted, `--source` defaults to the file name, and `--host` overrides host metadata. Typical uses: a threat-intel CSV (STIX export, OSINT feed) for correlation searches, sample logs from a new vendor to build props and transforms before onboarding the real feed, or captured traffic summaries for analysis.
 
-## Metrics catalog
-
-Explore metrics indexes without writing raw `| mcatalog` SPL. List all
-metric names in an index, optionally filter by prefix, or drill into the
-dimensions available for a specific metric.
-
-List all metric names in a metrics index:
+### Explore a metrics index
 
 ```bash
 splunkctl search metrics --index my_metrics
-```
-
-Filter to metrics starting with `cpu`:
-
-```bash
 splunkctl search metrics --index my_metrics --filter cpu
-```
-
-Show dimensions for a specific metric:
-
-```bash
 splunkctl search metrics --index my_metrics --metric cpu.idle
 ```
 
-The command runs `| mcatalog` under the hood via `oneshot` -- no special
-permissions beyond search access to the metrics index.
+Expected result: all metric names in the index, the names starting with `cpu`, or the dimensions of `cpu.idle`. The command runs `| mcatalog` through `oneshot`, so it needs only search access to the metrics index.
 
-## SPL normalization
+## Troubleshooting
 
-Bare keywords get `search` prepended automatically. Pipe-leading queries
-and generating commands (`makeresults`, `inputlookup`, `tstats`, etc.)
-pass through unchanged.
+- `confirmation_required` (exit 1): the SPL contains a write command. Add `--yes` only if the write is intended.
+- `auth` error: credentials are wrong or the session expired; run `splunkctl doctor`.
+- `permission` error on `upload`: the role lacks the capability to post to `receivers/simple`.
+- `timeout` on `run`: the job is still running; rerun with `--detach` and poll with `search job <SID> --status-only`, or raise the global `--timeout` (seconds).
+- `not_found` on `job` or `cancel`: the sid expired or was typed wrong; list current sids with `splunkctl search jobs`.
+- Zero results on a known-good search: check the time range first, then confirm the indexers are healthy with [Check server health and topology](server.md).
+
+## See also
+
+- [Configure](configure.md)
+- [Manage detection rules](rules.md)
+- [Triage ES notables](es.md)
+- [Manage lookups](lookups.md)
+- [Ingest SIEM results into SOAR](soar-ingest.md)
+- [Check server health and topology](server.md)
+- [Command reference: search](../commands/search.md)

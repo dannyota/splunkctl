@@ -2,37 +2,39 @@
 
 # Manage configuration as code
 
-`state` is the bank change-management workflow: pull a versioned
-snapshot of an instance's detection content, edit it like code, diff
-it against the live instance, then push -- with a savable before→after
-JSON artifact a change ticket can reference as evidence. It unifies
-`rules`/`parsers` import-export and read-only introspection of macros,
-lookups, and dashboards into one pull → edit → diff → push loop.
+When to use: your change process needs an audit trail for detection content: pull a versioned snapshot of an instance, edit it like code, diff it against the live instance, then push with a before-and-after JSON report a change ticket can reference as evidence. `state` unifies the `rules` and `parsers` export and import loops with macros, lookups, dashboards, and the SOAR playbook, list, and asset types in one pull, edit, diff, push loop.
 
-## Why this matters
+## Prerequisites
 
-A SOC running detections-as-code needs an audit trail: what changed,
-who approved it, what it looked like before. `state push --report`
-writes that record automatically -- the same JSON file works as the
-dry-run artifact attached to a change ticket for approval, and the
-`--yes` artifact recorded as what actually happened.
+- A Splunk profile that passes `splunkctl doctor`; the account needs write access to every app you intend to push to.
+- For the `dashboards` type: the optional SDK fork (`python -m pip install git+https://github.com/dannyota/splunk-sdk-python@splunkctl`, see [Manage dashboards](dashboards.md)).
+- For `soar-playbooks`, `soar-lists`, and `soar-assets`: SOAR credentials in the profile (`splunkctl config init --soar` or `SOAR_HOST`). Mixed SIEM and SOAR types in one command work; each type is routed to its own client.
+- The same `--app` scope (or none) on `pull`, `diff`, and `push` when lookups or dashboards are involved (see "Pull a snapshot").
 
-## Commands
+## Synopsis
 
-```bash
-splunkctl state pull --dir ./snapshot                    # everything, all apps
-splunkctl state pull --dir ./snapshot --app my_app        # one app only
-splunkctl state pull --dir ./snapshot --types rules,macros # a subset of types
-
-splunkctl state diff --dir ./snapshot                     # structured drift report
-splunkctl state diff --dir ./snapshot --json | jq .
-
-splunkctl state push --dir ./snapshot                     # dry-run preview
-splunkctl state push --dir ./snapshot --yes \
-    --report change-12345.json                            # apply + evidence
+```text
+splunkctl state pull --dir <DIR> [--app APP] [--types rules,parsers,macros,lookups,dashboards,soar-playbooks,soar-lists,soar-assets]
+splunkctl state diff --dir <DIR> [--app APP] [--types LIST]
+splunkctl state push --dir <DIR> [--app APP] [--types LIST] [--report FILE.json] [--yes]
 ```
 
-## The pulled tree
+`--types` defaults to all eight types. `--app` is accepted by all three commands but ignored for SOAR types, which are not scoped by Splunk app.
+
+## Workflow
+
+### Pull a snapshot
+
+```bash
+splunkctl state pull --dir ./snapshot
+splunkctl state pull --dir ./snapshot --app my_app
+splunkctl state pull --dir ./snapshot --types rules,macros
+splunkctl state pull --dir ./snap --types soar-playbooks
+splunkctl state pull --dir ./snap --types soar-lists,soar-assets
+splunkctl state pull --dir ./snap --types rules,soar-playbooks
+```
+
+Expected result: a tree you can commit:
 
 ```text
 snapshot/
@@ -42,60 +44,58 @@ snapshot/
   macros.yml          # macros.conf stanzas with explicit keys
   lookups/<name>      # one CSV per lookup table file
   dashboards/<name>.xml  # one XML export per dashboard
+  soar-playbooks/
+    index.json                  # id/name/filename map for diff/push
+    local__detect_malware.tgz   # one tgz per playbook (slash -> __)
+  soar-lists/
+    blocklist.json              # JSON array-of-arrays content
+  soar-assets/
+    firewall.json               # asset config (passwords masked)
 ```
 
-`manifest.json` deliberately has **no timestamp** -- only `version`,
-`host`, and `types` (object counts). A wall-clock stamp would make the
-manifest, and anything diffing two pulls, non-deterministic; the
-snapshot's own version-control commit (or filesystem mtime) already
-answers "when". `--types` controls which of the five files/directories
-get written; `pull` owns and overwrites only the types it's asked to
-touch, and is otherwise read-only against the instance.
+`manifest.json` deliberately has no timestamp, only `version`, `host`, and `types` (object counts); a wall-clock stamp would make two pulls non-deterministic to diff, and the commit or file mtime already answers "when". `pull` owns and overwrites only the types it is asked for and is otherwise read-only against the instance.
 
-**Hard constraint: keep `--app` consistent across pull/diff/push.**
-`lookups/<name>` and `dashboards/<name>.xml` are a *flat* layout --
-the file name carries no app, unlike `rules.yml`/`parsers.yml`/
-`macros.yml`, where every doc records its own `app`. If you `pull`
-unscoped (or with one `--app`) and then `diff`/`push` with a
-*different* single `--app`, a lookup or dashboard belonging to another
-app can be misattributed: it shows as `added` even though it already
-exists live, and `push` would try to *create* it under the wrong app.
-Always use the same `--app` scope across pull, diff, and push (or
-none, for all three) when lookups or dashboards are in play.
+Keep `--app` consistent across pull, diff, and push. `lookups/<name>` and `dashboards/<name>.xml` are a flat layout where the file name carries no app, unlike `rules.yml`, `parsers.yml`, and `macros.yml`, where every document records its own `app`. If you pull unscoped (or with one `--app`) and then diff or push with a different single `--app`, a lookup or dashboard from another app can be misattributed: it shows as `added` even though it exists live, and `push` would try to create it under the wrong app.
 
-## Object type capability matrix
+What each type supports:
 
 | Type | Pull (read) | Diff | Push (apply) |
 |---|---|---|---|
 | `rules` | `rules_io` export | field-level | `rules_io` import |
 | `parsers` | `parsers_io` export (explicit keys) | key-level | `parsers_io` import |
 | `macros` | explicit-key conf read | key-level | `conf_ops.set_keys` |
-| `lookups` | CSV download | content hash | CSV upload/update |
-| `dashboards` | XML export | content hash | **not supported** -- no import path |
-| `soar-playbooks` | tgz export | content hash | tgz import |
-| `soar-lists` | JSON content export | content hash | create/full-replace |
-| `soar-assets` | JSON config export | field-level | fetch-merge-post |
+| `lookups` | CSV download | content hash | CSV upload or update |
+| `dashboards` | XML export | content hash | not supported |
+| `soar-playbooks` | tgz export | content hash (SHA-256 of the tgz bytes) | tgz import via `POST /rest/import_playbook` |
+| `soar-lists` | JSON content export | content hash | create or full replace |
+| `soar-assets` | JSON config export (password fields masked as `****`) | field-level, masked fields ignored | fetch-merge-post, masked values skipped so server secrets survive |
 
-Every read/diff/apply path reuses the existing per-type machinery
-(`rules_io`, `parsers_io`, `conf_ops`, `client.upload_lookup`) -- `state`
-is pure orchestration, never a second implementation of serialization
-or apply logic.
+Every path reuses the per-type machinery (`rules_io`, `parsers_io`, `conf_ops`, `client.upload_lookup`, the SOAR commands); `state` is orchestration only, never a second implementation.
 
-## Drift classification
-
-`state diff` reports **every** object in a type, not just deltas:
-
-- `added` -- on disk, not on the instance (`push` would create it)
-- `removed` -- on the instance, not on disk (`push` does **not**
-  delete it -- see below)
-- `modified` -- both exist and differ; rules/parsers/macros carry a
-  structured `fields: [{field, old, new}]` diff, lookups/dashboards
-  (blob-shaped) carry a `sha256` before/after instead
-- `unchanged` -- both exist and match
+### Edit the snapshot like code
 
 ```bash
-splunkctl state diff --dir ./snapshot --types rules --json
+git init ./snapshot && git -C ./snapshot add . && git -C ./snapshot commit -m "Baseline from prod"
+$EDITOR ./snapshot/rules.yml
+git -C ./snapshot commit -am "Raise brute force threshold to 30"
 ```
+
+Expected result: every change is a reviewable commit. The YAML shapes are the ones `rules export` and `parsers export` write (see [Manage detection rules](rules.md) and [Manage source types and extractions](parsers.md)).
+
+### Diff against the live instance
+
+```bash
+splunkctl state diff --dir ./snapshot
+splunkctl state diff --dir ./snapshot --types rules --json
+splunkctl state diff --dir ./snap --types soar-lists
+```
+
+Expected result: every object in each type, not just deltas, classified as:
+
+- `added`: on disk, not on the instance (`push` would create it)
+- `removed`: on the instance, not on disk (`push` does not delete it)
+- `modified`: both exist and differ; rules, parsers, macros, and SOAR assets carry a structured `fields: [{field, old, new}]` diff, while lookups, dashboards, playbooks, and lists (blob-shaped) carry a `sha256` before and after instead
+- `unchanged`: both exist and match
 
 ```json
 [
@@ -108,69 +108,30 @@ splunkctl state diff --dir ./snapshot --types rules --json
 ]
 ```
 
-`diff` always exits 0 -- it is a report, not a gate.
+`diff` always exits 0; it is a report, not a gate.
 
-## push never deletes
+Dashboard drift is a raw-XML content hash, so `diff` can show a few dashboards as `modified` with zero real edits: Splunk's export is not always byte-identical across requests, and two apps sharing a dashboard name collide in the flat `dashboards/<name>.xml` layout. This is cosmetic, because dashboards are never pushed, but do not treat a non-empty dashboard diff as evidence of a real change without checking.
 
-`push` only ever creates or updates an object that is represented on
-disk. An instance object with no on-disk counterpart is classified
-`removed` by the underlying diff, surfaced as an informational note
-(`note: rules: 2 object(s) on the instance only -- not deleted (push
-never deletes)`), and never touched -- there is no delete path in
-`state push`, by design. To actually remove something, use the
-type-specific `delete` command (`rules delete`, `lookups delete`, ...)
-directly, with its own guard.
-
-## Dashboards: pull + diff only
-
-Dashboards have no import path in the SDK fork or the CLI yet. `state
-pull`/`state diff` work normally for dashboards; `state push` reports
-drifted dashboards as apply-unsupported and skips them without
-erroring:
-
-```text
-note: dashboards: 1 drifted object(s), apply not supported (export-only, no import path)
-```
-
-If `dashboards` is the only `--types` value and nothing else drifted,
-`push` still runs cleanly (exit 0) and, with `--report`, still writes
-an artifact (`changes: []`).
-
-**Diff caveat.** `dashboards` drift is a raw-XML content hash, so
-`state diff` can show a handful of dashboards as `modified` with zero
-real edits -- Splunk's export is not always byte-identical across
-requests, and (more commonly) two apps sharing a dashboard name
-collide in the flat `dashboards/<name>.xml` layout (see the `--app`
-constraint above). This is cosmetic -- dashboards are never pushed --
-but don't treat a non-empty dashboard diff as evidence of a real
-change without checking it.
-
-## The change-ticket workflow
+### Preview the push and save the plan
 
 ```bash
-# 1. Snapshot the instance
-splunkctl state pull --dir ./snapshot --types rules
-
-# 2. Edit rules.yml like code -- change a search, a schedule, a threshold
-
-# 3. See exactly what changed
-splunkctl state diff --dir ./snapshot --types rules
-
-# 4. Preview the push and save the plan for ticket approval
-splunkctl state push --dir ./snapshot --types rules \
-    --report change-12345-plan.json
-
-# 5. Once approved, apply it and save the record
-splunkctl state push --dir ./snapshot --types rules --yes \
-    --report change-12345-applied.json
+splunkctl state push --dir ./snapshot
+splunkctl state push --dir ./snapshot --types rules --report change-12345-plan.json
 ```
 
-`--report` writes `{host, types, changes, applied}` on **both** runs:
-`applied: false` for the dry-run plan (what would happen -- attach
-this to the ticket for approval), `applied: true` for the `--yes` run
-(what actually happened -- the change record). `changes` is the same
-shape as `state diff`'s modified/added rows, plus `before`/`after`
-maps built from the same field diff:
+Expected result: exactly what `--yes` would create or update, nothing applied. `--report` writes `{host, types, changes, applied}` with `applied: false`; attach it to the change ticket for approval.
+
+### Apply the approved push
+
+> **Safety:** Target is the Splunk host (and, for SOAR types, the SOAR host) in the active profile. Impact: every `added` object is created and every `modified` object is updated on the live instance; `removed` objects are never deleted. Preview with `splunkctl state push --dir ./snapshot --types rules --report change-12345-plan.json`, apply with `splunkctl state push --dir ./snapshot --types rules --yes --report change-12345-applied.json`, and verify with `splunkctl state diff --dir ./snapshot --types rules` (expect only `unchanged`).
+
+```bash
+splunkctl state push --dir ./snapshot --types rules --yes --report change-12345-applied.json
+splunkctl state push --dir ./snap --types soar-assets --yes
+splunkctl state diff --dir ./snapshot --types rules
+```
+
+Expected result: the report is written again with `applied: true` as the change record. `changes` has the same shape as `diff`'s modified and added rows plus `before` and `after` maps built from the field diff:
 
 ```json
 {
@@ -189,84 +150,50 @@ maps built from the same field diff:
 }
 ```
 
-`changes` never includes `removed` or `unchanged` entries -- only what
-was (or would be) actually created/updated. `removed` drift and
-dashboard apply-unsupported drift are surfaced as console notes, not
-as report entries, since neither is ever applied.
+`changes` never includes `removed` or `unchanged` entries, only what was (or would be) created or updated. `removed` drift and dashboard apply-unsupported drift are console notes, not report entries, because neither is ever applied.
 
-## SOAR types
+`push` never deletes. An instance object with no on-disk counterpart is classified `removed`, surfaced as a note (`note: rules: 2 object(s) on the instance only -- not deleted (push never deletes)`), and never touched; there is no delete path in `state push` by design. To remove something, use the type-specific `delete` command (`rules delete`, `lookups delete`, and so on) with its own guard.
 
-Three SOAR types extend the state workflow to Splunk SOAR: playbooks,
-custom lists, and assets. They require a configured SOAR profile
-(`splunkctl config init --soar` or `SOAR_HOST` env var). If SOAR types
-are requested without a configured SOAR host, the CLI exits with a
-clear error. Mixed SIEM + SOAR types in a single command work -- the
-orchestrator creates each client lazily and routes each type to the
-correct backend.
-
-```bash
-# SOAR-only pulls
-splunkctl state pull --dir ./snap --types soar-playbooks
-splunkctl state pull --dir ./snap --types soar-lists,soar-assets
-
-# Mixed SIEM + SOAR
-splunkctl state pull --dir ./snap --types rules,soar-playbooks
-
-# Diff and push work identically
-splunkctl state diff --dir ./snap --types soar-lists
-splunkctl state push --dir ./snap --types soar-assets --yes
-```
-
-### The pulled tree (SOAR types)
+Dashboards are pull and diff only. `state push` has no apply path for them: drifted dashboards are reported as apply-unsupported and skipped without erroring:
 
 ```text
-snapshot/
-  soar-playbooks/
-    index.json                  # id/name/filename map for diff/push
-    local__detect_malware.tgz   # one tgz per playbook (slash -> __)
-  soar-lists/
-    blocklist.json              # JSON array-of-arrays content
-  soar-assets/
-    firewall.json               # asset config (passwords masked)
+note: dashboards: 1 drifted object(s), apply not supported (export-only, no import path)
 ```
 
-### soar-playbooks
+If `dashboards` is the only `--types` value and nothing else drifted, `push` still exits 0 and, with `--report`, still writes an artifact with `changes: []`. To change a dashboard, use `splunkctl dashboards update` directly (see [Manage dashboards](dashboards.md)).
 
-Playbooks are opaque tgz archives. Pull exports each via the SOAR REST
-API; diff compares content hashes (SHA-256 of the tgz bytes); push
-imports via `POST /rest/import_playbook` with the tgz base64-encoded.
-Filenames replace `/` with `__` (SOAR playbook names are scoped as
-`<dir>/<module>`).
+### Run the change-ticket loop end to end
 
-### soar-lists
+> **Safety:** Target is the Splunk host in the active profile. Impact: step 5 creates and updates every drifted rule on the instance. Preview with step 4 and attach its report to the ticket, apply with step 5 once approved, and verify with `splunkctl state diff --dir ./snapshot --types rules` (expect only `unchanged`).
 
-Custom lists (decided lists) are JSON arrays-of-arrays. Pull downloads
-the content; diff compares content hashes; push creates new lists or
-full-replaces existing ones via the SOAR REST API.
+```bash
+splunkctl state pull --dir ./snapshot --types rules
+$EDITOR ./snapshot/rules.yml
+splunkctl state diff --dir ./snapshot --types rules
+splunkctl state push --dir ./snapshot --types rules --report change-12345-plan.json
+splunkctl state push --dir ./snapshot --types rules --yes --report change-12345-applied.json
+```
 
-### soar-assets
+Expected result: a plan artifact for approval and an applied artifact as the record, from the same file; the same JSON works as the dry-run attachment and as the evidence of what actually happened.
 
-Assets are JSON config blobs. Pull exports each asset's configuration
-with password-type fields masked as `****` so secrets never land on
-disk. Diff does field-level comparison, ignoring masked fields to avoid
-false-positive drift. Push uses fetch-merge-post semantics (same as
-`soar assets update`): masked values are skipped during merge so
-existing secrets are preserved on the server.
+## Troubleshooting
 
-**Note on `--app`:** the `--app` flag is accepted by all commands for
-signature consistency but is ignored for SOAR types -- SOAR objects are
-not scoped by Splunk app.
+- Usage error "No SOAR host configured" when a SOAR type is requested: run `splunkctl config init --soar` or set `SOAR_HOST`.
+- `ImportError` or missing `Dashboard` classes on `pull --types dashboards`: install the SDK fork listed under Prerequisites, or leave `dashboards` out of `--types`.
+- A lookup or dashboard shows `added` although it exists: `--app` differs between `pull` and `diff` or `push`; rerun all three with the same scope.
+- `permission` on `push`: the account cannot write to the app that owns the object; narrow the run with `--types` or `--app` and fix the role.
+- `push` printed "not deleted (push never deletes)": expected; delete with the type's own `delete` command if that is intended.
+- Dashboards appear `modified` on every `diff`: cosmetic hash drift (see "Diff against the live instance"); verify with `splunkctl dashboards get <NAME>` before acting.
 
-## Implementation notes
+## See also
 
-`splunkctl/commands/state.py` is pure CLI orchestration (guard
-integration, preview text, `--report`/`--types`/`--app` handling).
-Every per-type read/diff/apply call is delegated to
-`splunkctl/commands/state_io.py` and its topic siblings
-(`state_io_confs.py` for parsers/macros, `state_io_blobs.py` for
-lookups/dashboards, `state_io_soar.py` for SOAR playbooks/lists,
-`state_io_soar_assets.py` for SOAR assets, `state_types.py` for the
-shared TypedDicts and drift-classification helpers) -- split across
-files to stay under the 500-line budget, but `state_io` re-exports
-everything so `state_io.<name>` is the one import surface callers and
-tests use.
+- [Manage detection rules](rules.md)
+- [Manage source types and extractions](parsers.md)
+- [Manage macros, eventtypes, tags](knowledge.md)
+- [Manage lookups](lookups.md)
+- [Manage dashboards](dashboards.md)
+- [Run playbooks](soar-playbooks.md)
+- [Maintain custom lists](soar-lists.md)
+- [Configure assets and monitor ingestion](soar-assets.md)
+- [Audit changes and attest RBAC](audit.md)
+- [Command reference: state](../commands/state.md)

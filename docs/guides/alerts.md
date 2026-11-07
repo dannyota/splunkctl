@@ -2,53 +2,58 @@
 
 # Review fired alerts
 
-Fired alerts are the SOC's incoming work queue. During an incident, you
-need to see what triggered, when, and at what severity. During planned
-maintenance, you need to suppress noisy rules before they flood the
-on-call channel. After the fact, auditors ask which alerts fired and
-which were suppressed. These commands cover all three workflows.
+When to use: an incident is under way and you need to see which rules fired, when, and at what severity; a maintenance window is coming and noisy rules must be throttled before they flood the on-call channel; or an auditor asks which alerts fired and which were suppressed.
 
-## Commands
+## Prerequisites
 
-```bash
-splunkctl alerts list                         # list fired alerts
-splunkctl alerts get 'Alert Name'             # details for one alert group
-splunkctl alerts actions                      # list alert action types
-splunkctl alerts suppress 'Alert Name' \
-    --duration 7200 --yes                     # suppress for 2 hours
+- A profile that passes `splunkctl doctor` (see [Configure](configure.md)).
+- Read access to fired alerts for `list`, `get`, and `actions`.
+- Write access to the saved search that owns the rule for `suppress` and `unsuppress`.
+
+## Synopsis
+
+```text
+splunkctl alerts list [--filter SUBSTRING] [--limit N] [--offset N]
+splunkctl alerts get <NAME>
+splunkctl alerts actions
+splunkctl alerts suppress <NAME> [--duration SECONDS] [--yes]
+splunkctl alerts unsuppress <NAME> [--yes]
 ```
 
-## Triage during an incident
+`NAME` is the rule's saved search name, matched exactly and case-sensitively.
 
-List all currently fired alerts to see what the environment is telling you.
-Output includes name, trigger count, triggered time, and severity.
+## Workflow
+
+### Triage during an incident
 
 ```bash
 splunkctl alerts list
+splunkctl alerts list --filter brute
 splunkctl alerts get 'Brute Force Login Attempts'
 ```
 
-## Check alert action types
+Expected result: one row per firing with `rule`, `triggered`, `severity`, `sid`, and `actions`. `--filter` matches the rule name; `--limit` and `--offset` page the firing rows client side, so a row is one firing, not one rule. `get` prints every firing of one rule and the firing count.
 
-See which action types (email, webhook, script, etc.) are configured on
-the instance. Useful before creating or modifying saved searches that
-fire alerts.
+### Check alert action types
 
 ```bash
 splunkctl alerts actions
 ```
 
-## Suppress during a maintenance window
+Expected result: the action types (email, webhook, script, and app-provided actions) configured on the instance. Check this before creating or changing saved searches that fire alerts.
 
-Suppression is guarded -- dry-run by default. The first command below
-previews the change; the second applies it. Duration is in seconds.
+### Suppress during a maintenance window
+
+> **Safety:** Target is the Splunk host in the active profile. Impact: `alert.suppress=1` and `alert.suppress.period=<SECONDS>s` are written to the rule's saved search, so repeat firings are throttled for that window. Preview with `splunkctl alerts suppress 'Brute Force Login Attempts' --duration 7200`, apply by adding `--yes`, and verify with `splunkctl conf get savedsearches 'Brute Force Login Attempts' --key alert.suppress`.
 
 ```bash
 splunkctl alerts suppress 'Brute Force Login Attempts' --duration 7200
 splunkctl alerts suppress 'Brute Force Login Attempts' --duration 7200 --yes
 ```
 
-Suppress multiple alerts in a loop during a planned outage:
+Expected result: the preview prints `[DRY RUN] Throttle alerts for rule (profile: NAME @ HOST:8089)` and the settings it will write; the apply prints `Throttled 'Brute Force Login Attempts' for 7200s.`. `--duration` is in seconds and defaults to 3600. Splunk's fired-alerts endpoint cannot be edited; throttling is a property of the underlying saved search.
+
+Suppress several rules during a planned outage:
 
 ```bash
 for rule in 'Brute Force Login Attempts' 'Failed VPN Auth' 'DNS Exfil'; do
@@ -56,26 +61,38 @@ for rule in 'Brute Force Login Attempts' 'Failed VPN Auth' 'DNS Exfil'; do
 done
 ```
 
-## JSON output for scripts and agents
+### Remove suppression after the window
 
-Pass `--json` to get structured output suitable for piping into `jq`,
-feeding into an LLM agent, or storing as audit evidence.
+> **Safety:** Target is the Splunk host in the active profile. Impact: `alert.suppress=0` is written to the rule's saved search and it alerts normally again. Preview with `splunkctl alerts unsuppress 'Brute Force Login Attempts'`, apply by adding `--yes`, and verify with `splunkctl conf get savedsearches 'Brute Force Login Attempts' --key alert.suppress`.
 
 ```bash
-splunkctl alerts list --json                          # all fired alerts
-splunkctl alerts list --json | jq '.[] | select(.severity >= 6)'
+splunkctl alerts unsuppress 'Brute Force Login Attempts'
+splunkctl alerts unsuppress 'Brute Force Login Attempts' --yes
+```
+
+Expected result: `Removed throttling from 'Brute Force Login Attempts'.`. The throttle setting stays on the saved search until you remove it; it does not expire on its own.
+
+### Produce JSON for scripts and agents
+
+```bash
+splunkctl alerts list --json
+splunkctl alerts list --json | jq '.[] | select((.severity | tonumber) >= 5)'
 splunkctl alerts get 'Brute Force Login Attempts' --json > alert_detail.json
 ```
 
-An LLM agent can consume the JSON directly to decide next steps --
-for example, correlating fired alerts with a change window calendar
-or auto-filing tickets for high-severity triggers.
+Expected result: a JSON array of firing rows, suitable for `jq`, an agent, or audit evidence. `--format table|json|csv|jsonl` picks another output format. An agent can consume the JSON directly to correlate fired alerts with a change calendar or file tickets for high-severity triggers.
 
-## Options
+## Troubleshooting
 
-| Flag | Applies to | Description |
-|------|-----------|-------------|
-| `--duration` | `suppress` | Suppression length in seconds (default 3600) |
-| `--json` | all | Force JSON output regardless of TTY |
-| `--format` | all | Output format: `table`, `json`, `csv`, `jsonl` |
-| `--yes` | `suppress` | Apply the mutation (skip dry-run preview) |
+- `not_found` from `alerts get`: the name must match the rule exactly; run `splunkctl alerts list --filter <text>` to find the spelling.
+- `not_found` from `suppress` or `unsuppress`: no saved search with that name is visible to your account; check `splunkctl rules list --filter <text>`.
+- `permission` from `suppress` or `unsuppress`: your role cannot edit the saved search in its owning app.
+- `No fired alerts.`: nothing has fired within Splunk's fired-alert retention; this is not an error.
+- A rule keeps firing after `suppress --yes`: throttling suppresses repeat firings for the period after a trigger; it does not disable the search. Disable the rule itself with the commands in [Manage detection rules](rules.md).
+
+## See also
+
+- [Manage detection rules](rules.md)
+- [Triage ES notables](es.md)
+- [Edit any conf file](conf.md)
+- [Command reference: alerts](../commands/alerts.md)

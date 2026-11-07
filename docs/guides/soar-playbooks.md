@@ -2,268 +2,170 @@
 
 # Run playbooks
 
-Playbook lifecycle and playbooks-as-code workflow on Splunk SOAR via the
-REST API. Export, edit in git, import back -- the first programmatic
-playbook management loop.
+When to use: you want to run a playbook against a container and watch it finish, enable or disable playbooks and set their triggers, or keep playbooks as code: export the bundle, edit the Python in git, and import it back.
 
-## List
+## Prerequisites
 
-```bash
-splunkctl soar playbooks list                     # all playbooks
-splunkctl soar playbooks list --active            # only active
-splunkctl soar playbooks list --label events      # by label
-splunkctl soar playbooks list --repo local        # by SCM repo
-splunkctl soar playbooks list --json
+- SOAR credentials in the active profile and a passing `splunkctl soar test` (see [Set up and check SOAR](soar.md)).
+- Username and password credentials for `delete`; SOAR 8.5 exposes no working REST deletion, so the CLI logs in through the Web UI, which refuses automation tokens.
+- A container id for `run` (`splunkctl soar containers list`).
+- For `import`: a playbook bundle, either a `.tgz` or a directory with `<name>.json` (metadata, COA graph, labels, trigger config) and `<name>.py` (Python code with `@phantom.playbook_block()` functions).
+
+## Synopsis
+
+```text
+splunkctl soar playbooks list [--active] [--label LABEL] [--repo NAME]
+splunkctl soar playbooks get <PLAYBOOK_ID>
+splunkctl soar playbooks enable <PLAYBOOK_ID> [--yes]
+splunkctl soar playbooks disable <PLAYBOOK_ID> [--cancel-runs] [--yes]
+splunkctl soar playbooks trigger <PLAYBOOK_ID> --on <artifact_created|container_resolved> [--yes]
+splunkctl soar playbooks run <PLAYBOOK_ID_OR_NAME> --container <CONTAINER_ID> [--scope all|new] [--input KEY=VALUE]... [--wait] [--timeout SECONDS] [--yes]
+splunkctl soar playbooks runs list [--container CONTAINER_ID] [--status pending|running|success|failed] [--limit N]
+splunkctl soar playbooks runs get <RUN_ID> [--blocks]
+splunkctl soar playbooks runs cancel <RUN_ID> [--yes]
+splunkctl soar playbooks export <PLAYBOOK_ID_OR_NAME> [--out DIR] [--unpack]
+splunkctl soar playbooks import <PATH.tgz | DIR/> [--scm NAME] [--force|--no-force] [--yes]
+splunkctl soar playbooks delete <PLAYBOOK_ID_OR_NAME>... [--yes]
+splunkctl soar playbooks repos
+splunkctl soar playbooks sync <REPO_ID> [--yes]
 ```
 
-Filters compose (AND). `--active` uses the SOAR boolean filter
-(`_filter_active=True`). `--label` matches against the playbook's
-`labels[]` array. `--repo` filters by the SCM repo name.
+## Workflow
 
-## Get
+### List and inspect playbooks
 
 ```bash
-splunkctl soar playbooks get 10                   # by numeric ID
+splunkctl soar playbooks list
+splunkctl soar playbooks list --active
+splunkctl soar playbooks list --label events
+splunkctl soar playbooks list --repo local
 splunkctl soar playbooks get 10 --json
 ```
 
-Returns the full playbook object including `coa` graph, labels, trigger
-configuration, and `draft_mode` status.
+Expected result: filters combine with AND. `--active` uses the SOAR boolean filter (`_filter_active=True`), `--label` matches the playbook's `labels[]` array, `--repo` filters by SCM repo name. `get` returns the full object including the `coa` graph, labels, trigger configuration, and `draft_mode`.
 
-## Enable / Disable
+### Run a playbook against a container
+
+> **Safety:** Target is the SOAR host in the active profile. Impact: the playbook's blocks execute against the container's artifacts, including any containment actions it contains. Preview with `splunkctl soar playbooks run my_playbook --container 42` and read the POST body, apply by adding `--yes`, and verify with `splunkctl soar playbooks runs list --container 42`.
+
+```bash
+splunkctl soar playbooks run my_playbook --container 42 --yes
+splunkctl soar playbooks run 7 --container 42 --yes
+splunkctl soar playbooks run my_playbook --container 42 \
+  --scope new --input ip=1.2.3.4 --input domain=evil.com --yes
+splunkctl soar playbooks run my_playbook --container 42 \
+  --wait --timeout 120 --yes
+```
+
+Expected result: a `POST /rest/playbook_run` with `{playbook_id, container_id, scope, run: true, inputs?}` and the run id. A name is resolved through `GET /rest/playbook?_filter_name=...`. `--scope all` (default) runs against every artifact in the container; `new` limits to artifacts not yet processed. `--wait` polls `GET /rest/playbook_run/<id>` until the status reaches `success`, `failed`, or `cancelled` (default timeout 300 seconds); when the `message` field parses as JSON it is pretty-printed. A bogus playbook id returns 404 `"Playbook \"N\" not found"`; the server validates the id before creating a run.
+
+### Monitor and cancel runs
+
+> **Safety:** Target is the SOAR host in the active profile. Impact: `runs cancel` stops an in-progress run part way through its blocks. Preview with `splunkctl soar playbooks runs cancel 101`, apply by adding `--yes`, and verify with `splunkctl soar playbooks runs get 101`.
+
+```bash
+splunkctl soar playbooks runs list
+splunkctl soar playbooks runs list --container 42 --status failed
+splunkctl soar playbooks runs get 101
+splunkctl soar playbooks runs get 101 --blocks
+splunkctl soar playbooks runs cancel 101 --yes
+```
+
+Expected result: `runs get` shows the run detail; `--blocks` adds per-block status and output from `/rest/playbook_run/<id>/block_results`; `cancel` posts `{cancel: true}` to the run.
+
+### Enable, disable, or set the trigger
+
+> **Safety:** Target is the SOAR host in the active profile. Impact: `enable` makes the playbook fire on its trigger for every matching container; `disable --cancel-runs` also stops running instances; `trigger` changes when it fires. Preview with `splunkctl soar playbooks enable 10`, apply by adding `--yes`, and verify with `splunkctl soar playbooks get 10 --json`.
 
 ```bash
 splunkctl soar playbooks enable 10 --yes
 splunkctl soar playbooks disable 10 --yes
 splunkctl soar playbooks disable 10 --cancel-runs --yes
-```
-
-Enable sets `active: true`; disable sets `active: false`. Pass
-`--cancel-runs` to stop any running instances when disabling.
-
-**draft_mode caveat**: playbooks in `draft_mode: true` cannot be
-activated. The CLI surfaces this with a hint if the server rejects the
-enable. Re-import the playbook without `draft_mode` or finalize it in
-the Visual Playbook Editor first.
-
-Guarded: dry-run by default, `--yes` to apply.
-
-## Trigger
-
-```bash
 splunkctl soar playbooks trigger 10 --on artifact_created --yes
 splunkctl soar playbooks trigger 10 --on container_resolved --yes
 ```
 
-Sets the automation trigger type. `artifact_created` triggers when an
-artifact is added; `container_resolved` triggers on resolution. The
-`label` trigger seen in playbook metadata is import-only, the REST
-endpoint rejects setting it ("playbook_trigger is set to an invalid
-enum"), so it is not an accepted `--on` value.
+Expected result: `enable` sets `active: true`, `disable` sets `active: false`. Playbooks in `draft_mode: true` cannot be activated; the CLI adds a hint when the server rejects the enable. Re-import without `draft_mode` or finalize it in the Visual Playbook Editor first. `artifact_created` fires when an artifact is added, `container_resolved` on resolution. The `label` trigger seen in playbook metadata is import-only; the REST endpoint rejects setting it ("playbook_trigger is set to an invalid enum"), so it is not an accepted `--on` value.
 
-Guarded: dry-run by default, `--yes` to apply.
-
-## Export
+### Export a playbook
 
 ```bash
-splunkctl soar playbooks export 10 > playbook.tgz       # raw tgz
-splunkctl soar playbooks export 10 --out ./exports/      # write tgz file
-splunkctl soar playbooks export 10 --unpack --out ./pb/  # extract json+py
-splunkctl soar playbooks export my_playbook              # by name
-```
-
-Downloads the playbook bundle via `GET /rest/playbook/<id>/export`.
-Without `--unpack`, writes raw tgz (to stdout or `--out`). With
-`--unpack`, extracts the `<name>.json` metadata and `<name>.py` code
-into the output directory.
-
-Non-numeric identifiers trigger a name lookup first, exact scoped
-name (`<dir>/<module>`), then the bare module name as a suffix match
-(`export my_playbook` finds `my-repo-dir/my_playbook`). Ambiguous or
-missing names return an error.
-
-## Delete
-
-```bash
-splunkctl soar playbooks delete 10 --yes                 # by id
-splunkctl soar playbooks delete local/old_pb --yes       # by exact name
-splunkctl soar playbooks delete 10 11 12 --yes           # bulk
-```
-
-SOAR 8.5 exposes no working REST deletion (`DELETE /rest/playbook/<id>`
-returns 405, and a POST with `{"delete": true}` reports success without
-removing anything), so this command uses the same route the browser
-does: a Django Web UI login (CSRF cookie) followed by `POST /playbooks`
-with `{ids, delete: true}`. It therefore **requires username/password
-credentials**, an automation token alone is refused with an `auth`
-error.
-
-Deletion is irreversible, so names never suffix-match: pass the exact
-scoped name (`<dir>/<module>`) or the numeric id. A bare module name
-that only matches as a suffix returns a did-you-mean error carrying the
-full name and id. Name→id resolution happens at apply time, the
-dry-run preview lists the identifiers as typed and needs no
-connectivity.
-
-Guarded: dry-run by default, `--yes` to apply. Prints the server's
-per-playbook change/error report and exits 1 if any deletion failed.
-
-## Import
-
-```bash
-splunkctl soar playbooks import ./my_playbook/ --yes     # from directory
-splunkctl soar playbooks import ./my_playbook.tgz --yes  # from tgz
-splunkctl soar playbooks import ./pb/ --scm my_repo --yes
-splunkctl soar playbooks import ./pb/ --no-force --yes   # no overwrite
-```
-
-Imports a playbook bundle via `POST /rest/import_playbook`. Accepts a
-directory (packed into tgz on the fly) or an existing tgz file. The
-payload is base64-encoded and posted with `{playbook, scm, force}`.
-
-- `--scm` (default: `local`) sets the target SCM repository.
-- `--force/--no-force` (default: force) controls overwrite behavior.
-
-Guarded: dry-run by default, `--yes` to apply.
-
-## Playbooks-as-Code Workflow
-
-The export/import pair enables a full as-code loop:
-
-```bash
-# 1. Export the playbook
+splunkctl soar playbooks export 10 > playbook.tgz
+splunkctl soar playbooks export 10 --out ./exports/
+splunkctl soar playbooks export 10 --unpack --out ./pb/
 splunkctl soar playbooks export my_playbook --unpack --out ./pb/
+```
 
-# 2. Edit the Python code (between Custom Code markers)
+Expected result: the bundle from `GET /rest/playbook/<id>/export`, written raw to stdout or as a tgz under `--out`; `--unpack` extracts `<name>.json` and `<name>.py` into the directory. A non-numeric identifier is looked up by exact scoped name (`<dir>/<module>`) first, then as a suffix match on the bare module name (`export my_playbook` finds `my-repo-dir/my_playbook`). Ambiguous or missing names return an error.
+
+### Import a playbook
+
+> **Safety:** Target is the SOAR host in the active profile. Impact: the playbook is created in `--scm` (default `local`) or, with the default `--force`, overwrites the existing one of the same name. Preview with `splunkctl soar playbooks import ./my_playbook/`, apply by adding `--yes`, and verify with `splunkctl soar playbooks list --json | jq '.[] | select(.name=="my_playbook")'`.
+
+```bash
+splunkctl soar playbooks import ./my_playbook/ --yes
+splunkctl soar playbooks import ./my_playbook.tgz --yes
+splunkctl soar playbooks import ./pb/ --scm my_repo --yes
+splunkctl soar playbooks import ./pb/ --no-force --yes
+```
+
+Expected result: a directory is packed into a tgz on the fly; the payload is base64-encoded and posted to `/rest/import_playbook` as `{playbook, scm, force}`. `--no-force` refuses to overwrite.
+
+### Keep playbooks as code
+
+> **Safety:** Target is the SOAR host in the active profile. Impact: step 5 overwrites the playbook on the instance with the edited bundle. Preview with step 4 (no `--yes`), apply with step 5, and verify with step 6.
+
+```bash
+splunkctl soar playbooks export my_playbook --unpack --out ./pb/
 $EDITOR ./pb/my_playbook/my_playbook.py
-
-# 3. Commit to git
-cd ./pb && git add . && git commit -m "Update playbook logic"
-
-# 4. Re-import
+cd ./pb && git add . && git commit -m "Update playbook logic" && cd ..
+splunkctl soar playbooks import ./pb/my_playbook/
 splunkctl soar playbooks import ./pb/my_playbook/ --yes
-
-# 5. Verify
 splunkctl soar playbooks list --json | jq '.[] | select(.name=="my_playbook")'
 ```
 
-A playbook bundle consists of a `<name>.json` (metadata, COA graph,
-labels, trigger config) paired with a `<name>.py` (Python code with
-`@phantom.playbook_block()` functions). Hand-edits to the Python code
-should stay between the `## Custom Code Start` / `## Custom Code End`
-markers.
+Expected result: the export and import pair gives a full as-code loop. Keep hand edits to the Python between the `## Custom Code Start` and `## Custom Code End` markers so the Visual Playbook Editor keeps them. [Manage configuration as code](state.md) pulls and pushes every playbook as the `soar-playbooks` type.
 
-## SCM Repos
+### Delete playbooks
+
+> **Safety:** Target is the SOAR host in the active profile. Impact: the playbooks are removed irreversibly. Preview with `splunkctl soar playbooks delete local/old_pb` (the preview lists the identifiers as typed and needs no connectivity), apply by adding `--yes`, and verify with `splunkctl soar playbooks list`.
 
 ```bash
-splunkctl soar playbooks repos                    # list all repos
-splunkctl soar playbooks repos --json
+splunkctl soar playbooks export 10 --out ./backup/
+splunkctl soar playbooks delete 10 --yes
+splunkctl soar playbooks delete local/old_pb --yes
+splunkctl soar playbooks delete 10 11 12 --yes
 ```
 
-Lists SCM repositories via `GET /rest/scm`. The lab ships with one
-`local` repo (`file:////opt/phantom/scm/git/local`).
+Expected result: `DELETE /rest/playbook/<id>` returns 405 and a POST with `{"delete": true}` reports success without removing anything on SOAR 8.5, so the command uses the browser's route: a Django Web UI login (CSRF cookie) followed by `POST /playbooks` with `{ids, delete: true}`. Because deletion is irreversible, names never suffix-match: pass the exact scoped name (`<dir>/<module>`) or the numeric id; a bare module name that only matches as a suffix returns a did-you-mean error carrying the full name and id. Name resolution happens at apply time. The command prints the server's per-playbook change and error report and exits 1 if any deletion failed.
 
-## Sync
+### List and sync SCM repositories
+
+> **Safety:** Target is the SOAR host in the active profile. Impact: `sync` pulls and force-syncs the repo from its remote, replacing playbooks on the instance with the remote's versions. Preview with `splunkctl soar playbooks sync 1`, apply by adding `--yes`, and verify with `splunkctl soar playbooks list --repo <NAME>`.
 
 ```bash
-splunkctl soar playbooks sync 1 --yes             # sync repo id 1
+splunkctl soar playbooks repos
+splunkctl soar playbooks sync 1 --yes
 ```
 
-Triggers a pull + force sync on an external SCM repo via
-`POST /rest/scm/<id>`. Designed for HTTPS/SSH repos that have a real
-remote to pull from.
+Expected result: `repos` lists SCM repositories from `GET /rest/scm` (the lab ships one `local` repo at `file:////opt/phantom/scm/git/local`). `sync` posts to `/rest/scm/<id>` and is meant for HTTPS or SSH repos with a real remote. The built-in local repo has no remote, so the server rejects the sync with HTTP 400 "Remote named 'origin' didn't exist" on SOAR 8.5 (older versions return 500 "Operation not supported"); that is expected. Use `import` for local deployment.
 
-**Local repo caveat**: the built-in local repo (`file://` URI) has no
-remote to pull from, so the server rejects the sync, HTTP 400 "Remote
-named 'origin' didn't exist" on SOAR 8.5 (older versions return 500
-"Operation not supported"). This is expected behavior, not a bug. Use
-`import` instead for local playbook deployment.
+## Troubleshooting
 
-Guarded: dry-run by default, `--yes` to apply.
+- `not_found` on `run` or `export` by name: no playbook matches; list with `splunkctl soar playbooks list` and use the id or the scoped `<dir>/<module>` name.
+- `http` error on `enable` with the draft_mode hint: the playbook is a draft; re-import it without `draft_mode` or finalize it in the Visual Playbook Editor.
+- `auth` on `delete` while everything else works: the profile has only an automation token; add a username and password with `splunkctl config init --soar`.
+- Did-you-mean error on `delete`: you passed a bare module name; repeat the command with the full scoped name or id from the message.
+- `http` 400 "Remote named 'origin' didn't exist" on `sync`: the repo is the local one; use `import`.
+- `run --wait` exits 1: the run ended `failed` or `cancelled`, or `--timeout` elapsed; read `splunkctl soar playbooks runs get <RUN_ID> --blocks`.
+- `http` 400 "playbook_trigger is set to an invalid enum": `--on label` is not supported; set the label in the playbook JSON and import it.
 
-## Seed Playbook
+## See also
 
-The test suite includes a minimal valid playbook bundle at
-`tests/soar/fixtures/splunkctl_seed_noop/` -- a no-op start-to-end
-automation playbook (`splunkctl_seed_noop.json` + `.py`). It serves as:
-
-- A round-trip test fixture (import then export, compare)
-- A seed for the lab (imported and left in place for playbook-run tests)
-
-## Implementation Notes
-
-- Uses `SOARClient.get_bytes()` for export (binary tgz download).
-- Import packs directories into tgz with `tarfile`, base64-encodes, and
-  POSTs to `import_playbook`.
-- Name resolution on export uses a filter query, not a list scan.
-- All mutations go through `guard.soar_check()` with the SOAR host
-  banner.
-
-Run playbooks against containers, poll to completion, inspect run history
-and block results, cancel in-progress runs.
-
-## Run a playbook
-
-```bash
-# By name (resolved via GET /rest/playbook)
-splunkctl soar playbooks run my_playbook --container 42 --yes
-
-# By numeric id
-splunkctl soar playbooks run 7 --container 42 --yes
-
-# With scope and inputs
-splunkctl soar playbooks run my_playbook --container 42 \
-  --scope new --input ip=1.2.3.4 --input domain=evil.com --yes
-
-# Wait for completion (polls until terminal status)
-splunkctl soar playbooks run my_playbook --container 42 \
-  --wait --timeout 120 --yes
-```
-
-The `run` command is a guarded mutation: without `--yes` it previews the
-POST body and exits. The `--wait` flag polls `GET /rest/playbook_run/<id>`
-until the status reaches `success`, `failed`, or `cancelled`. When the
-`message` field parses as JSON it is pretty-printed.
-
-**Scope**: `all` (default) runs the playbook against all artifacts in the
-container; `new` limits to artifacts not yet processed.
-
-## List playbook runs
-
-```bash
-# All runs
-splunkctl soar playbooks runs list
-
-# Filter by container and/or status
-splunkctl soar playbooks runs list --container 42 --status failed
-```
-
-## Get a playbook run
-
-```bash
-# Run detail
-splunkctl soar playbooks runs get 101
-
-# Block-level results
-splunkctl soar playbooks runs get 101 --blocks
-```
-
-## Cancel a run
-
-```bash
-# Guarded: dry-run by default
-splunkctl soar playbooks runs cancel 101 --yes
-```
-
-## API reference
-
-| Operation | Endpoint | Notes |
-|---|---|---|
-| Run | `POST /rest/playbook_run` | `{playbook_id, container_id, scope, run: true, inputs?}` |
-| Poll | `GET /rest/playbook_run/<id>` | Terminal: success, failed, cancelled |
-| Block results | `GET /rest/playbook_run/<id>/block_results` | Per-block status and output |
-| Cancel | `POST /rest/playbook_run/<id>` | `{cancel: true}` |
-| Resolve name | `GET /rest/playbook?_filter_name="<name>"` | Returns playbook metadata with id |
-
-Bogus `playbook_id` returns HTTP 404 with `"Playbook \"N\" not found"` --
-the server validates the id before creating a run.
+- [Work SOAR incidents](soar-incidents.md)
+- [Run actions](soar-actions.md)
+- [Manage custom functions](soar-functions.md)
+- [Handle approvals](soar-approvals.md)
+- [Manage configuration as code](state.md)
+- [Set up and check SOAR](soar.md)
+- [Command reference: soar](../commands/soar.md)

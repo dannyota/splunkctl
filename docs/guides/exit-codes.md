@@ -2,8 +2,7 @@
 
 # Exit codes
 
-splunkctl uses three exit codes. Scripts and CI pipelines can branch on
-`$?` to distinguish success, operational errors, and bad invocations.
+When to use: you are writing a shell script, CI step, or agent wrapper around splunkctl and need to branch on `$?` to distinguish success, operational errors, and bad invocations.
 
 | Code | Meaning | Examples |
 |------|---------|---------|
@@ -13,27 +12,20 @@ splunkctl uses three exit codes. Scripts and CI pipelines can branch on
 
 ## Details
 
-**Code 0** -- the command ran and produced its result. For mutation
-commands with `--yes`, the change was applied. For dry-run previews
-(the default), the preview was printed successfully.
+**Code 0**: the command ran and produced its result. For mutation commands with `--yes`, the change was applied. For dry-run previews (the default), the preview was printed successfully.
 
-**Code 1** -- the command understood what you asked for but could not
-complete it. Common causes:
+**Code 1**: the command understood what you asked for but could not complete it. Common causes:
 
 - Write SPL refused without `--yes` (`confirmation_required` in JSON errors).
-- Authentication or authorization failure (wrong credentials, expired
-  token, insufficient role).
-- Resource not found (no such index, saved search, dashboard, lookup,
-  container, playbook).
-- Server-side validation error (invalid cron, duplicate name, field
-  constraint).
-- Network or connectivity error (host unreachable, timeout, TLS
-  handshake failure).
+- Authentication or authorization failure (wrong credentials, expired token, insufficient role): `auth` or `permission`.
+- Resource not found (no such index, saved search, dashboard, lookup, container, playbook): `not_found`.
+- Server-side validation error (invalid cron, duplicate name, field constraint): `conflict` or `http`.
+- Network or connectivity error (host unreachable, timeout, TLS handshake failure): `connection` or `timeout`.
+- Unreadable or foreign config file: `config`.
 
-**Code 2** -- Click rejected the invocation before the command ran.
-The arguments or options did not match the command's schema. Fix the
-invocation and retry. This code is never produced by splunkctl's own
-logic; it comes from the argument parser.
+With `--json`, the error is a single-line envelope on standard output: `{"error": {"kind": "...", "http_status": ..., "message": "..."}}`.
+
+**Code 2**: Click rejected the invocation before the command ran. The arguments or options did not match the command's schema. Fix the invocation and retry. This code is never produced by splunkctl's own logic; it comes from the argument parser. Commands that validate mutually exclusive options themselves (for example `kvstore insert --data` versus `--file`) also raise a usage error and exit 2.
 
 ## Scripting example
 
@@ -45,3 +37,10 @@ case $? in
   2) echo "bad usage" >&2; exit 2;;
 esac
 ```
+
+## See also
+
+- [Diagnose a connection](doctor.md)
+- [Configure](configure.md)
+- [Set up the MCP server](mcp.md)
+- [Command reference: global commands](../commands/global.md)

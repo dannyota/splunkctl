@@ -2,55 +2,56 @@
 
 # Ingest SIEM results into SOAR
 
-Ingest SIEM search results into Splunk SOAR as containers and artifacts,
-using the official CIM-to-CEF field mapping and connector conventions.
+When to use: you have Splunk search results (ES notables, firewall hits, a hunting query) and want them in SOAR as containers and CEF artifacts so playbooks can act on them, with the official CIM-to-CEF mapping, deduplication, and a preview before anything is sent.
 
-## Commands
+## Prerequisites
+
+- A Splunk profile that passes `splunkctl doctor` and SOAR credentials that pass `splunkctl soar test` (see [Configure](configure.md) and [Set up and check SOAR](soar.md)).
+- A label that exists on the SOAR instance (`splunkctl soar meta labels`); the default is `events`.
+- Either an SPL query (`--spl`) or the sid of a finished search job (`--sid`, from `splunkctl search jobs`); the two are mutually exclusive.
+
+## Synopsis
+
+```text
+splunkctl soar ingest (--spl <SPL> | --sid <SID>) [--earliest TIME] [--latest TIME] [--app APP] [--label LABEL] [--severity NAME] [--sensitivity NAME] [--sdi-field FIELD] [--container-name TEXT] [--container-name-field FIELD] [--grouping] [--map CEF_KEY=SPLUNK_FIELD]... [--map-file FILE.yaml] [--include-unmapped] [--no-automation] [--yes]
+```
+
+Defaults: `--label events`, `--sensitivity amber`, `--sdi-field event_id`, severity derived from the row, one container per row.
+
+## Workflow
+
+### Preview an ingest
 
 ```bash
-# Dry-run (default): preview containers, mapping table, sample CEF
 splunkctl soar ingest --spl '| makeresults count=2 | eval src="10.0.0.1"'
+splunkctl soar ingest --spl 'index=firewall src=10.0.0.1' --earliest -24h
+```
 
-# Apply
+Expected result: the dry run shows the container count and artifacts per container, the active CIM-to-CEF mapping table (first 10 entries), and a sample CEF payload from the first result row. No data is sent to SOAR. The search runs through the same machinery as `splunkctl search run`; `--earliest`, `--latest`, and `--app` scope it.
+
+### Apply the ingest
+
+> **Safety:** Target is the SOAR host in the active profile, with results read from the Splunk host in the same profile. Impact: new containers and artifacts are created and playbooks fire on the last artifact of each container. Preview with `splunkctl soar ingest --spl 'index=firewall src=10.0.0.1' --earliest -24h`, apply by adding `--yes`, and verify with `splunkctl soar containers list --label events --since <today>`.
+
+```bash
 splunkctl soar ingest --spl '| makeresults count=2 | eval src="10.0.0.1"' --yes
-
-# From an existing search job
 splunkctl soar ingest --sid 1720000000.42 --yes
-
-# Custom label, severity, sensitivity
-splunkctl soar ingest --spl 'index=firewall' \
-    --label notable --severity high --sensitivity green --yes
+splunkctl soar ingest --spl 'index=firewall' --label notable --severity high --sensitivity green --yes
 ```
 
-## SIEM search integration
+Expected result: one container per result row (or one container for all rows with `--grouping`), each with CEF artifacts, and a summary of containers and artifacts created and skipped.
 
-Uses the same SIEM search machinery as `splunkctl search run`. Provide
-`--spl` (runs a new search) or `--sid` (fetches results from an existing
-job). Time bounds via `--earliest` / `--latest`; app context via `--app`.
+### Control the field mapping
 
-## Field mapping (CIM to CEF)
-
-The built-in `CIM_CEF_MAP` mirrors the official Splunk SOAR Connector for
-Splunk mapping (with the upstream `butesIn` typo fixed to `bytesIn`).
-CEF keys get automatic `cef_types` from the built-in `CEF_CONTAINS_MAP`
-(e.g. `sourceAddress` -> `["ip", "host name"]`), making artifact fields
-actionable as playbook inputs.
-
-### Override mappings
-
-Per-field overrides:
+> **Safety:** Target is the SOAR host in the active profile. Impact: containers and artifacts are created with the mapped CEF keys. Preview by dropping `--yes` and reading the mapping table and sample CEF payload, apply by adding it back, and verify with `splunkctl soar artifacts list --container <CONTAINER_ID>`.
 
 ```bash
-splunkctl soar ingest --spl '...' --map sourceAddress=my_src --yes
+splunkctl soar ingest --spl 'index=firewall' --map sourceAddress=my_src --yes
+splunkctl soar ingest --spl 'index=firewall' --map-file ~/.splunkctl/cim_cef_map.yaml --yes
+splunkctl soar ingest --spl 'index=firewall' --include-unmapped --yes
 ```
 
-YAML mapping file:
-
-```bash
-splunkctl soar ingest --spl '...' --map-file ~/.splunkctl/cim_cef_map.yaml --yes
-```
-
-Format:
+Expected result: the built-in `CIM_CEF_MAP` mirrors the official Splunk SOAR Connector for Splunk mapping (with the upstream `butesIn` typo fixed to `bytesIn`). CEF keys get automatic `cef_types` from the built-in `CEF_CONTAINS_MAP` (for example `sourceAddress` becomes `["ip", "host name"]`), which makes artifact fields actionable as playbook inputs. `--map` overrides one key per flag; `--map-file` loads a YAML file:
 
 ```yaml
 mappings:
@@ -59,64 +60,61 @@ mappings:
 unmapped: drop   # or "pass" to keep unmapped fields as custom CEF keys
 ```
 
-### Include unmapped fields
+Fields not in the map are dropped by default. `--include-unmapped` (or `unmapped: pass`) passes them through as custom CEF keys; underscore-prefixed internal fields such as `_raw` and `_time` are always excluded.
 
-By default, fields not in the CIM map are dropped. Use `--include-unmapped`
-to pass them through as custom CEF keys (underscore-prefixed internal
-fields like `_raw`, `_time` are always excluded).
+### Group rows into one container
 
-## Grouping
-
-Default: one container per result row. Use `--grouping` to group all rows
-into a single container with multiple artifacts.
+> **Safety:** Target is the SOAR host in the active profile. Impact: one container with every row as an artifact is created. Preview by dropping `--yes`, apply by adding it back, and verify with `splunkctl soar containers list --label events --since <today>`.
 
 ```bash
 splunkctl soar ingest --spl 'index=firewall src=10.0.0.1' --grouping --yes
 ```
 
-## Container naming
+Expected result: a single container with one artifact per row instead of one container per row.
 
-Priority:
-1. `--container-name-field`, use that row field's value.
-2. `--container-name`, literal name or template.
-3. `rule_name` field (ES notable convention).
-4. Fallback: `"Splunk Log Entry on <_time>: <source>"`.
+### Name containers and set severity
 
-## Severity
+> **Safety:** Target is the SOAR host in the active profile. Impact: containers are created with the chosen names and severity, which drives SOAR queue sorting. Preview by dropping `--yes` and reading the container list in the dry run, apply by adding it back, and verify with `splunkctl soar containers list --severity high`.
 
-Checks `severity` first, then `urgency`; defaults to `medium`. Multivalue
-fields take the highest value. Override with `--severity`.
+```bash
+splunkctl soar ingest --spl 'index=notable' --container-name-field rule_name --yes
+splunkctl soar ingest --spl 'index=firewall' --container-name "Firewall sweep" --yes
+splunkctl soar ingest --spl 'index=firewall' --severity high --yes
+```
 
-| Splunk severity/urgency | SOAR severity |
+Expected result: the name is chosen in this order: `--container-name-field` (that row field's value), `--container-name` (a literal or template), the `rule_name` field (ES notable convention), then the fallback `"Splunk Log Entry on <_time>: <source>"`. Severity checks the row's `severity` first, then `urgency`, and defaults to `medium`; multivalue fields take the highest value, and `--severity` overrides:
+
+| Splunk severity or urgency | SOAR severity |
 |---|---|
 | informational, low | low |
 | medium | medium |
 | high, critical | high |
 
-## Dedup (source_data_identifier)
+### Rerun safely with deduplication
 
-SDI field defaults to `event_id` (if present in the row); otherwise a
-SHA-256 hash of the full row. Override with `--sdi-field`.
+> **Safety:** Target is the SOAR host in the active profile. Impact: only rows whose SDI is new become containers or artifacts; changing `--sdi-field` can make every row look new and duplicate the queue. Preview by dropping `--yes` and reading the skipped counts, apply by adding it back, and verify with `splunkctl soar containers list --filter '_filter_source_data_identifier="<SDI>"'`.
 
-- **Container-level**: client-side precheck via
-  `_filter_source_data_identifier`; server-side fallback returns
-  `existing_container_id`.
-- **Artifact-level**: client-side precheck only (server does not dedup
-  artifacts).
+```bash
+splunkctl soar ingest --spl 'index=notable | head 10' --yes
+splunkctl soar ingest --spl 'index=notable | head 10' --yes
+splunkctl soar ingest --spl 'index=firewall' --sdi-field event_hash --yes
+```
 
-Re-running the same ingest reports existing containers/artifacts and skips
-creation.
+Expected result: the second run reports the existing containers and artifacts and skips creating them. The source data identifier (SDI) is the `event_id` field when present, otherwise a SHA-256 hash of the full row; `--sdi-field` picks another field. Containers are prechecked client-side with `_filter_source_data_identifier`, and the server-side fallback returns `existing_container_id`. Artifacts are prechecked client-side only, because the server does not deduplicate artifacts.
 
-## Automation batching
+### Control playbook automation
 
-All artifacts are created with `run_automation: false` except the last
-artifact in each container, which gets `run_automation: true` (playbooks
-fire once the container is fully populated). Use `--no-automation` to
-suppress automation on all artifacts.
+> **Safety:** Target is the SOAR host in the active profile. Impact: with `--no-automation` no playbook fires for the new artifacts; without it the last artifact per container triggers active playbooks. Preview by dropping `--yes`, apply by adding it back, and verify with `splunkctl soar playbooks runs list --container <CONTAINER_ID>`.
 
-## Notable events (ES)
+```bash
+splunkctl soar ingest --spl 'index=firewall' --no-automation --yes
+```
 
-Ingest ES notables with their native fields:
+Expected result: by default every artifact is created with `run_automation: false` except the last artifact actually created in each container, which gets `run_automation: true`, so playbooks fire once the container is fully populated. `--no-automation` suppresses automation on all artifacts.
+
+### Ingest ES notables
+
+> **Safety:** Target is the SOAR host in the active profile, reading notables from the Splunk host in the same profile. Impact: one container per notable with its context fields as CEF keys, and playbooks fire on each. Preview by dropping `--yes`, apply by adding it back, and verify with `splunkctl soar containers list --label events --since <today>`.
 
 ```bash
 splunkctl soar ingest \
@@ -124,40 +122,23 @@ splunkctl soar ingest \
     --include-unmapped --yes
 ```
 
-- SDI = `event_id` (default `--sdi-field`).
-- Container name from `rule_name`.
-- Severity mapped from the notable's `severity` / `urgency`.
-- `--include-unmapped` preserves `event_id`, `risk_score`,
-  `security_domain`, and other context fields as custom CEF keys for
-  playbook use.
+Expected result: notables with their native fields: SDI from `event_id` (the default `--sdi-field`), the container name from `rule_name`, severity mapped from the notable's `severity` or `urgency`, and `--include-unmapped` preserving `event_id`, `risk_score`, `security_domain`, and other context fields as custom CEF keys for playbook use.
 
-## Dry-run preview
+## Troubleshooting
 
-Without `--yes`, the command shows:
+- Usage error "No SOAR host configured": run `splunkctl config init --soar`.
+- `confirmation_required` from the SIEM search: the SPL contains a write command; remove it, the ingest only reads results.
+- `auth` or `connection` naming the Splunk host: the SIEM side failed; run `splunkctl doctor`. Naming the SOAR host: run `splunkctl soar test`.
+- `not_found` on `--sid`: the job expired; rerun with `--spl`, or create a fresh job with `splunkctl search run ... --detach`.
+- `http` error on container creation: the server rejected a field; check that `--label` exists (`splunkctl soar meta labels`) and `--severity` and `--sensitivity` are valid names (`splunkctl soar meta severities`).
+- Everything is skipped on rerun: deduplication by SDI is working; change `--sdi-field` only if the rows are genuinely new.
+- Playbooks did not fire: `--no-automation` was set, or the playbook's trigger and label do not match (see [Run playbooks](soar-playbooks.md)).
 
-- Container count and artifacts per container.
-- Active CIM-to-CEF mapping table (first 10 entries).
-- Sample CEF payload from the first result row.
+## See also
 
-No data is sent to SOAR in dry-run mode.
-
-## Flags reference
-
-| Flag | Default | Description |
-|---|---|---|
-| `--spl` | - | SPL search to run on SIEM |
-| `--sid` | - | Existing SIEM job SID |
-| `--label` | `events` | Container label |
-| `--severity` | auto | Override SOAR severity |
-| `--sensitivity` | `amber` | Container sensitivity/TLP |
-| `--sdi-field` | `event_id` | Row field for SDI (else row hash) |
-| `--container-name` | - | Container name (literal or template) |
-| `--container-name-field` | - | Row field for container name |
-| `--grouping` | off | Group all rows into one container |
-| `--map` | - | CEF_KEY=SPLUNK_FIELD, map a result field onto a CEF key (repeatable) |
-| `--map-file` | - | YAML custom mapping file |
-| `--include-unmapped` | off | Pass unmapped fields as custom CEF |
-| `--no-automation` | off | Suppress playbook automation |
-| `--earliest` | - | SIEM search earliest time |
-| `--latest` | - | SIEM search latest time |
-| `--app` | - | SIEM app context |
+- [Run searches](search.md)
+- [Triage ES notables](es.md)
+- [Work SOAR incidents](soar-incidents.md)
+- [Run playbooks](soar-playbooks.md)
+- [Configure assets and monitor ingestion](soar-assets.md)
+- [Command reference: soar](../commands/soar.md)
