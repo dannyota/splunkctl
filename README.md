@@ -4,7 +4,7 @@
 
 Operate Splunk Enterprise, Enterprise Security, and Splunk SOAR from a terminal, or give an AI agent the same commands through MCP.
 
-Requires Python 3.13+ and credentials for your Splunk instance.
+Requires Python 3.12+ and credentials for your Splunk instance.
 
 ## Quickstart
 
@@ -50,7 +50,7 @@ Guarded tools keep the same contract as the CLI: a call previews until the agent
 
 ## Requirements and limitations
 
-- Python 3.13 or newer.
+- Python 3.12 or newer.
 - A Splunk account with REST API access on port 8089 (or your configured port). Each command needs the Splunk capability or SOAR permission its action requires; `splunkctl doctor` reports which checks pass for the active profile.
 - Enterprise Security commands (`splunkctl es ...`) check for the `SplunkEnterpriseSecuritySuite` app and exit 1 with a `not_found` error when it is not installed.
 - Dashboard, lookup file, and HEC token commands use entity classes from an optional SDK fork. Install it with:

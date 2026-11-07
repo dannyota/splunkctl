@@ -1,4 +1,4 @@
-<!-- summary: Install splunkctl from PyPI on Python 3.13 or newer, add the optional SDK fork and browser extra when you need them, and verify the install with doctor. -->
+<!-- summary: Install splunkctl from PyPI on Python 3.12 or newer, add the optional SDK fork and browser extra when you need them, and verify the install with doctor. -->
 
 # Install
 
@@ -6,7 +6,7 @@ When to use: you are putting splunkctl on a workstation, a jump host, or a CI ru
 
 ## Prerequisites
 
-- Python 3.13 or newer with `pip`.
+- Python 3.12 or newer with `pip`.
 - Network access from this machine to the Splunk REST API (port 8089 by default) and, for SOAR, to the SOAR REST port (8443 by default).
 - A Splunk account. `splunkctl doctor` reports which permissions it has; each command needs the capabilities its action requires.
 
@@ -94,7 +94,7 @@ splunkctl completion fish | source
 
 ## Troubleshooting
 
-- `pip` reports no matching distribution: your Python is older than 3.13. Check with `python --version` and install a newer interpreter.
+- `pip` reports no matching distribution: your Python is older than 3.12. Check with `python --version` and install a newer interpreter.
 - `splunkctl --version` prints something other than `splunkctl, version X.Y.Z`: another `splunkctl` is first on `PATH`; use `splunkctl-py`.
 - `ImportError` mentioning `Dashboard`, `LookupTableFile`, or `HECToken`: install the SDK fork.
 - `doctor` fails on connection: confirm host and port, and that the REST port is reachable from this machine (`curl -k https://HOST:8089/services/server/info`).

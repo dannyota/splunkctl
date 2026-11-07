@@ -4,7 +4,7 @@
 
 Operate Splunk Enterprise, Enterprise Security, and Splunk SOAR from a terminal, or give an AI agent the same commands through MCP.
 
-Requires Python 3.13+ and credentials for your Splunk instance. splunkctl is an independent community project, not affiliated with or endorsed by Splunk Inc.
+Requires Python 3.12+ and credentials for your Splunk instance. splunkctl is an independent community project, not affiliated with or endorsed by Splunk Inc.
 
 ## Quickstart
 
