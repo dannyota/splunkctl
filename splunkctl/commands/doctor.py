@@ -255,6 +255,11 @@ def doctor_cmd(ctx: click.Context, *, strict: bool = False) -> None:
         web_ssl = str(web_conf.content.get("enableSplunkWebSSL", "0")) == "1"
         scheme = "https" if web_ssl else "http"
         web_url = f"{scheme}://{svc.host}:{web_port}"
+        configured = cfg_mod.load(config_path, profile=obj.get("profile")).get(
+            "web_url"
+        )
+        if configured:
+            web_url = str(configured).rstrip("/")
 
         ctx_ssl = ssl.create_default_context()
         ctx_ssl.check_hostname = False

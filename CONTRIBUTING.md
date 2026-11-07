@@ -31,6 +31,9 @@ splunkctl docs generate --check
 - Keep every Python file at or under 500 lines and every Markdown guide at
   or under 450 lines. Split by topic instead of trimming tests.
 - Tests must not need a live Splunk or SOAR instance. Mock the client.
+  For a manual check against a real instance, run
+  `SPLUNKCTL=splunkctl bash scripts/live-adapter-smoke.sh` with a profile
+  that points at a throwaway Splunk.
 - Pages under `docs/commands/` are generated. Run `splunkctl docs generate`
   after changing help text and commit the result.
 - Prose in the repository is English, plain and direct. No em dashes.

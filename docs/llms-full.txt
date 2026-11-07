@@ -24,7 +24,7 @@ splunkctl config init
 splunkctl doctor
 ```
 
-`config init` writes `~/.splunkctl/config.yaml`. `doctor` checks the connection, authentication, server health, and your permissions. See [Install](https://splunkctl.danny.vn/guides/install.md) for the optional SDK fork and shell completion, and [Configure](https://splunkctl.danny.vn/guides/configure.md) for profiles and environment variables.
+`config init` writes `~/.splunkctl/config.yaml`. `doctor` checks the connection, authentication, server health, and your permissions. See [Install](https://splunkctl.danny.vn/guides/install.md) for shell completion, and [Configure](https://splunkctl.danny.vn/guides/configure.md) for profiles and environment variables.
 
 ### Safety
 
@@ -138,12 +138,6 @@ Core commands work with the upstream Splunk SDK that `pip` installs as a depende
 
 #### Add optional components
 
-Dashboard, lookup-file, and HTTP Event Collector (HEC) token commands use entity classes from a fork of the Splunk SDK. Install it only if you need those groups:
-
-```bash
-python -m pip install git+https://github.com/dannyota/splunk-sdk-python@splunkctl
-```
-
 Browser SAML login (`splunkctl auth login`) needs Playwright:
 
 ```bash
@@ -197,7 +191,6 @@ splunkctl completion fish | source
 
 - `pip` reports no matching distribution: your Python is older than 3.12. Check with `python --version` and install a newer interpreter.
 - `splunkctl --version` prints something other than `splunkctl, version X.Y.Z`: another `splunkctl` is first on `PATH`; use `splunkctl-py`.
-- `ImportError` mentioning `Dashboard`, `LookupTableFile`, or `HECToken`: install the SDK fork.
 - `doctor` fails on connection: confirm host and port, and that the REST port is reachable from this machine (`curl -k https://HOST:8089/services/server/info`).
 - `doctor` reports a Splunk-format config file: `~/.splunkctl/config.yaml` belongs to Splunk's CLI; run `splunkctl config init --path ~/.splunkctl/profiles.yaml` or see [Relationship to Splunk's splunkctl](https://splunkctl.danny.vn/guides/splunk-cli.md).
 
@@ -715,12 +708,6 @@ When to use: you want dashboard XML or Studio JSON in version control, need to c
 
 ### Prerequisites
 
-- The optional SDK fork, because dashboard commands use its `Dashboard` entity classes:
-
-  ```bash
-  python -m pip install git+https://github.com/dannyota/splunk-sdk-python@splunkctl
-  ```
-
 - A Splunk account with write access to the target app (for example the `admin` or `power` role in `search`).
 
 ### Synopsis
@@ -804,7 +791,6 @@ splunkctl dashboards delete old_dash --app search --yes
 
 ### Troubleshooting
 
-- `ImportError` or a message about missing `Dashboard` classes: install the SDK fork listed under Prerequisites.
 - `not_found` on `get` or `update`: pass `--app`; the dashboard may live outside `search`.
 - `--definition` errors: the dashboard is Classic XML, not Studio.
 - `permission` on create or share: the account lacks write access to the app, or `global` sharing needs the `admin_all_objects` capability.
@@ -1255,7 +1241,7 @@ When to use: your detections run on accelerated CIM data models through `| tstat
 
 - A profile that passes `splunkctl doctor` (see [Configure](https://splunkctl.danny.vn/guides/configure.md)).
 - Read access to data models for `list`, `get`, and `acceleration`; write access to the model's app (for example `Splunk_SA_CIM`) for `rebuild`.
-- No SDK fork is needed: every command is a thin, typed wrapper around the `datamodel/model` and `admin/summarization` REST collections.
+- Every command is a thin, typed wrapper around the `datamodel/model` and `admin/summarization` REST collections.
 
 ### Synopsis
 
@@ -1353,12 +1339,6 @@ When to use: a detection needs enrichment from a table you control, such as a th
 
 ### Prerequisites
 
-- The optional SDK fork, because table-file commands use its `LookupTableFile` entity classes:
-
-  ```bash
-  python -m pip install git+https://github.com/dannyota/splunk-sdk-python@splunkctl
-  ```
-
 - A profile that passes `splunkctl doctor` including `Web UI reachable`: `upload` and `update` go through the Splunk Web form handler because the REST API requires a server-side path.
 - Write access to the target app (`--app`, default `search` for `upload`, `update`, `delete`, and `download`).
 
@@ -1451,7 +1431,6 @@ splunkctl lookups delete old_table.csv --app search --yes
 
 ### Troubleshooting
 
-- `ImportError` mentioning `LookupTableFile`: install the SDK fork listed under Prerequisites.
 - `Lookup upload failed` or a `web` error: Splunk Web is not reachable from this machine; check `Web UI reachable` in `splunkctl doctor`.
 - `not_found` from `get`, `download`, or `delete`: the file is in another app; `list` spans all apps but `download` and `delete` default to `search`, so pass `--app`.
 - `upload` fails because the file exists: use `update` to overwrite.
@@ -3163,7 +3142,6 @@ When to use: your change process needs an audit trail for detection content: pul
 ### Prerequisites
 
 - A Splunk profile that passes `splunkctl doctor`; the account needs write access to every app you intend to push to.
-- For the `dashboards` type: the optional SDK fork (`python -m pip install git+https://github.com/dannyota/splunk-sdk-python@splunkctl`, see [Manage dashboards](https://splunkctl.danny.vn/guides/dashboards.md)).
 - For `soar-playbooks`, `soar-lists`, and `soar-assets`: SOAR credentials in the profile (`splunkctl config init --soar` or `SOAR_HOST`). Mixed SIEM and SOAR types in one command work; each type is routed to its own client.
 - The same `--app` scope (or none) on `pull`, `diff`, and `push` when lookups or dashboards are involved (see "Pull a snapshot").
 
@@ -3335,7 +3313,6 @@ Expected result: a plan artifact for approval and an applied artifact as the rec
 ### Troubleshooting
 
 - Usage error "No SOAR host configured" when a SOAR type is requested: run `splunkctl config init --soar` or set `SOAR_HOST`.
-- `ImportError` or missing `Dashboard` classes on `pull --types dashboards`: install the SDK fork listed under Prerequisites, or leave `dashboards` out of `--types`.
 - A lookup or dashboard shows `added` although it exists: `--app` differs between `pull` and `diff` or `push`; rerun all three with the same scope.
 - `permission` on `push`: the account cannot write to the app that owns the object; narrow the run with `--types` or `--app` and fix the role.
 - `push` printed "not deleted (push never deletes)": expected; delete with the type's own `delete` command if that is intended.
@@ -4074,12 +4051,6 @@ When to use: a SOAR playbook, custom script, CI pipeline, or cloud webhook needs
 
 ### Prerequisites
 
-- The optional SDK fork, because token commands use its `HECToken` entity classes:
-
-  ```bash
-  python -m pip install git+https://github.com/dannyota/splunk-sdk-python@splunkctl
-  ```
-
 - A profile that passes `splunkctl doctor` and an account allowed to manage HTTP inputs (the `admin` role covers it).
 - For `send`: network access from this machine to the HEC port (8088 by default), which is separate from the 8089 management port.
 
@@ -4172,7 +4143,6 @@ splunkctl hec delete legacy_siem_bridge --yes
 
 ### Troubleshooting
 
-- `ImportError` mentioning `HECToken`: install the SDK fork listed under Prerequisites.
 - `not_found` from `get`, `enable`, `disable`, `delete`, or `send`: use the short name without the `http://` prefix and check `splunkctl hec list`.
 - `Create failed` naming an existing token: the name is taken; pick another or delete the old one.
 - `HEC send failed` with a server message such as `Invalid token` or `Incorrect index`: the token is disabled, HEC is globally disabled, or `--index` is not in the token's allowed indexes.
@@ -4594,7 +4564,7 @@ When to use: an allowlist, a threat-intel feed, or an enrichment table lives in 
 
 - A profile that passes `splunkctl doctor` with the `KV Store` check at `ready`; `splunkctl server kvstore` shows the status on its own.
 - Write access to the target app (`--app`, default `search`); collection ownership is always `nobody`, the KV store convention, so every command addresses `servicesNS/nobody/<app>/storage/collections/{config|data}/...`.
-- No SDK fork is needed: every command is a thin, typed wrapper around raw `GET`, `POST`, and `DELETE` calls.
+- Every command is a thin, typed wrapper around raw `GET`, `POST`, and `DELETE` calls.
 
 ### Synopsis
 

@@ -1,4 +1,4 @@
-<!-- summary: Install splunkctl from PyPI on Python 3.12 or newer, add the optional SDK fork and browser extra when you need them, and verify the install with doctor. -->
+<!-- summary: Install splunkctl from PyPI on Python 3.12 or newer, add the browser extra when you need it, and verify the install with doctor. -->
 
 # Install
 
@@ -36,12 +36,6 @@ Expected result: `splunkctl, version X.Y.Z`. If the output looks different, Splu
 Core commands work with the upstream Splunk SDK that `pip` installs as a dependency.
 
 ### Add optional components
-
-Dashboard, lookup-file, and HTTP Event Collector (HEC) token commands use entity classes from a fork of the Splunk SDK. Install it only if you need those groups:
-
-```bash
-python -m pip install git+https://github.com/dannyota/splunk-sdk-python@splunkctl
-```
 
 Browser SAML login (`splunkctl auth login`) needs Playwright:
 
@@ -96,7 +90,6 @@ splunkctl completion fish | source
 
 - `pip` reports no matching distribution: your Python is older than 3.12. Check with `python --version` and install a newer interpreter.
 - `splunkctl --version` prints something other than `splunkctl, version X.Y.Z`: another `splunkctl` is first on `PATH`; use `splunkctl-py`.
-- `ImportError` mentioning `Dashboard`, `LookupTableFile`, or `HECToken`: install the SDK fork.
 - `doctor` fails on connection: confirm host and port, and that the REST port is reachable from this machine (`curl -k https://HOST:8089/services/server/info`).
 - `doctor` reports a Splunk-format config file: `~/.splunkctl/config.yaml` belongs to Splunk's CLI; run `splunkctl config init --path ~/.splunkctl/profiles.yaml` or see [Relationship to Splunk's splunkctl](splunk-cli.md).
 

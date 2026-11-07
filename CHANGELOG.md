@@ -4,6 +4,23 @@
 
 ### Changed
 
+- Dashboard, lookup file, and HEC token commands no longer need the
+  optional SDK fork. Thin REST adapters over `data/ui/views`,
+  `data/lookup-table-files`, and `data/inputs/http` replace its entity
+  classes; the upstream `splunk-sdk` from PyPI is sufficient.
+
+### Fixed
+
+- `doctor` and `lookups upload` honor the profile's `web_url` instead of
+  deriving the Web UI address from the server's `httpport`, so port-mapped
+  and proxied instances work.
+
+### Added
+
+- `scripts/live-adapter-smoke.sh`: a maintainer smoke test that exercises
+  dashboards, lookup files, HEC tokens, and `state pull` against a live
+  Splunk instance.
+
 - Support Python 3.12. The command reference generator normalizes help
   text so generated pages are identical across Python versions.
 

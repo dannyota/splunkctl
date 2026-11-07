@@ -204,6 +204,7 @@ class SplunkClient:
                 verify=bool(cfg.get("verify", True)),
                 debug=self._debug,
                 timeout=self._timeout or 30,
+                web_url=cfg.get("web_url"),
             )
         return self._web_session
 
@@ -258,8 +259,12 @@ class _WebSession:
         verify: bool = True,
         debug: bool = False,
         timeout: int = 30,
+        web_url: str | None = None,
     ) -> None:
         self._host: str = service.host
+        # A configured web_url wins over the server's httpport: port-mapped
+        # containers and proxies serve Splunk Web on a different address.
+        self._web_base_override: str | None = web_url.rstrip("/") if web_url else None
         self._username: str = service.username
         self._password: str = service.password
         if not self._username or not self._password:
@@ -286,6 +291,8 @@ class _WebSession:
 
     @property
     def _base_url(self) -> str:
+        if self._web_base_override:
+            return self._web_base_override
         scheme = "https" if self._web_ssl else "http"
         return f"{scheme}://{self._host}:{self._web_port}"
 

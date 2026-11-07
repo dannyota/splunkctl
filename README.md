@@ -53,12 +53,6 @@ Guarded tools keep the same contract as the CLI: a call previews until the agent
 - Python 3.12 or newer.
 - A Splunk account with REST API access on port 8089 (or your configured port). Each command needs the Splunk capability or SOAR permission its action requires; `splunkctl doctor` reports which checks pass for the active profile.
 - Enterprise Security commands (`splunkctl es ...`) check for the `SplunkEnterpriseSecuritySuite` app and exit 1 with a `not_found` error when it is not installed.
-- Dashboard, lookup file, and HEC token commands use entity classes from an optional SDK fork. Install it with:
-
-  ```bash
-  python -m pip install git+https://github.com/dannyota/splunk-sdk-python@splunkctl
-  ```
-
 - Browser SAML login needs the `browser` extra: `python -m pip install 'splunkctl[browser]'`.
 
 ## Project and support

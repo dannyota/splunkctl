@@ -6,12 +6,6 @@ When to use: a SOAR playbook, custom script, CI pipeline, or cloud webhook needs
 
 ## Prerequisites
 
-- The optional SDK fork, because token commands use its `HECToken` entity classes:
-
-  ```bash
-  python -m pip install git+https://github.com/dannyota/splunk-sdk-python@splunkctl
-  ```
-
 - A profile that passes `splunkctl doctor` and an account allowed to manage HTTP inputs (the `admin` role covers it).
 - For `send`: network access from this machine to the HEC port (8088 by default), which is separate from the 8089 management port.
 
@@ -104,7 +98,6 @@ splunkctl hec delete legacy_siem_bridge --yes
 
 ## Troubleshooting
 
-- `ImportError` mentioning `HECToken`: install the SDK fork listed under Prerequisites.
 - `not_found` from `get`, `enable`, `disable`, `delete`, or `send`: use the short name without the `http://` prefix and check `splunkctl hec list`.
 - `Create failed` naming an existing token: the name is taken; pick another or delete the old one.
 - `HEC send failed` with a server message such as `Invalid token` or `Incorrect index`: the token is disabled, HEC is globally disabled, or `--index` is not in the token's allowed indexes.
