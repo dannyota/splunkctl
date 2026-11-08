@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Added
+
+- `scripts/live-smoke.sh` replaces `scripts/live-adapter-smoke.sh`: a
+  maintainer smoke test for every SIEM command group against a throwaway
+  Splunk instance, with `LIVE_ONLY`, `LIVE_SKIP`, `CIM_TGZ`,
+  `LIVE_MONITOR_PATH`, `LIVE_HEC_URL` and `LIVE_PYTHON` knobs and
+  self-cleaning `sc_live_` fixtures.
+- `hec send --url` overrides the HEC base URL for hosts where the HEC port
+  is mapped differently from the management port.
+
 ### Changed
 
 - Require `splunk-sdk>=3.0` on Python 3.13 and later. `splunk-sdk` 3.x

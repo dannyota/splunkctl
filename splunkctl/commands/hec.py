@@ -210,6 +210,11 @@ def hec_settings(ctx: click.Context, action: str | None) -> None:
 @click.argument("event")
 @click.option("--index", default=None, help="Target index.")
 @click.option("--sourcetype", default=None, help="Source type.")
+@click.option(
+    "--url",
+    default=None,
+    help="HEC base URL (scheme://host:port); default: API host and HEC settings.",
+)
 @click.pass_context
 def hec_send(
     ctx: click.Context,
@@ -218,6 +223,7 @@ def hec_send(
     *,
     index: str | None,
     sourcetype: str | None,
+    url: str | None,
 ) -> None:
     """Send one event through a HEC token."""
     details = f"  token: {name}\n  event: {event[:60]}"
@@ -239,7 +245,8 @@ def hec_send(
     ssl = str(gcontent.get("enableSSL", "1")) == "1"
     scheme = "https" if ssl else "http"
     host = svc.host
-    url = f"{scheme}://{host}:{port}/services/collector/event"
+    base_url = url or f"{scheme}://{host}:{port}"
+    url = base_url.rstrip("/") + "/services/collector/event"
     payload: dict[str, str] = {"event": event}
     if index:
         payload["index"] = index

@@ -228,7 +228,9 @@ def test_settings_get(mock_gc: MagicMock) -> None:
 
     result = CliRunner().invoke(cli, ["--json", "hec", "settings"])
     assert result.exit_code == 0
-    assert "8088" in result.output
+    data = json.loads(result.stdout)
+    assert data[0]["disabled"] == "0"
+    assert data[0]["port"] == "8088"
 
 
 @patch(_PATCH)
@@ -336,3 +338,37 @@ def test_send_includes_timeout(
     assert "timeout" in call_kwargs
     assert isinstance(call_kwargs["timeout"], int)
     assert call_kwargs["timeout"] > 0
+
+
+@patch(_CFG_PATCH, return_value={"verify": True})
+@patch("splunkctl.commands.hec.req.post")
+@patch(_PATCH)
+def test_send_url_override_keeps_api_connection(
+    mock_gc: MagicMock, mock_post: MagicMock, _mock_cfg: MagicMock
+) -> None:
+    svc = _setup_send_mocks(mock_gc, ssl="1")
+    svc.host = "127.0.0.1"
+    svc.port = 18089
+    result = CliRunner().invoke(
+        cli,
+        [
+            "--yes",
+            "hec",
+            "send",
+            "sc_live_token",
+            "sc_live_event",
+            "--index",
+            "sc_live_index",
+            "--url",
+            "http://127.0.0.1:18088/",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert mock_post.call_args.args[0] == (
+        "http://127.0.0.1:18088/services/collector/event"
+    )
+    assert mock_post.call_args.kwargs["json"] == {
+        "event": "sc_live_event",
+        "index": "sc_live_index",
+    }
+    assert svc.port == 18089

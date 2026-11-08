@@ -4064,7 +4064,7 @@ splunkctl hec enable <NAME> [--yes]
 splunkctl hec disable <NAME> [--yes]
 splunkctl hec delete <NAME> [--yes]
 splunkctl hec settings [--enable|--disable] [--yes]
-splunkctl hec send <NAME> <EVENT> [--index INDEX] [--sourcetype SOURCETYPE] [--yes]
+splunkctl hec send <NAME> <EVENT> [--index INDEX] [--sourcetype SOURCETYPE] [--url URL] [--yes]
 ```
 
 Splunk stores HEC token names with an `http://` prefix internally, so creating `my_token` produces a token named `http://my_token`. The CLI handles this for you; always use the short name.
@@ -4148,6 +4148,11 @@ splunkctl hec delete legacy_siem_bridge --yes
 - `HEC send failed` with a server message such as `Invalid token` or `Incorrect index`: the token is disabled, HEC is globally disabled, or `--index` is not in the token's allowed indexes.
 - `connection` or `timeout` from `send` only: the HEC port (8088) is blocked while the management port is open; open it or send from a host that can reach it.
 - `permission` from `create` or `delete`: the account cannot manage HTTP inputs; use an `admin` account.
+
+For a mapped HEC port, pass a base URL such as
+`--url http://127.0.0.1:18088`. Without `--url`, `send` uses the API host with
+the port and TLS setting from `hec settings`; it cannot infer external port mappings.
+The manual smoke script accepts this override as `LIVE_HEC_URL`.
 
 ### See also
 

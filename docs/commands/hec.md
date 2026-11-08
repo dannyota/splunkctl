@@ -95,6 +95,7 @@ splunkctl hec send [OPTIONS] NAME EVENT
 |---|---|---|---|
 | `--index` | text | - | Target index. |
 | `--sourcetype` | text | - | Source type. |
+| `--url` | text | - | HEC base URL (scheme://host:port); default: API host and HEC settings. |
 
 ## hec settings
 

@@ -1830,6 +1830,15 @@
                 "--sourcetype"
               ],
               "help": "Source type."
+            },
+            {
+              "name": "url",
+              "type": "text",
+              "kind": "option",
+              "flags": [
+                "--url"
+              ],
+              "help": "HEC base URL (scheme://host:port); default: API host and HEC settings."
             }
           ]
         },
