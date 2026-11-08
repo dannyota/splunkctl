@@ -53,6 +53,23 @@ splunkctl docs generate --check
 - Every mutation command stays a dry run by default and must go through
   the guard in `splunkctl/guard.py`.
 
+Run `bash scripts/live-smoke-soar.sh` with a throwaway profile containing a
+`soar:` block and HTTP Basic credentials. `SPLUNKCTL` and `LIVE_PYTHON` select
+the executable and Python; `LIVE_ONLY`/`LIVE_SKIP` select numbered groups.
+Before any mutating group, the runner lists active playbooks and skips all
+mutating groups if a playbook can operate on the fixture label `events`.
+Read-only groups still run. `LIVE_SOAR_ALLOW_ACTIVE_PLAYBOOKS=1` allows these
+mutations, including container resolution, which can trigger existing
+playbooks and consume licensed actions outside the action probe gate.
+The check precedes creation of the runner's own no-op playbook, so that
+playbook is excluded. A failed preflight blocks mutations.
+Community edition allows 100 licensed actions per day and five New/Open
+cases. Licensed probes require `LIVE_SOAR_ACTIONS=1`, `LIVE_SOAR_ACTION_ASSET`,
+and `LIVE_SOAR_ACTION`; optional `LIVE_SOAR_ACTION_PARAMS` is a JSON object.
+The runner uses at most one action run, closes its case before promotion,
+and retains failed cleanup commands for recovery. It has not yet been run
+against the rebuilt SOAR 8.8 lab.
+
 ## Cutting a release
 
 1. Update `__version__` in `splunkctl/__init__.py` and the expected value in

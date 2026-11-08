@@ -4,6 +4,11 @@
 
 ### Added
 
+- `soar artifacts update --no-automation` suppresses playbook automation.
+- `scripts/live-smoke-soar.sh`: a maintainer SOAR live smoke test with owned
+  fixtures, no licensed actions by default (`LIVE_SOAR_ACTIONS=1` opts in),
+  an active-playbook preflight, reverse cleanup, and offline coverage and
+  runner checks. Shared helpers move to `scripts/live-smoke-lib.sh`.
 - `installers/vmlab/fetch-installers.sh` downloads public installers and
   verifies selected artifacts, with a download-free `--check` mode.
 
@@ -20,6 +25,11 @@
 
 ### Fixed
 
+- `soar assets update` and `soar actions run` resolve the asset's app name
+  (as SOAR returns it) to the numeric `app_id`, and reject ambiguous names,
+  instead of failing with `ValueError`.
+- `soar playbooks list` exits 1 on a response without a data list instead of
+  printing an empty list.
 - `server kvstore` reports Splunk 10.6 cohosted, migration, and backup/restore
   fields; `doctor` also requires cohosted KV Store readiness when the
   cohosted block is present.
