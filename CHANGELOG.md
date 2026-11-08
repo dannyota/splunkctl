@@ -18,6 +18,12 @@
   queries) and gitleaks replace semgrep. pip-audit continues to cover
   dependency vulnerabilities.
 
+### Fixed
+
+- `server kvstore` reports Splunk 10.6 cohosted, migration, and backup/restore
+  fields; `doctor` also requires cohosted KV Store readiness when the
+  cohosted block is present.
+
 ## 0.16.0
 
 Live-verified against Splunk Enterprise 10.6.1.1 and SOAR 8.6.0.530: a

@@ -4,6 +4,7 @@ import json
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+import pytest
 from click.testing import CliRunner
 
 from splunkctl.main import cli
@@ -117,6 +118,10 @@ def test_kvstore_status_ready(mock_gc: MagicMock) -> None:
         "version": "4.4",
         "storage_engine": "wiredTiger",
         "db_path": "/opt/splunk/var/lib/splunk/kvstore/mongo",
+        "cohosted_type": "",
+        "cohosted_status": "",
+        "migration_status": "",
+        "backup_restore_status": "",
     }
 
 
@@ -279,3 +284,60 @@ def test_license_usage_perpetual_only_never_expires(mock_gc: MagicMock) -> None:
     row = json.loads(result.output)[0]
     assert row["pct_used"] == 0.0
     assert row["soonest_expiry"] == "never"
+
+
+@pytest.mark.parametrize("cohosted_state", ["ready", "starting"])
+@patch(_PATCH)
+def test_kvstore_status_10_6(
+    mock_gc: MagicMock, kvstore_10_6: dict[str, Any], cohosted_state: str
+) -> None:
+    kvstore_10_6["cohosted"]["status"] = cohosted_state
+    mock_gc.return_value.service.get.return_value = _resp(
+        {"entry": [{"content": kvstore_10_6}]}
+    )
+
+    result = CliRunner().invoke(cli, ["--json", "server", "kvstore"])
+
+    assert result.exit_code == 0
+    assert json.loads(result.stdout) == [
+        {
+            "status": "ready",
+            "port": 8191,
+            "version": "",
+            "storage_engine": "wiredTiger",
+            "db_path": "",
+            "cohosted_type": "Pdl",
+            "cohosted_status": cohosted_state,
+            "migration_status": "NotStarted",
+            "backup_restore_status": "Ready",
+        }
+    ]
+
+
+@pytest.mark.parametrize(
+    ("cohosted", "expected_type", "expected_status"),
+    [
+        (None, "", ""),
+        ("unexpected", "", ""),
+        ({"serviceInfo": "Pdl", "status": "ready"}, "", "ready"),
+    ],
+)
+@patch(_PATCH)
+def test_kvstore_status_malformed_cohosted(
+    mock_gc: MagicMock,
+    kvstore_10_6: dict[str, Any],
+    cohosted: Any,
+    expected_type: str,
+    expected_status: str,
+) -> None:
+    kvstore_10_6["cohosted"] = cohosted
+    mock_gc.return_value.service.get.return_value = _resp(
+        {"entry": [{"content": kvstore_10_6}]}
+    )
+
+    result = CliRunner().invoke(cli, ["--json", "server", "kvstore"])
+
+    assert result.exit_code == 0
+    row = json.loads(result.stdout)[0]
+    assert row["cohosted_type"] == expected_type
+    assert row["cohosted_status"] == expected_status

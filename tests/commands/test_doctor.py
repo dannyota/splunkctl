@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -301,3 +302,74 @@ def test_doctor_missing_config_warns_and_continues(
     assert "1 warnings, 0 failures" in result.stderr
     assert rows[-1]["check"] == "MCP registered"
     assert not config_path.exists()
+
+
+@pytest.mark.parametrize(
+    ("current_state", "cohosted", "expected_status", "detail"),
+    [
+        ("ready", "ready", "OK", "ready (cohosted Pdl: ready, migration: NotStarted)"),
+        (
+            "ready",
+            "starting",
+            "WARN",
+            "ready (cohosted Pdl: starting, migration: NotStarted)",
+        ),
+        (
+            "failed",
+            "ready",
+            "WARN",
+            "failed (cohosted Pdl: ready, migration: NotStarted)",
+        ),
+        ("ready", "empty", "WARN", "ready (cohosted : unknown, migration: NotStarted)"),
+        ("ready", "bad-info", "OK", "ready (cohosted : ready, migration: NotStarted)"),
+        ("ready", "null", "OK", "ready"),
+        ("ready", "string", "OK", "ready"),
+        ("ready", None, "OK", "ready"),
+        ("failed", None, "WARN", "failed"),
+    ],
+)
+@patch("splunkctl.commands.doctor.urllib.request")
+@patch(_PATCH)
+def test_doctor_kvstore(
+    mock_gc: MagicMock,
+    mock_urllib: MagicMock,
+    kvstore_10_6: dict[str, Any],
+    current_state: str,
+    cohosted: str | None,
+    expected_status: str,
+    detail: str,
+) -> None:
+    svc = _mock_service()
+    kvstore_10_6["current"]["status"] = current_state
+    if cohosted is None:
+        kvstore_10_6 = {"current": {"status": current_state, "version": "4.4"}}
+    elif cohosted == "empty":
+        kvstore_10_6["cohosted"] = {}
+    elif cohosted == "bad-info":
+        kvstore_10_6["cohosted"]["serviceInfo"] = "Pdl"
+    elif cohosted == "null":
+        kvstore_10_6["cohosted"] = None
+    elif cohosted == "string":
+        kvstore_10_6["cohosted"] = "unexpected"
+    else:
+        kvstore_10_6["cohosted"]["status"] = cohosted
+    kv_resp = MagicMock()
+    kv_resp.body.read.return_value = json.dumps(
+        {"entry": [{"content": kvstore_10_6}]}
+    ).encode()
+    health_resp = svc.get.return_value
+    svc.get.side_effect = lambda path, **kwargs: (
+        kv_resp if path == "/services/kvstore/status" else health_resp
+    )
+    mock_gc.return_value.service = svc
+    mock_urllib.build_opener.return_value.open.return_value.status = 200
+
+    result = CliRunner().invoke(cli, ["--json", "doctor"])
+
+    assert result.exit_code == 0
+    row = next(r for r in json.loads(result.stdout) if r["check"] == "KV Store")
+    assert row["status"] == expected_status
+    assert row["detail"] == detail
+    if expected_status == "WARN":
+        assert "splunkd.log" in row["hint"]
+        assert "mongod.log" in row["hint"]
