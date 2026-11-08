@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+import pytest
 from click.testing import CliRunner
 
 from splunkctl.main import cli
@@ -233,3 +234,33 @@ class TestArtifactsDelete:
             ["--json", "--yes", "soar", "artifacts", "delete", "999"],
         )
         assert result.exit_code == 1
+
+
+@pytest.mark.parametrize("suppress", [False, True])
+def test_update_automation_payload(suppress: bool) -> None:
+    client = MagicMock()
+    client.post.return_value = {"success": True}
+    with (
+        patch(PATCH_RESOLVE, return_value=soar_cfg()),
+        patch(PATCH_CLIENT, return_value=client),
+        patch(PATCH_SOAR_RESOLVE, return_value=soar_cfg()),
+    ):
+        result = CliRunner().invoke(
+            cli,
+            [
+                "--json",
+                "--yes",
+                "soar",
+                "artifacts",
+                "update",
+                "42",
+                "--name",
+                "changed",
+                *(["--no-automation"] if suppress else []),
+            ],
+        )
+    assert result.exit_code == 0, result.output
+    expected = {"name": "changed"}
+    if suppress:
+        expected["run_automation"] = False
+    client.post.assert_called_once_with("artifact/42", body=expected)

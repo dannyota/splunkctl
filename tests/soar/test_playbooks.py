@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+import pytest
 from click.testing import CliRunner
 
 from splunkctl.main import cli
@@ -72,6 +73,26 @@ class TestPlaybooksList:
         rows = json.loads(result.output)
         assert len(rows) == 1
         assert rows[0]["name"] == "test_pb"
+
+    @pytest.mark.parametrize(
+        "response",
+        [{}, {"count": 1, "data": None}, {"result": []}, [], "oops"],
+    )
+    @patch(PATCH_CLIENT)
+    @patch(PATCH_RESOLVE)
+    def test_list_malformed_response_fails(
+        self, mock_resolve: MagicMock, mock_cls: MagicMock, response: Any
+    ) -> None:
+        mock_resolve.return_value = soar_cfg()
+        client = MagicMock()
+        client.get.return_value = response
+        mock_cls.return_value = client
+
+        result = CliRunner().invoke(
+            cli, ["--json", "soar", "playbooks", "list", "--active"]
+        )
+        assert result.exit_code == 1
+        assert "no playbook data list" in result.output
 
     @patch(PATCH_CLIENT)
     @patch(PATCH_RESOLVE)

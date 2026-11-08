@@ -318,6 +318,12 @@ def create_cmd(
 )
 @click.option("--severity", default=None, help="New severity.")
 @click.option("--type", "artifact_type", default=None, help="New type.")
+@click.option(
+    "--no-automation",
+    is_flag=True,
+    default=False,
+    help="Suppress playbook automation on this artifact update.",
+)
 @click.pass_context
 def update_cmd(
     ctx: click.Context,
@@ -329,6 +335,7 @@ def update_cmd(
     replace_cef: bool,
     severity: str | None,
     artifact_type: str | None,
+    no_automation: bool,
 ) -> None:
     """Update an artifact (fetch-merge for CEF by default)."""
     client = get_soar_client(ctx)
@@ -380,6 +387,9 @@ def update_cmd(
         output.error("Nothing to update — provide at least one field.", kind="usage")
         ctx.exit(1)
         return
+
+    if no_automation:
+        payload["run_automation"] = False
 
     details = json.dumps(payload, indent=2, default=str)
     if not soar_check(ctx, f"Update artifact {artifact_id}", details=details):

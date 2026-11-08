@@ -26,7 +26,6 @@ KV document operations require a ready KV store; built-in model reads require a 
 - `server serverclasses reload`: No create verb for an owned serverclass; cannot safely reload others.
 - `server tokens create`: Requires enabled token authentication; does not change authentication settings.
 - `server tokens revoke`: No token fixture is issued.
-- `soar *`: requires a SOAR instance; see [docs/design/soar-api.md](../../docs/design/soar-api.md).
 
 A populated acceleration summary (percent complete, size, summarized range) is
 not awaited, so those fields are covered by unit tests only. CIM retains

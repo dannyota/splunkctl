@@ -5399,6 +5399,15 @@
                     "--type"
                   ],
                   "help": "New type."
+                },
+                {
+                  "name": "no_automation",
+                  "type": "flag",
+                  "kind": "option",
+                  "flags": [
+                    "--no-automation"
+                  ],
+                  "help": "Suppress playbook automation on this artifact update."
                 }
               ]
             }

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -9,7 +10,7 @@ import click
 
 from splunkctl import config as cfg_mod
 from splunkctl import output
-from splunkctl.soar.client import SOARClient
+from splunkctl.soar.client import SOARClient, SOARError
 
 
 def get_soar_client(ctx: click.Context) -> SOARClient:
@@ -79,3 +80,28 @@ def get_soar_client(ctx: click.Context) -> SOARClient:
         password=cfg.get("password"),
         verify=bool(cfg.get("verify", True)),
     )
+
+
+def resolve_app_reference(client: SOARClient, reference: Any) -> int | None:
+    """Resolve the numeric id or exact app name returned by asset GET."""
+    if isinstance(reference, int):
+        return reference
+    if not isinstance(reference, str) or not reference.strip():
+        return None
+    if reference.isdecimal():
+        return int(reference)
+    result = client.get(
+        "app", params={"_filter_name": json.dumps(reference), "page_size": 2}
+    )
+    rows = result.get("data", []) if isinstance(result, dict) else []
+    if not rows:
+        raise SOARError(f"App '{reference}' not found.", kind="not_found")
+    if len(rows) >= 2:
+        raise SOARError(
+            f"Ambiguous: multiple apps named '{reference}'", kind="ambiguous"
+        )
+    if isinstance(rows[0], dict):
+        value = rows[0].get("id")
+        if isinstance(value, int) or (isinstance(value, str) and value.isdecimal()):
+            return int(value)
+    return None

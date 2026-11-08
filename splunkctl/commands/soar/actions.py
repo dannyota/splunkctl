@@ -9,7 +9,7 @@ from typing import Any
 import click
 
 from splunkctl import guard, output
-from splunkctl.commands.soar._client import get_soar_client
+from splunkctl.commands.soar._client import get_soar_client, resolve_app_reference
 from splunkctl.soar.client import SOARError
 
 _TERMINAL_STATUSES: frozenset[str] = frozenset({"success", "failed", "cancelled"})
@@ -161,7 +161,7 @@ def _resolve_app_id(
     data = result.get("data", []) if isinstance(result, dict) else []
     if data and isinstance(data[0], dict):
         aid = data[0].get("app") or data[0].get("app_id") or 0
-        return int(aid) if aid else None
+        return resolve_app_reference(client, aid)
     return None
 
 

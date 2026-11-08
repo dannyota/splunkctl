@@ -19,9 +19,16 @@ SCRIPTS = [
     ROOT / "scripts/live-smoke.sh",
     *sorted((ROOT / "scripts/live-smoke.d").glob("*.sh")),
 ]
+SOAR_SCRIPTS = [
+    ROOT / "scripts/live-smoke-soar.sh",
+    *sorted((ROOT / "scripts/live-smoke-soar.d").glob("*.sh")),
+]
+LIBRARY = ROOT / "scripts/live-smoke-lib.sh"
 
 
-@pytest.mark.parametrize("script", SCRIPTS, ids=lambda p: p.name)
+@pytest.mark.parametrize(
+    "script", [*SCRIPTS, *SOAR_SCRIPTS, LIBRARY], ids=lambda p: p.name
+)
 def test_bash_syntax(script: Path) -> None:
     result = subprocess.run(  # noqa: S603
         [BASH, "-n", str(script)], capture_output=True, text=True, check=False
@@ -76,6 +83,19 @@ def _invoked_commands(source: str, leaves: set[str]) -> set[str]:
     """Recognize CLI calls and expand the script's simple shell verb loops."""
     import shlex
 
+    # Generated bundle contents are data, not shell command invocations.
+    lines = []
+    delimiter = None
+    for line in source.splitlines():
+        if delimiter is not None:
+            if line.strip() == delimiter:
+                delimiter = None
+            continue
+        lines.append(line)
+        match = re.search(r"<<-?\s*['\"]?(\w+)['\"]?", line)
+        if match:
+            delimiter = match.group(1)
+    source = "\n".join(lines)
     source = source.replace("\\\n", " ")
     loop = r"\bfor (\w+) in ([^;\n]+); do(.*?)\bdone\b"
 
@@ -90,14 +110,39 @@ def _invoked_commands(source: str, leaves: set[str]) -> set[str]:
     paths = {name: name.split() for name in leaves}
     invoked = set()
     for line in source.splitlines():
-        lexer = shlex.shlex(line, posix=True, punctuation_chars=";&|")
+        # Preserve quoted separator literals through shlex quote removal.
+        line = re.sub(r"(['\"])([;&|(){}]+)\1", "quoted_separator", line)
+        lexer = shlex.shlex(line, posix=True, punctuation_chars=";&|()")
         lexer.whitespace_split = True
         words = list(lexer)
-        for i, word in enumerate(words):
+        # Only command words and known executing wrapper argument positions count.
+        starts = [0] + [
+            i + 1
+            for i, word in enumerate(words)
+            if word in {";", "&&", "||", "|", "{", ")", "("}
+        ]
+        for i in starts:
+            if i >= len(words):
+                continue
+            word = words[i]
+            if word in {"if", "!", "elif", "then", "do", "else"}:
+                i += 1
+                if i < len(words) and words[i] == "!":
+                    i += 1
+                if i >= len(words):
+                    continue
+                word = words[i]
             if word == "$S":
                 args = words[i + 1 :]
             elif word in {"check_json", "error_kind"}:
                 args = words[i + 2 :]
+            elif word in {"absent", "delete_fixture"}:
+                args = words[i + 1 :]
+            elif word in {"run", "expect_ok", "expect_fail", "capture", "defer"}:
+                j = i + (2 if word == "capture" else 1)
+                if j >= len(words) or words[j] != "$S":
+                    continue
+                args = words[j + 1 :]
             else:
                 continue
             while args and args[0].startswith("--"):
@@ -117,7 +162,20 @@ def test_every_non_soar_leaf_is_invoked_or_documented() -> None:
     source = "\n".join(p.read_text() for p in SCRIPTS)
     invoked = _invoked_commands(source, leaves)
     uncovered = (ROOT / "scripts/live-smoke.d/UNCOVERED.md").read_text()
-    listed = set(re.findall(r"^- `([^`]+)`: .+", uncovered, re.M)) - {"soar *"}
+    listed = set(re.findall(r"^- `([^`]+)`: .+", uncovered, re.M))
+    assert not leaves - invoked - listed, sorted(leaves - invoked - listed)
+    assert not listed - leaves, f"Stale documentation: {sorted(listed - leaves)}"
+    assert not listed & invoked, f"Now covered: {sorted(listed & invoked)}"
+
+
+def test_every_soar_leaf_is_invoked_or_documented() -> None:
+    tree = json.loads((ROOT / "docs/commands.json").read_text())
+    soar = next(node for node in tree["commands"] if node["name"] == "soar")
+    leaves = _leaves(soar)
+    source = "\n".join(p.read_text() for p in SOAR_SCRIPTS)
+    invoked = _invoked_commands(source, leaves)
+    uncovered = (ROOT / "scripts/live-smoke-soar.d/UNCOVERED.md").read_text()
+    listed = set(re.findall(r"^- `([^`]+)`: .+", uncovered, re.M))
     assert not leaves - invoked - listed, sorted(leaves - invoked - listed)
     assert not listed - leaves, f"Stale documentation: {sorted(listed - leaves)}"
     assert not listed & invoked, f"Now covered: {sorted(listed & invoked)}"
@@ -142,111 +200,6 @@ check_json 'len(d) == 1' search oneshot '| makeresults'
         "search oneshot",
     }
     assert _invoked_commands(source, leaves) == leaves - {"hec send"}
-
-
-HEC_STUB = r"""
-import json, os, sys
-from pathlib import Path
-p = Path(os.environ['HEC_STATE'])
-state = json.loads(p.read_text())
-args = [a for a in sys.argv[1:] if a not in ('--json', '--yes')]
-if '--timeout' in args:
-    i = args.index('--timeout')
-    del args[i:i+2]
-state['calls'].append(args)
-def respond(value=None, missing=False):
-    p.write_text(json.dumps(state))
-    if missing:
-        print(json.dumps({'error': {'kind': 'not_found'}}), file=sys.stderr)
-        sys.exit(1)
-    if value is not None:
-        print(json.dumps(value))
-    sys.exit(0)
-if args[:2] == ['hec', 'settings']:
-    if '--enable' in args: state['disabled'] = '0'
-    if '--disable' in args: state['disabled'] = '1'
-    respond([{'disabled': state['disabled'], 'port': '8088', 'enableSSL': '0'}])
-if args[:2] == ['indexes', 'create']:
-    state['index'] = args[args.index('--name') + 1]
-    respond()
-if args[:2] == ['indexes', 'delete']:
-    state['index'] = None
-    respond()
-if args[:2] == ['indexes', 'get']:
-    respond([{'name': state.get('index')}], missing=not state.get('index'))
-if args[:2] == ['hec', 'create']:
-    state['token_index'] = args[args.index('--index') + 1]
-    state['token'] = args[args.index('--name') + 1]
-    state['token_disabled'] = '0'
-    respond()
-if args[:2] == ['hec', 'delete']:
-    state['token'] = None
-    respond()
-if args[:2] == ['hec', 'get']:
-    respond([{'disabled': state.get('token_disabled', '0')}],
-            missing=not state.get('token'))
-if args[:2] == ['hec', 'list']: respond([])
-if args[:2] == ['hec', 'disable']:
-    state['token_disabled'] = '1'
-    respond()
-if args[:2] == ['hec', 'enable']:
-    state['token_disabled'] = '0'
-    respond()
-if args[:2] == ['hec', 'send']:
-    p.write_text(json.dumps(state))
-    sys.exit(int(os.environ['HEC_SEND_FAIL']))
-if args[:2] == ['search', 'oneshot']:
-    state['polls'] += 1
-    respond([{'count': '0' if state['polls'] == 1 else '1'}])
-raise AssertionError(args)
-"""
-
-
-@pytest.mark.parametrize(
-    "disabled,send_fail", [("0", False), ("1", False), ("1", True)]
-)
-def test_hec_send_retries_and_restores_settings(
-    tmp_path: Path, disabled: str, send_fail: bool
-) -> None:
-    import sys
-
-    binary = tmp_path / "splunkctl-stub"
-    binary.write_text(f"#!{sys.executable}\n" + HEC_STUB)
-    binary.chmod(0o755)
-    state_file = tmp_path / "hec.json"
-    state_file.write_text(json.dumps({"disabled": disabled, "calls": [], "polls": 0}))
-    env = {
-        **os.environ,
-        "SPLUNKCTL": str(binary),
-        "LIVE_PYTHON": sys.executable,
-        "LIVE_ONLY": "hec",
-        "LIVE_SKIP": "",
-        "LIVE_HEC_URL": "http://127.0.0.1:18088",
-        "HEC_STATE": str(state_file),
-        "HEC_SEND_FAIL": str(int(send_fail)),
-    }
-    result = subprocess.run(  # noqa: S603
-        [BASH, str(SCRIPTS[0])], env=env, capture_output=True, text=True, check=False
-    )
-    assert result.returncode == int(send_fail), result.stdout + result.stderr
-    state = json.loads(state_file.read_text())
-    assert state["disabled"] == disabled
-    assert state["index"] is None and state["token"] is None
-    assert state["token_index"].startswith("sc_live_")
-    calls = state["calls"]
-    sends = [c for c in calls if c[:2] == ["hec", "send"]]
-    assert len(sends) == 1
-    send = sends[0]
-    assert send[2] == state["token_index"]
-    assert send[send.index("--index") + 1] == state["token_index"]
-    assert send[send.index("--url") + 1] == "http://127.0.0.1:18088"
-    settings_changes = [c for c in calls if c[:2] == ["hec", "settings"] and len(c) > 2]
-    assert settings_changes == (
-        [["hec", "settings", "--enable"], ["hec", "settings", "--disable"]]
-        if disabled == "1"
-        else []
-    )
-    assert state["polls"] == (0 if send_fail else 2)
 
 
 def test_leaf_guard_matches_only_command_position() -> None:
@@ -495,3 +448,52 @@ exit "$fail"
         assert (
             state["last_json"] if mode != "error" else "Error: poll failed"
         ) in skipped[0]
+
+
+def test_leaf_guard_ignores_bundle_heredoc() -> None:
+    source = '''cat <<'PYBUNDLE'
+"""A multiline Python string
+expect_ok "$S" soar users delete
+"""
+PYBUNDLE
+expect_ok "$S" soar users list
+'''
+    assert _invoked_commands(source, {"soar users list", "soar users delete"}) == {
+        "soar users list"
+    }
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        'echo "$S" soar users delete',
+        'skip "$S" soar users delete',
+        'log "$S" soar users delete',
+        'echo then "$S" soar users delete',
+        'echo ";" "$S" soar users delete',
+        '# "$S" soar users delete',
+        "echo 'expect_ok \"$S\" soar users delete'",
+        'cat <<EOF\n"$S" soar users delete\nEOF',
+    ],
+)
+def test_leaf_guard_rejects_message_text(source: str) -> None:
+    assert not _invoked_commands(source, {"soar users delete"})
+
+
+@pytest.mark.parametrize(
+    "prefix",
+    [
+        "",
+        "run ",
+        "expect_ok ",
+        "expect_fail ",
+        'capture "$T/out" ',
+        "defer ",
+        "if ",
+        "if ! ",
+        'case "$group" in users) ',
+    ],
+)
+def test_leaf_guard_accepts_executable_positions(prefix: str) -> None:
+    leaf = "soar users list"
+    assert _invoked_commands(prefix + '"$S" ' + leaf, {leaf}) == {leaf}

@@ -10,7 +10,7 @@ from typing import Any
 import click
 
 from splunkctl import guard, output
-from splunkctl.commands.soar._client import get_soar_client
+from splunkctl.commands.soar._client import get_soar_client, resolve_app_reference
 from splunkctl.soar.client import SOARError
 
 # Max polls for async test_connectivity result.
@@ -300,17 +300,24 @@ def update_cmd(
     elif "description" in existing:
         body["description"] = existing["description"]
 
-    # Preserve app association — the server exposes the field as "app" but
+    # Preserve app association: the server exposes the field as "app" but
     # POST accepts "app_id".
-    app_ref = existing.get("app")
-    if app_ref is not None:
-        body["app_id"] = app_ref
-
-    # Mask secrets in dry-run preview
-    app_id = existing.get("app") or existing.get("app_id")
-    secret_keys: set[str] = set()
-    if app_id is not None:
-        secret_keys = _password_keys_from_app(client, int(app_id))
+    try:
+        app_id = resolve_app_reference(
+            client, existing.get("app") or existing.get("app_id")
+        )
+        if app_id is None and (existing.get("app") or existing.get("app_id")):
+            output.error("Asset app could not be resolved.", kind="not_found")
+            ctx.exit(1)
+            return
+        secret_keys: set[str] = set()
+        if app_id is not None:
+            body["app_id"] = app_id
+            secret_keys = _password_keys_from_app(client, app_id)
+    except SOARError as exc:
+        output.error(exc.message, kind=exc.kind, http_status=exc.http_status)
+        ctx.exit(1)
+        return
 
     preview_body = dict(body)
     if secret_keys:

@@ -254,6 +254,7 @@ splunkctl soar artifacts update [OPTIONS] ARTIFACT_ID
 | `--replace-cef` | flag | false | Replace cef{} wholesale instead of merging. |
 | `--severity` | text | - | New severity. |
 | `--type` | text | - | New type. |
+| `--no-automation` | flag | false | Suppress playbook automation on this artifact update. |
 
 ## soar assets create
 
