@@ -71,20 +71,39 @@ def _render_license_usage(ctx: click.Context, svc: Any) -> None:
     entries: list[dict[str, Any]] = body.get("entry", [])
     c: dict[str, Any] = entries[0].get("content", {}) if entries else {}
     used = int(c.get("slaves_usage_bytes", 0))
-    quota = int(c.get("quota", 0))
-    pct = round(used / quota * 100, 1) if quota else 0.0
+    resp = svc.get("/services/licenser/groups", output_mode="json", count=0)
+    groups: dict[str, Any] = json.loads(resp.body.read())
+    active_group = next(
+        (
+            entry.get("name", "")
+            for entry in groups.get("entry", [])
+            if str(entry.get("content", {}).get("is_active", "0")).lower()
+            in {"1", "true"}
+        ),
+        "",
+    )
+    quota = 0
+    statuses: set[str] = set()
 
-    resp = svc.get("/services/licenser/licenses", output_mode="json")
+    resp = svc.get("/services/licenser/licenses", output_mode="json", count=0)
     lic_body: dict[str, Any] = json.loads(resp.body.read())
     valid = 0
     expiries: list[int] = []
     for entry in lic_body.get("entry", []):
         lc: dict[str, Any] = entry.get("content", {})
+        if not active_group or lc.get("group_id") != active_group:
+            continue
+        quota += int(lc.get("quota", 0))
+        statuses.add(str(lc.get("status", "UNKNOWN")))
         if lc.get("status") == "VALID":
             valid += 1
         exp = int(lc.get("expiration_time", _PERPETUAL))
         if exp < _PERPETUAL:
             expiries.append(exp)
+    group_status = (
+        "UNKNOWN" if not statuses else ",".join(sorted(statuses - {"VALID"})) or "VALID"
+    )
+    pct = round(used / quota * 100, 1) if quota else 0.0
     soonest = (
         datetime.fromtimestamp(min(expiries), tz=UTC).strftime("%Y-%m-%d")
         if expiries
@@ -94,6 +113,8 @@ def _render_license_usage(ctx: click.Context, svc: Any) -> None:
     output.render(
         ctx,
         {
+            "active_group": active_group or "unknown",
+            "active_group_status": group_status,
             "used": _human_bytes(used),
             "quota": _human_bytes(quota),
             "pct_used": pct,

@@ -98,6 +98,8 @@ splunkctl soar meta cef
 splunkctl soar meta features
 ```
 
+`severities`, `statuses`, `cef`, and `features` fetch every result page. `labels` and `tags` read the complete arrays from `/rest/container_options`.
+
 `statuses` shows the name-to-id map; container updates take the status name, not the id. `labels` cannot be created through the REST API, only in the UI. `features` lists feature flags with their enabled state.
 
 ### Search across objects

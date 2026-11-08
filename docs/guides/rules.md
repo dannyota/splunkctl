@@ -74,7 +74,7 @@ splunkctl rules create --name 'Rule' --search '<SPL>' --cron '*/5 * * * *' \
     --throttle 3600 --throttle-fields src --disabled --yes
 ```
 
-Expected result: the rule exists; with `--disabled` it is created but not scheduled until you `enable` it.
+Expected result: the rule is enabled by default (`disabled=0`). A nonempty `--cron` also sets `is_scheduled=1`. Without a cron, the rule stays unscheduled and stderr explains why. `--disabled` prevents scheduled runs until you enable the rule.
 
 `--email-to`, `--email-subject`, and `--webhook-url` are shortcuts for the most common alert-action fields, on both `create` and `update`:
 
@@ -104,7 +104,7 @@ splunkctl rules enable 'Rule' --yes
 splunkctl rules disable 'Rule' --yes
 ```
 
-Expected result: `get` shows the new field values; `enable` and `disable` flip `disabled`.
+Expected result: `get` shows the new field values; `enable` and `disable` flip `disabled`. `enable` and `update --enabled` set `is_scheduled=1` only when the effective cron is nonempty. `update --cron` uses the new expression for scheduling; an empty expression clears scheduling. An enabled rule without a cron prints one advisory line on stderr and stays unscheduled.
 
 ### Test a rule without firing actions
 
@@ -113,7 +113,7 @@ splunkctl rules test 'Rule'
 splunkctl rules test 'Rule' --earliest -7d --latest now --limit 500
 ```
 
-Expected result: the saved search is dispatched now over its window (or the override) and the results print, without triggering alert actions. Use it to backfill or to tune a threshold before enabling.
+Expected result: an enabled saved search is dispatched with `trigger_actions=0`. For a disabled rule, stderr announces an ad hoc search of its SPL in the rule's app, using its saved earliest/latest times unless overridden. Both paths print results without firing alert actions or changing the rule. Use this to backfill or tune a threshold before enabling.
 
 ### Change sharing
 

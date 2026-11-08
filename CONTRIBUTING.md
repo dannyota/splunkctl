@@ -34,10 +34,14 @@ splunkctl docs generate --check
   For a manual check against a real instance, run
   `SPLUNKCTL=splunkctl bash scripts/live-smoke.sh` with a throwaway profile.
   `LIVE_ONLY`/`LIVE_SKIP` select comma-separated groups; `LIVE_MONITOR_PATH`
-  defaults to `/tmp`; `CIM_TGZ` optionally supplies a Splunk_SA_CIM package;
+  is an existing server path (default `/tmp`), monitored disabled initially;
+  the inputs step skips if that exact input already exists.
+  `CIM_TGZ` optionally supplies a Splunk_SA_CIM package;
   `LIVE_HEC_URL` overrides the HEC base URL; `LIVE_PYTHON` names the
   interpreter that has splunkctl installed (default `python3`).
-  Set `LIVE_HEC_URL=http://127.0.0.1:18088` when HEC uses a mapped port.
+  The `LIVE_HEC_URL` scheme must match `hec settings` `enableSSL`: use
+  `https` on a default install, or `http` when SSL is disabled.
+  For a mapped port, for example, set `LIVE_HEC_URL=https://127.0.0.1:18088`.
   `datamodels rebuild --yes` runs only when `CIM_TGZ` is set and acceleration
   statistics populate within 90 seconds; otherwise it reports SKIPPED.
   The `kvstore` export/import round trip requires a healthy KV store.

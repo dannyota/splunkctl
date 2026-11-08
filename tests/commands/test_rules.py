@@ -121,7 +121,9 @@ def test_create_applies(mock_gc: MagicMock) -> None:
         ],
     )
     assert result.exit_code == 0
-    svc.saved_searches.create.assert_called_once_with("r1", search="index=main")
+    svc.saved_searches.create.assert_called_once_with(
+        "r1", search="index=main", disabled="0", is_scheduled="0"
+    )
 
 
 @patch("splunkctl.commands.rules.get_client")
@@ -152,6 +154,7 @@ def test_create_with_options(mock_gc: MagicMock) -> None:
         search="index=main",
         cron_schedule="*/5 * * * *",
         is_scheduled="1",
+        disabled="0",
         description="test",
         actions="email",
     )

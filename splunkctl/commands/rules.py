@@ -10,6 +10,7 @@ from splunkctl.client import get_client
 from splunkctl.commands import common
 from splunkctl.commands.common import read_results, spl_quote
 from splunkctl.commands.rules_io import export_rules, import_rules
+from splunkctl.commands.rules_runtime import schedule_flag, start_test, warn_unscheduled
 from splunkctl.commands.rules_schedule import schedule_cmd
 
 
@@ -217,14 +218,13 @@ def create(
     kwargs: dict[str, Any] = dict(common.alert_kwargs(actions=actions, **alert_flags))
     if cron is not None:
         kwargs["cron_schedule"] = cron
-        kwargs["is_scheduled"] = "1"
+    kwargs["is_scheduled"] = schedule_flag(cron)
     if description is not None:
         kwargs["description"] = description
     if actions is not None:
         kwargs["actions"] = actions
         common.warn_missing_action_fields(actions, kwargs)
-    if disabled:
-        kwargs["disabled"] = "1"
+    kwargs["disabled"] = "1" if disabled else "0"
     if app is not None:
         kwargs["app"] = app
 
@@ -238,6 +238,7 @@ def create(
     client = get_client(ctx)
     client.service.saved_searches.create(name, search=spl, **kwargs)
     output.info(f"Created saved search '{name}'.")
+    warn_unscheduled(name, kwargs)
 
 
 @rules_group.command()
@@ -251,7 +252,7 @@ def create(
 @click.option(
     "--enabled/--disabled",
     default=None,
-    help="Enable or disable scheduling.",
+    help="Enable or disable the saved search.",
 )
 @common.alert_options
 @click.pass_context
@@ -274,28 +275,30 @@ def update(
         kwargs["search"] = spl
     if cron is not None:
         kwargs["cron_schedule"] = cron
+        kwargs["is_scheduled"] = schedule_flag(cron)
     if description is not None:
         kwargs["description"] = description
     if actions is not None:
         kwargs["actions"] = actions
     if enabled is not None:
         kwargs["disabled"] = "0" if enabled else "1"
-        if enabled:
-            kwargs["is_scheduled"] = "1"
 
     if not kwargs:
         output.error("No changes specified.")
         ctx.exit(1)
         return
 
-    # Only fetch the existing rule up front when a required-field check
-    # against server-side state is needed — keeps other dry-runs offline.
+    # Fetch existing state only for action validation or enabling without --cron.
     client: Any = None
     ss: Any = None
-    if actions is not None:
+    if actions is not None or (enabled and cron is None):
         client = get_client(ctx)
         ss = _resolve_rule(ctx, client, name, app)
-        common.warn_missing_action_fields(actions, kwargs, ss.content)
+        if actions is not None:
+            common.warn_missing_action_fields(actions, kwargs, ss.content)
+    if enabled:
+        effective_cron = cron if cron is not None else ss.content.get("cron_schedule")
+        kwargs["is_scheduled"] = schedule_flag(effective_cron)
 
     detail = "\n".join(f"  {k}: {v}" for k, v in kwargs.items())
     if not guard.check(ctx, f"Update saved search '{name}'", details=detail):
@@ -306,6 +309,7 @@ def update(
         ss = _resolve_rule(ctx, client, name, app)
     ss.update(**kwargs).refresh()
     output.info(f"Updated saved search '{name}'.")
+    warn_unscheduled(name, kwargs)
 
 
 @rules_group.command()
@@ -333,7 +337,7 @@ def delete(ctx: click.Context, name: str) -> None:
 @click.argument("name")
 @click.pass_context
 def enable(ctx: click.Context, name: str) -> None:
-    """Enable scheduling for a saved search."""
+    """Enable a saved search and schedule it when a cron exists."""
     if not guard.check(ctx, f"Enable saved search '{name}'"):
         return
 
@@ -344,8 +348,13 @@ def enable(ctx: click.Context, name: str) -> None:
         output.error(f"Saved search not found: {name}", kind="not_found")
         ctx.exit(1)
         return
-    ss.update(disabled="0", is_scheduled="1").refresh()
+    kwargs = {
+        "disabled": "0",
+        "is_scheduled": schedule_flag(ss.content.get("cron_schedule")),
+    }
+    ss.update(**kwargs).refresh()
     output.info(f"Enabled saved search '{name}'.")
+    warn_unscheduled(name, kwargs)
 
 
 @rules_group.command()
@@ -420,14 +429,7 @@ def test_rule(
         ctx.exit(1)
         return
 
-    kwargs: dict[str, str] = {"trigger_actions": "0"}
-    if earliest:
-        kwargs["dispatch.earliest_time"] = earliest
-    if latest:
-        kwargs["dispatch.latest_time"] = latest
-
-    output.info(f"Dispatching '{name}'" + (f" over {earliest or '(rule window)'}"))
-    job: Any = ss.dispatch(**kwargs)
+    job: Any = start_test(client, ss, earliest, latest)
 
     timeout: int = ctx.obj.get("timeout", 30)
     deadline = time.monotonic() + timeout

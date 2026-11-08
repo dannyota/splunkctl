@@ -63,7 +63,7 @@ splunkctl rules disable [OPTIONS] NAME
 
 ## rules enable
 
-Enable scheduling for a saved search.
+Enable a saved search and schedule it when a cron exists.
 
 > Guarded mutation — dry-run by default; apply with `--yes`.
 
@@ -227,7 +227,7 @@ splunkctl rules update [OPTIONS] NAME
 | `--app` | text | - | Splunk app context of the rule. |
 | `--description` | text | - | Description. |
 | `--actions` | text | - | Alert actions (comma-separated). |
-| `--enabled / --disabled` | flag | - | Enable or disable scheduling. |
+| `--enabled / --disabled` | flag | - | Enable or disable the saved search. |
 | `--earliest` | text | - | dispatch.earliest_time (e.g. -24h). |
 | `--latest` | text | - | dispatch.latest_time (e.g. now). |
 | `--alert-type` | choice: custom, number of events, number of hosts, number of sources | - | Alert trigger type (defaults to 'number of events' when a comparator is set). |

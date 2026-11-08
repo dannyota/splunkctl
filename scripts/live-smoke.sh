@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Manual test ONLY for a throwaway Splunk Enterprise profile. Never run in CI.
 # "$PY" must have splunkctl and PyYAML installed (also used for stanza cleanup).
+# LIVE_HEC_URL must match hec settings enableSSL: https by default, http if disabled.
 set -uo pipefail
 S="${SPLUNKCTL:-splunkctl}"
 PY="${LIVE_PYTHON:-python3}"

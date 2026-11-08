@@ -6,10 +6,11 @@ import json
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+import pytest
 from click.testing import CliRunner
 
 from splunkctl.main import cli
-from splunkctl.soar.client import SOARError
+from splunkctl.soar.client import SOARClient, SOARError
 from tests.soar.conftest import PATCH_CLIENT, PATCH_RESOLVE, mock_client, soar_cfg
 
 # -------------------------------------------------------------------
@@ -193,6 +194,7 @@ class TestSoarMeta:
             ],
         }
         client = mock_client({"severity": severity_data})
+        client.iter_pages.return_value = iter(severity_data["data"])
         mock_cls.return_value = client
 
         result = CliRunner().invoke(cli, ["--json", "soar", "meta", "severities"])
@@ -215,6 +217,7 @@ class TestSoarMeta:
             ],
         }
         client = mock_client({"container_status": status_data})
+        client.iter_pages.return_value = iter(status_data["data"])
         mock_cls.return_value = client
 
         result = CliRunner().invoke(cli, ["--json", "soar", "meta", "statuses"])
@@ -270,6 +273,7 @@ class TestSoarMeta:
             ],
         }
         client = mock_client({"cef": cef_data})
+        client.iter_pages.return_value = iter(cef_data["data"])
         mock_cls.return_value = client
 
         result = CliRunner().invoke(cli, ["--json", "soar", "meta", "cef"])
@@ -292,6 +296,7 @@ class TestSoarMeta:
             ],
         }
         client = mock_client({"feature_flag": feature_data})
+        client.iter_pages.return_value = iter(feature_data["data"])
         mock_cls.return_value = client
 
         result = CliRunner().invoke(cli, ["--json", "soar", "meta", "features"])
@@ -313,3 +318,41 @@ class TestSoarMeta:
 
         result = CliRunner().invoke(cli, ["--json", "soar", "meta", "bogus"])
         assert result.exit_code != 0
+
+
+@pytest.mark.parametrize(
+    ("vocabulary", "endpoint"),
+    [
+        ("severities", "severity"),
+        ("statuses", "container_status"),
+        ("cef", "cef"),
+        ("features", "feature_flag"),
+    ],
+)
+def test_meta_fetches_every_page(vocabulary: str, endpoint: str) -> None:
+    class PaginatingClient(SOARClient):
+        def __init__(self) -> None:
+            self.pages: list[int] = []
+
+        def get(
+            self, path: str, *, params: dict[str, Any] | None = None
+        ) -> dict[str, Any]:
+            assert path == endpoint
+            page = (params or {}).get("page", 0)
+            self.pages.append(page)
+            return {
+                "count": 3,
+                "num_pages": 3,
+                "data": [{"id": page + 1, "name": f"value-{page}"}],
+            }
+
+    client = PaginatingClient()
+    with (
+        patch(PATCH_RESOLVE, return_value=soar_cfg()),
+        patch(PATCH_CLIENT, return_value=client),
+    ):
+        result = CliRunner().invoke(cli, ["--json", "soar", "meta", vocabulary])
+
+    assert result.exit_code == 0, result.output
+    assert [row["id"] for row in json.loads(result.output)] == [1, 2, 3]
+    assert client.pages == [0, 1, 2]

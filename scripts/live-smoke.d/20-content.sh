@@ -159,7 +159,7 @@ if selected conf; then
         expect_ok "$S" conf list props --app search --json
         check_json 'd[0]["category"]=="sc_live_conf"' conf get props "${N}_conf" --app search
         expect_ok "$S" conf unset props "${N}_conf" category --yes
-        check_json 'd[0]["category"]==""' conf get props "${N}_conf" --app search
+        check_json 'd[0]["category"] in (None, "")' conf get props "${N}_conf" --app search
         expect_ok "$S" conf reload props --yes
     else bad 'create conf stanza'; fi
 fi

@@ -39,10 +39,8 @@ if selected datamodels; then
             model=$("$PY" -c 'import json,sys; d=json.load(open(sys.argv[1])); print(d[0]["name"] if d else "")' "$T/cim.json")
             if [ -n "$model" ]; then
                 expect_ok "$S" datamodels get "$model" --app Splunk_SA_CIM --json
-                # Generic conf can scope writes through SPLUNK_APP.
-                expect_ok env SPLUNK_APP=Splunk_SA_CIM "$S" conf set datamodels "$model" \
-                    acceleration=true acceleration.earliest_time=-15m \
-                    'acceleration.cron_schedule=*/5 * * * *' --yes
+                expect_ok "$S" datamodels accelerate "$model" --app Splunk_SA_CIM \
+                    --earliest -15m --cron '*/5 * * * *' --yes
                 deadline=$((SECONDS+90))
                 populated=0
                 printf '[]\n' > "$T/acceleration.json"

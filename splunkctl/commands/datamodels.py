@@ -28,6 +28,7 @@ from splunklib.binding import UrlEncoded
 
 from splunkctl import guard, output
 from splunkctl.client import get_client, rest_get_json
+from splunkctl.commands import conf_ops
 from splunkctl.commands.common import fetch_page, list_options
 
 _OWNER = "nobody"
@@ -276,6 +277,67 @@ def acceleration_status(ctx: click.Context, name: str | None) -> None:
 
     rows = [_acceleration_row(e, by_name) for e in candidates]
     output.render(ctx, rows, empty="No accelerated data models found.")
+
+
+@datamodels_group.command("accelerate")
+@guard.guarded
+@click.argument("name")
+@click.option("--app", default="-", help="Splunk app context.")
+@click.option(
+    "--earliest", default="-1mon", show_default=True, help="Summary time range start."
+)
+@click.option(
+    "--cron", default="*/5 * * * *", show_default=True, help="Summarization schedule."
+)
+@click.option(
+    "--disable", is_flag=True, help="Disable acceleration instead of enabling it."
+)
+@click.pass_context
+def accelerate_model(
+    ctx: click.Context,
+    name: str,
+    *,
+    app: str,
+    earliest: str,
+    cron: str,
+    disable: bool,
+) -> None:
+    """Configure acceleration in the model's datamodels.conf stanza."""
+    client = get_client(ctx)
+    entry = _resolve(client, name, app)
+    if entry is None:
+        output.error(f"Data model '{name}' not found.", kind="not_found")
+        ctx.exit(1)
+        return
+
+    resolved_app = str(entry.get("acl", {}).get("app", ""))
+    resolved_name = str(entry.get("name", name))
+    kv = {
+        "acceleration": "false" if disable else "true",
+        "acceleration.earliest_time": earliest,
+        "acceleration.cron_schedule": cron,
+    }
+    try:
+        entity = conf_ops.get_stanza(
+            client, "datamodels", resolved_name, app=resolved_app
+        )
+        current: dict[str, Any] = dict(entity.content)
+    except KeyError:
+        current = {}
+    diff = "\n".join(conf_ops.diff_lines(current, kv))
+    details = (
+        f"  app: {resolved_app}\n"
+        f"  file: datamodels.conf\n  stanza: {resolved_name}\n{diff}"
+    )
+    if not guard.check(
+        ctx, f"Configure acceleration for data model '{resolved_name}'", details=details
+    ):
+        return
+
+    conf_ops.set_keys(client, "datamodels", resolved_name, kv, app=resolved_app)
+    output.info(
+        f"Updated acceleration for data model '{resolved_name}' (app '{resolved_app}')."
+    )
 
 
 @datamodels_group.command("rebuild")

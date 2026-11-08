@@ -5,6 +5,25 @@
 
 CIM/tstats data models — definitions and acceleration health.
 
+## datamodels accelerate
+
+Configure acceleration in the model's datamodels.conf stanza.
+
+> Guarded mutation — dry-run by default; apply with `--yes`.
+
+```text
+splunkctl datamodels accelerate [OPTIONS] NAME
+```
+
+**Flags**
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--app` | text | - | Splunk app context. |
+| `--earliest` | text | -1mon | Summary time range start. |
+| `--cron` | text | */5 * * * * | Summarization schedule. |
+| `--disable` | flag | - | Disable acceleration instead of enabling it. |
+
 ## datamodels acceleration
 
 Acceleration build status: percent complete, summarized range, errors.

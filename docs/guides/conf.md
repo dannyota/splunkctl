@@ -77,7 +77,7 @@ splunkctl conf unset macros my_macro definition
 splunkctl conf unset macros my_macro definition --yes
 ```
 
-Expected result: the key reads back empty. This is the same mechanism `parsers unset` uses. To remove a whole stanza, use the dedicated command group for that file when one exists (for example `parsers delete` for `props.conf`).
+Expected result: the key reads back empty (`""` or JSON `null`, depending on Splunk). This is the same mechanism `parsers unset` uses. To remove a whole stanza, use the dedicated command group for that file when one exists (for example `parsers delete` for `props.conf`).
 
 ### Reload the file
 

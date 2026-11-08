@@ -4,6 +4,8 @@
 
 ### Added
 
+- `datamodels accelerate` previews and configures datamodels.conf acceleration.
+
 - `scripts/live-smoke.sh` replaces `scripts/live-adapter-smoke.sh`: a
   maintainer smoke test for every SIEM command group against a throwaway
   Splunk instance, with `LIVE_ONLY`, `LIVE_SKIP`, `CIM_TGZ`,
@@ -18,6 +20,13 @@
   needs Python 3.13, so Python 3.12 installs stay on `splunk-sdk>=2.1`.
 - CI runs `pip-audit` against the installed runtime dependencies.
 - The install guide no longer mentions the retired SDK fork.
+
+### Fixed
+
+- Rules enable without a cron; disabled rule tests run SPL ad hoc.
+- SOAR metadata vocabularies walk all REST pages.
+- License usage scopes validity, quota and expiry totals to the active group.
+- Live smoke skips existing inputs, accepts null conf, and tests rule paths and acceleration.
 
 ## 0.15.0
 

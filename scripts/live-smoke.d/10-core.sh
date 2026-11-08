@@ -81,13 +81,20 @@ fi
 if selected inputs; then
     step "inputs"
     # Monitor names are server paths. Never attach to or delete an existing /tmp input.
-    monitor="${LIVE_MONITOR_PATH:-/tmp}/$N"
-    if ensure_index && absent inputs get "$monitor" && {
+    monitor="${LIVE_MONITOR_PATH:-/tmp}"
+    "$S" --json inputs get "$monitor" > "$T/monitor.json" 2>&1
+    monitor_status=$?
+    if [ "$monitor_status" = 0 ]; then
+        skip "inputs: monitor already exists: $monitor"
+    elif ! is_not_found "$monitor_status" "$T/monitor.json"; then
+        cat "$T/monitor.json"
+        bad 'could not verify monitor input absence'
+    elif ensure_index && {
         defer "$S" inputs delete "$monitor" --yes
         run "$S" inputs create --name "$monitor" --kind monitor --index "$N" --disabled --yes
     }; then
         expect_ok "$S" inputs get "$monitor" --json
-        check_json 'len(d)==1' inputs list --filter "$N"
+        check_json 'len(d)==1' inputs list --filter "$monitor"
         expect_ok "$S" inputs update "$monitor" --sourcetype "$N" --yes
         expect_ok "$S" inputs disable "$monitor" --yes
         check_json 'str(d[0]["disabled"]).lower() in ("1","true")' inputs get "$monitor"
@@ -104,6 +111,7 @@ if selected rules; then
         expect_ok "$S" rules update "$N" --description sc_live_updated --yes
         expect_ok "$S" rules enable "$N" --yes
         check_json 'str(d[0]["disabled"]).lower() in ("0","false")' rules get "$N"
+        expect_ok "$S" rules test "$N" --earliest -15m --json
         expect_ok "$S" rules disable "$N" --yes
         check_json 'str(d[0]["disabled"]).lower() in ("1","true")' rules get "$N"
         expect_ok "$S" rules share "$N" --sharing app --yes

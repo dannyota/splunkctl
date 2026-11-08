@@ -878,7 +878,7 @@ splunkctl rules create --name 'Rule' --search '<SPL>' --cron '*/5 * * * *' \
     --throttle 3600 --throttle-fields src --disabled --yes
 ```
 
-Expected result: the rule exists; with `--disabled` it is created but not scheduled until you `enable` it.
+Expected result: the rule is enabled by default (`disabled=0`). A nonempty `--cron` also sets `is_scheduled=1`. Without a cron, the rule stays unscheduled and stderr explains why. `--disabled` prevents scheduled runs until you enable the rule.
 
 `--email-to`, `--email-subject`, and `--webhook-url` are shortcuts for the most common alert-action fields, on both `create` and `update`:
 
@@ -908,7 +908,7 @@ splunkctl rules enable 'Rule' --yes
 splunkctl rules disable 'Rule' --yes
 ```
 
-Expected result: `get` shows the new field values; `enable` and `disable` flip `disabled`.
+Expected result: `get` shows the new field values; `enable` and `disable` flip `disabled`. `enable` and `update --enabled` set `is_scheduled=1` only when the effective cron is nonempty. `update --cron` uses the new expression for scheduling; an empty expression clears scheduling. An enabled rule without a cron prints one advisory line on stderr and stays unscheduled.
 
 #### Test a rule without firing actions
 
@@ -917,7 +917,7 @@ splunkctl rules test 'Rule'
 splunkctl rules test 'Rule' --earliest -7d --latest now --limit 500
 ```
 
-Expected result: the saved search is dispatched now over its window (or the override) and the results print, without triggering alert actions. Use it to backfill or to tune a threshold before enabling.
+Expected result: an enabled saved search is dispatched with `trigger_actions=0`. For a disabled rule, stderr announces an ad hoc search of its SPL in the rule's app, using its saved earliest/latest times unless overridden. Both paths print results without firing alert actions or changing the rule. Use this to backfill or tune a threshold before enabling.
 
 #### Change sharing
 
@@ -1239,8 +1239,8 @@ When to use: your detections run on accelerated CIM data models through `| tstat
 ### Prerequisites
 
 - A profile that passes `splunkctl doctor` (see [Configure](https://splunkctl.danny.vn/guides/configure.md)).
-- Read access to data models for `list`, `get`, and `acceleration`; write access to the model's app (for example `Splunk_SA_CIM`) for `rebuild`.
-- Every command is a thin, typed wrapper around the `datamodel/model` and `admin/summarization` REST collections.
+- Read access to data models for `list`, `get`, and `acceleration`; write access to the model's app (for example `Splunk_SA_CIM`) for `accelerate` and `rebuild`.
+- Reads use the `datamodel/model` and `admin/summarization` REST collections; `accelerate` writes `datamodels.conf` through the same shared conf writer as `conf set`.
 
 ### Synopsis
 
@@ -1248,6 +1248,7 @@ When to use: your detections run on accelerated CIM data models through `| tstat
 splunkctl datamodels list [--app APP] [--filter SUBSTRING] [--limit N] [--offset N]
 splunkctl datamodels get <NAME> [--app APP] [--definition]
 splunkctl datamodels acceleration [NAME]
+splunkctl datamodels accelerate <NAME> [--app APP] [--earliest -1mon] [--cron '*/5 * * * *'] [--disable] [--yes]
 splunkctl datamodels rebuild <NAME> [--app APP] [--yes]
 ```
 
@@ -1297,6 +1298,19 @@ Expected result: without a name, one row per model whose acceleration configurat
 
 Two REST resources are involved because `datamodel/model`'s `acceleration` field holds only the configuration (`enabled`, `earliest_time`, `cron_schedule`) and never build progress. Percent complete, the summarized range, size, and the last build error live on a separate `admin/summarization` entity per accelerated model, named `tstats:DM_<app>_<model>`, the same source Splunk Web's Data Model Manager page reads. If nothing is accelerated, the command renders an empty result, never an error, and skips the `admin/summarization` fetch. `acceleration <name>` on a non-accelerated model returns `enabled: false` with the other fields blank or `null`; that is a valid answer to "is this model accelerated at all", so an agent auditing coverage does not need a special case. Only a model that does not exist is an error (`not_found`).
 
+#### Configure acceleration
+
+```bash
+splunkctl datamodels accelerate Authentication --app Splunk_SA_CIM
+splunkctl datamodels accelerate Authentication --app Splunk_SA_CIM --earliest -15m --cron '*/5 * * * *' --yes
+splunkctl datamodels acceleration Authentication
+splunkctl datamodels accelerate Authentication --app Splunk_SA_CIM --disable --yes
+```
+
+Expected result: the default dry run previews the app, canonical model name, and old and new values for `acceleration`, `acceleration.earliest_time`, and `acceleration.cron_schedule` in `datamodels.conf`. Add `--yes` to apply through the shared `conf set` writer. The defaults are `--earliest -1mon` and `--cron '*/5 * * * *'`; all three keys are written on every apply, including `--disable`, which sets `acceleration=false`. An absent configuration stanza is created in the resolved model's app. An absent model exits 1 without creating a stanza.
+
+Enabling acceleration starts summary work on the configured cron. Check `acceleration NAME` for progress; summary creation may not be immediate.
+
 #### Rebuild a stale summary
 
 > **Safety:** Target is the Splunk host in the active profile and the named model's app. Impact: the existing tsidx summary is dropped and historical data is re-summarized from scratch for the same `earliest_time` window; `| tstats` searches run on incomplete data until the rebuild finishes. Preview with `splunkctl datamodels rebuild Authentication`, apply by adding `--yes`, and verify with `splunkctl datamodels acceleration Authentication` until `percent_complete` reaches 100.
@@ -1317,7 +1331,7 @@ Because a rebuild is two separate POSTs, a failure between them (for example a p
 
 - `http` with status 503 from `list`: the instance is down or starting; the error envelope carries `kind`, `http_status`, and `message`, never a traceback.
 - `not_found` from `get`, `acceleration NAME`, or `rebuild`: the model name is case-sensitive and may live in another app; run `splunkctl datamodels list --filter <text>` and pass `--app`.
-- `Data model 'NAME' is not accelerated`: `rebuild` exits 1 and does nothing; enable acceleration in Splunk Web first.
+- `Data model 'NAME' is not accelerated`: `rebuild` exits 1 and does nothing; enable acceleration with `splunkctl datamodels accelerate NAME --yes` first.
 - `percent_complete` stays below 100 after a rebuild: the summarization cron has not caught up; check `last_error` for a peer-level failure before rebuilding again.
 - `acceleration_enabled` is `false` after a failed `rebuild --yes`: the second POST failed; fix the `permission` or `connection` error and run `rebuild --yes` again once acceleration is re-enabled in Splunk Web.
 - `has_summary: false` with `enabled: true`: acceleration was just enabled; wait for the first cron run.
@@ -1692,6 +1706,8 @@ splunkctl soar meta tags
 splunkctl soar meta cef
 splunkctl soar meta features
 ```
+
+`severities`, `statuses`, `cef`, and `features` fetch every result page. `labels` and `tags` read the complete arrays from `/rest/container_options`.
 
 `statuses` shows the name-to-id map; container updates take the status name, not the id. `labels` cannot be created through the REST API, only in the UI. `features` lists feature flags with their enabled state.
 
@@ -3411,7 +3427,7 @@ splunkctl conf unset macros my_macro definition
 splunkctl conf unset macros my_macro definition --yes
 ```
 
-Expected result: the key reads back empty. This is the same mechanism `parsers unset` uses. To remove a whole stanza, use the dedicated command group for that file when one exists (for example `parsers delete` for `props.conf`).
+Expected result: the key reads back empty (`""` or JSON `null`, depending on Splunk). This is the same mechanism `parsers unset` uses. To remove a whole stanza, use the dedicated command group for that file when one exists (for example `parsers delete` for `props.conf`).
 
 #### Reload the file
 
@@ -4475,7 +4491,7 @@ splunkctl server license --usage
 splunkctl server kvstore
 ```
 
-Expected result: `license` lists pool usage (used versus quota per pool). `--usage` reports one row with `used`, `quota`, `pct_used` (today's indexed volume against the licensed daily quota), `licenses_valid`, and `soonest_expiry` (earliest expiring non-perpetual license, or `never`). `kvstore` shows status, port, version, and storage engine, with an explicit status word (`ready`, `failed`, `starting`, `unknown`) so a down KV store is never mistaken for a healthy result.
+Expected result: `license` lists pool usage (used versus quota per pool). `--usage` reports one row with `used`, `quota`, `pct_used` (today's indexed volume against the licensed daily quota), `active_group`, `active_group_status`, `licenses_valid`, and `soonest_expiry` (earliest expiring non-perpetual license, or `never`). Quota, valid-license count, and expiry include only licenses belonging to the active group, selected by `/services/licenser/groups` `is_active`. An expired active Trial stays `EXPIRED` even when inactive Free or Forwarder licenses are valid. `UNKNOWN` means the active group or its licenses are missing. See [Splunk license endpoints](https://help.splunk.com/en/splunk-enterprise/rest-api-reference/10.4/license-endpoints/license-endpoint-descriptions). `kvstore` shows status, port, version, and storage engine, with an explicit status word (`ready`, `failed`, `starting`, `unknown`) so a down KV store is never mistaken for a healthy result.
 
 #### Read and dismiss system messages
 
