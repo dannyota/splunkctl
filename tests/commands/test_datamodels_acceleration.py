@@ -310,18 +310,16 @@ def test_rebuild_applies_with_yes_disables_then_reenables(mock_gc: MagicMock) ->
     first = svc.post.call_args_list[0]
     second = svc.post.call_args_list[1]
     assert first.args == ("datamodel/model/Authentication",)
-    assert first.kwargs == {
-        "owner": "nobody",
-        "app": "Splunk_SA_CIM",
-        "acceleration": "0",
-    }
+    assert first.kwargs["owner"] == "nobody"
+    assert first.kwargs["app"] == "Splunk_SA_CIM"
+    # The endpoint takes one JSON object; a bare 0/1 is a server error.
+    assert json.loads(first.kwargs["acceleration"]) == {"enabled": False}
+    assert set(first.kwargs) == {"owner", "app", "acceleration"}
     assert second.args == ("datamodel/model/Authentication",)
-    assert second.kwargs == {
-        "owner": "nobody",
-        "app": "Splunk_SA_CIM",
-        "acceleration": "1",
-        "acceleration.earliest_time": "-30d",
-    }
+    re_enabled = json.loads(second.kwargs["acceleration"])
+    assert re_enabled["enabled"] is True
+    assert re_enabled["earliest_time"] == "-30d"
+    assert set(second.kwargs) == {"owner", "app", "acceleration"}
 
 
 @patch(_PATCH)

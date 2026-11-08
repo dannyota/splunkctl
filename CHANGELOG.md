@@ -14,6 +14,13 @@
 - `hec send --url` overrides the HEC base URL for hosts where the HEC port
   is mapped differently from the management port.
 
+### Fixed
+
+- `datamodels rebuild` sent `acceleration=0` and `acceleration=1` as bare
+  form fields; the `datamodel/model` endpoint takes one JSON object and
+  answered HTTP 500. It now posts `{"enabled": false}` and then the
+  model's full acceleration config with `enabled` true.
+
 ### Changed
 
 - Require `splunk-sdk>=3.0` on Python 3.13 and later. `splunk-sdk` 3.x

@@ -388,18 +388,21 @@ def rebuild_model(ctx: click.Context, name: str, *, app: str) -> None:
     ):
         return
 
+    # datamodel/model takes the acceleration config as one JSON object; a
+    # bare "0"/"1" is answered with HTTP 500 "Unexpected EOF" (verified on
+    # Splunk 10.6). Disabling clears earliest_time server-side, so the
+    # re-enable resends the full original config.
     client.service.post(
         "datamodel/model/" + _seg(resolved_name),
         owner=_OWNER,
         app=resolved_app,
-        acceleration="0",
+        acceleration=json.dumps({"enabled": False}),
     )
     client.service.post(
         "datamodel/model/" + _seg(resolved_name),
         owner=_OWNER,
         app=resolved_app,
-        acceleration="1",
-        **{"acceleration.earliest_time": earliest},
+        acceleration=json.dumps({**accel, "enabled": True}),
     )
     output.info(
         f"Rebuild triggered for data model '{resolved_name}' (app '{resolved_app}')."
