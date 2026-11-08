@@ -300,3 +300,11 @@ class TestGuardedMarkers:
         data = json.loads(result.output)
         soar_cmds = _collect_guarded_full_path(data["commands"])
         assert "soar.notes.comment" in soar_cmds, "notes comment should be guarded"
+
+
+def test_secondary_option_flags_exported() -> None:
+    result = CliRunner().invoke(cli, ["commands"])
+    apps = next(c for c in json.loads(result.output)["commands"] if c["name"] == "apps")
+    update = next(c for c in apps["subcommands"] if c["name"] == "update")
+    visible = next(p for p in update["params"] if "--visible" in p.get("flags", []))
+    assert "--hidden" in visible["flags"]

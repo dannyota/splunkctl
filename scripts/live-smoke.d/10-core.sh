@@ -23,17 +23,21 @@ fi
 # Shared fixtures are lazy: LIVE_ONLY=search or inputs works without indexes.
 ensure_index() {
     if [ "${index_ready:-0}" = 0 ]; then
-        if run "$S" indexes create --name "$N" --yes; then
-            index_ready=1
+        if absent indexes get "$N" && {
             defer "$S" indexes delete "$N" --yes
+            run "$S" indexes create --name "$N" --yes
+        }; then
+            index_ready=1
         else bad 'create fixture index'; return 1; fi
     fi
 }
 ensure_rule() {
     if [ "${rule_ready:-0}" = 0 ]; then
-        if run "$S" rules create --name "$N" --search '| makeresults | eval sc_live_n=1' --app search --yes; then
-            rule_ready=1
+        if absent rules get "$N" --app search && {
             defer "$S" rules delete "$N" --yes
+            run "$S" rules create --name "$N" --search '| makeresults | eval sc_live_n=1' --app search --yes
+        }; then
+            rule_ready=1
         else bad 'create fixture rule'; return 1; fi
     fi
 }
@@ -52,8 +56,10 @@ if selected search; then
     fi
     check_json 'len(d)==1' search export '| makeresults' --earliest -15m
     check_json 'len(d)==1' search oneshot '| makeresults' --earliest -15m
-    if run "$S" indexes create --name "${N}_metrics" --datatype metric --yes; then
+    if absent indexes get "${N}_metrics" && {
         defer "$S" indexes delete "${N}_metrics" --yes
+        run "$S" indexes create --name "${N}_metrics" --datatype metric --yes
+    }; then
         check_json 'isinstance(d,list)' search metrics --index "${N}_metrics"
     else bad 'create metrics index'; fi
     if ensure_index; then
@@ -76,8 +82,10 @@ if selected inputs; then
     step "inputs"
     # Monitor names are server paths. Never attach to or delete an existing /tmp input.
     monitor="${LIVE_MONITOR_PATH:-/tmp}/$N"
-    if ensure_index && run "$S" inputs create --name "$monitor" --kind monitor --index "$N" --disabled --yes; then
+    if ensure_index && absent inputs get "$monitor" && {
         defer "$S" inputs delete "$monitor" --yes
+        run "$S" inputs create --name "$monitor" --kind monitor --index "$N" --disabled --yes
+    }; then
         expect_ok "$S" inputs get "$monitor" --json
         check_json 'len(d)==1' inputs list --filter "$N"
         expect_ok "$S" inputs update "$monitor" --sourcetype "$N" --yes

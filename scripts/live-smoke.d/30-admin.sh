@@ -19,9 +19,9 @@ with tarfile.open(sys.argv[1]) as tgz:
 assert roots == {'Splunk_SA_CIM'}, roots
 PYCIM
     then bad 'CIM_TGZ must contain only Splunk_SA_CIM'; return 1; fi
+    defer "$S" apps uninstall Splunk_SA_CIM --yes
     if run "$S" apps install --path "$CIM_TGZ" --yes; then
         cim_installed=1
-        defer "$S" apps uninstall Splunk_SA_CIM --yes
     else bad 'CIM install'; return 1; fi
 }
 if selected datamodels; then
@@ -41,10 +41,34 @@ if selected datamodels; then
                 expect_ok "$S" datamodels get "$model" --app Splunk_SA_CIM --json
                 # Generic conf can scope writes through SPLUNK_APP.
                 expect_ok env SPLUNK_APP=Splunk_SA_CIM "$S" conf set datamodels "$model" \
-                    acceleration='{"enabled":true,"earliest_time":"-15m","cron_schedule":"*/5 * * * *"}' --yes
-                check_json 'd[0]["enabled"] is True' datamodels acceleration "$model"
-                expect_ok "$S" datamodels rebuild "$model" --app Splunk_SA_CIM --yes
-                expect_ok "$S" datamodels acceleration "$model" --json
+                    acceleration=true acceleration.earliest_time=-15m \
+                    'acceleration.cron_schedule=*/5 * * * *' --yes
+                deadline=$((SECONDS+90))
+                populated=0
+                printf '[]\n' > "$T/acceleration.json"
+                while [ "$SECONDS" -lt "$deadline" ]; do
+                    remaining=$((deadline-SECONDS))
+                    if capture "$T/acceleration.json" "$S" --timeout "$remaining" \
+                        datamodels acceleration "$model" --app Splunk_SA_CIM --json; then
+                        if "$PY" - "$T/acceleration.json" <<'PYSTATS'
+import json, sys
+rows = json.load(open(sys.argv[1]))
+assert len(rows) == 1
+r = rows[0]
+assert r['enabled'] and r['has_summary']
+assert all(r[k] not in (None, '') for k in (
+    'percent_complete', 'size', 'earliest_summarized', 'latest_summarized'))
+PYSTATS
+                        then populated=1; break; fi
+                    fi
+                    [ "$SECONDS" -lt "$deadline" ] && sleep 1
+                done
+                if [ "$populated" = 1 ]; then
+                    expect_ok "$S" datamodels rebuild "$model" --app Splunk_SA_CIM --yes
+                    expect_ok "$S" datamodels acceleration "$model" --app Splunk_SA_CIM --json
+                else
+                    skip "datamodels rebuild: no populated statistics within 90 seconds; last status: $(cat "$T/acceleration.json")"
+                fi
             else bad 'CIM package contains no models'; fi
         fi
     fi
@@ -54,8 +78,10 @@ if selected kvstore; then
     expect_ok "$S" kvstore collections --app search --json
     if capture "$T/kvhealth.json" "$S" server kvstore --json; then
         if "$PY" -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d[0]["status"] == "ready"' "$T/kvhealth.json"; then
-            if run "$S" kvstore create "$N" --app search --yes; then
+            if absent kvstore query "$N" --app search && {
                 defer "$S" kvstore delete "$N" --app search --yes
+                run "$S" kvstore create "$N" --app search --yes
+            }; then
                 expect_ok "$S" kvstore insert "$N" --data '{"_key":"sc_live_row","value":1}' --yes
                 check_json 'len(d)==1 and d[0]["value"]==1' kvstore query "$N"
                 expect_ok "$S" kvstore update "$N" sc_live_row --data '{"value":2}' --yes
@@ -83,16 +109,20 @@ if selected users; then
     step "users"
     # Random passwords belong only to the disposable account.
     password=$("$PY" -c 'import secrets; print("Sc_live_9!"+secrets.token_hex(16))')
-    if run "$S" users create --name "$N" --password "$password" --roles user --yes; then
+    if absent users get "$N" && {
         defer "$S" users delete "$N" --yes
+        run "$S" users create --name "$N" --password "$password" --roles user --yes
+    }; then
         expect_ok "$S" users get "$N" --json
         expect_ok "$S" users list --filter "$N" --json
         expect_ok "$S" users update "$N" --password "${password}X" --realname sc_live_updated --yes
         check_json 'd[0]["realname"]=="sc_live_updated"' users get "$N"
     else bad 'create user'; fi
     step "users roles"
-    if run "$S" users roles create "$N" --imported-roles user --yes; then
+    if absent users roles get "$N" && {
         defer "$S" users roles delete "$N" --yes
+        run "$S" users roles create "$N" --imported-roles user --yes
+    }; then
         expect_ok "$S" users roles get "$N" --json
         expect_ok "$S" users roles list --filter "$N" --json
         expect_ok "$S" users roles update "$N" --default-app search --yes
@@ -127,19 +157,22 @@ if selected state; then
     if ensure_rule && ensure_lookup && ensure_dashboard; then
         expect_ok "$S" state pull --dir "$T/state" --app search --types rules,lookups,dashboards
         # Change only our rule; keep the original snapshot for the final diff.
-        expect_ok "$PY" - "$T/state/rules.yml" "$N" <<'PY'
+        expect_ok "$PY" - "$T/state/rules.yml" "$N" "$T/push" <<'PY'
 import sys, yaml
-p, name = sys.argv[1:]
+from pathlib import Path
+p, name, push = sys.argv[1:]
 docs = yaml.safe_load(open(p))
 ours = [d for d in docs if d['name'] == name]
 assert len(ours) == 1
 ours[0]['description'] = 'sc_live_state_changed'
 with open(p, 'w') as f:
     yaml.safe_dump(docs, f)
+Path(push).mkdir()
+Path(push, "rules.yml").write_text(yaml.safe_dump(ours))
 PY
         check_json 'any(r["change"]=="modified" and r["name"].startswith("sc_live_") for r in d)' \
             state diff --dir "$T/state" --app search --types rules,lookups,dashboards
-        expect_ok "$S" state push --dir "$T/state" --app search --types rules --report "$T/dry.json"
+        expect_ok "$S" state push --dir "$T/push" --app search --types rules --report "$T/dry.json"
         # Refuse to apply if the plan touches anything except our own rule.
         if "$PY" - "$T/dry.json" "$N" <<'PYPLAN'
 import json, sys
@@ -149,7 +182,7 @@ assert len(report['changes']) == 1
 assert report['changes'][0]['name'] == sys.argv[2]
 PYPLAN
         then
-            expect_ok "$S" state push --dir "$T/state" --app search --types rules --yes --report "$T/applied.json"
+            expect_ok "$S" state push --dir "$T/push" --app search --types rules --yes --report "$T/applied.json"
             assert_json "$T/applied.json" 'd["applied"] is True and len(d["changes"])==1'
             check_json 'd[0]["description"]=="sc_live_state_changed"' rules get "$N"
             check_json 'all(r["change"]=="unchanged" for r in d)' \

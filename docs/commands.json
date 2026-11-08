@@ -309,7 +309,8 @@
               "type": "flag",
               "kind": "option",
               "flags": [
-                "--visible"
+                "--visible",
+                "--hidden"
               ],
               "help": "Set app visibility."
             },
@@ -318,7 +319,8 @@
               "type": "flag",
               "kind": "option",
               "flags": [
-                "--enabled"
+                "--enabled",
+                "--disabled"
               ],
               "help": "Enable or disable the app."
             }
@@ -742,7 +744,8 @@
               "type": "flag",
               "kind": "option",
               "flags": [
-                "--verify"
+                "--verify",
+                "--no-verify"
               ],
               "help": "Verify SSL certificate."
             },
@@ -1334,7 +1337,8 @@
                   "type": "flag",
                   "kind": "option",
                   "flags": [
-                    "--enabled"
+                    "--enabled",
+                    "--disabled"
                   ],
                   "help": "Show only enabled or disabled correlation searches."
                 },
@@ -2254,7 +2258,8 @@
               "type": "flag",
               "kind": "option",
               "flags": [
-                "--enabled"
+                "--enabled",
+                "--disabled"
               ],
               "help": "Enable or disable."
             }
@@ -2608,7 +2613,8 @@
               "type": "flag",
               "kind": "option",
               "flags": [
-                "--overwrite"
+                "--overwrite",
+                "--no-overwrite"
               ],
               "help": "OUTPUT (default): always overwrite. --no-overwrite: OUTPUTNEW (only fill fields not already present on the event)."
             },
@@ -2692,7 +2698,8 @@
               "type": "flag",
               "kind": "option",
               "flags": [
-                "--case-sensitive"
+                "--case-sensitive",
+                "--no-case-sensitive"
               ],
               "help": "Case-sensitive field matching (default: Splunk's own default, unset)."
             },
@@ -3394,7 +3401,8 @@
               "type": "flag",
               "kind": "option",
               "flags": [
-                "--create"
+                "--create",
+                "--no-create"
               ],
               "help": "Create the stanza when missing (default: create)."
             }
@@ -3662,7 +3670,8 @@
               "type": "flag",
               "kind": "option",
               "flags": [
-                "--track"
+                "--track",
+                "--no-track"
               ],
               "help": "List firings under triggered alerts."
             },
@@ -3843,7 +3852,8 @@
               "type": "flag",
               "kind": "option",
               "flags": [
-                "--update"
+                "--update",
+                "--no-update"
               ],
               "help": "Update existing rules (default: yes)."
             }
@@ -4097,7 +4107,8 @@
               "type": "flag",
               "kind": "option",
               "flags": [
-                "--enabled"
+                "--enabled",
+                "--disabled"
               ],
               "help": "Enable or disable scheduling."
             },
@@ -4192,7 +4203,8 @@
               "type": "flag",
               "kind": "option",
               "flags": [
-                "--track"
+                "--track",
+                "--no-track"
               ],
               "help": "List firings under triggered alerts."
             },
@@ -7037,7 +7049,8 @@
                   "type": "flag",
                   "kind": "option",
                   "flags": [
-                    "--force"
+                    "--force",
+                    "--no-force"
                   ],
                   "help": "Force overwrite (default: true)."
                 }

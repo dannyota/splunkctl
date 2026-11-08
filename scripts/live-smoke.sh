@@ -20,33 +20,76 @@ selected() {
     case ",${LIVE_ONLY:-}," in ,,|*",$1,"*) return 0;; esac
     skip "$1: not in LIVE_ONLY"; return 1
 }
-# Register immediately after successful creation. Reverse order respects dependencies.
+# Register before creation. Reverse order respects dependencies.
 defer() {
     if [ "$1" = "$S" ]; then
-        case "$2:$3" in
-            indexes:delete|inputs:delete|rules:delete|lookups:delete|dashboards:delete|hec:delete)
-                shift
-                set -- delete_fixture "$@";;
-        esac
+        shift
+        set -- delete_fixture "$@"
     fi
     printf '%q ' "$@" >> "$T/cleanup.sh"
     printf '\n' >> "$T/cleanup.sh"
 }
+is_not_found() {
+    [ "$1" -eq 1 ] && "$PY" - "$2" <<'PY'
+import json, sys
+rows = [json.loads(s) for s in open(sys.argv[1]) if s.startswith('{')]
+assert any(r.get('error', {}).get('kind') == 'not_found' for r in rows)
+PY
+}
+absent() {
+    "$S" --json "$@" > "$T/absent.json" 2>&1
+    local status=$?
+    is_not_found "$status" "$T/absent.json" || {
+        cat "$T/absent.json"
+        bad "fixture must be absent: $*"
+        return 1
+    }
+}
 delete_fixture() {
-    local group=$1 name=$3
-    run "$S" "$@" || return 1
-    error_kind not_found "$group" get "$name"
+    "$S" --json "$@" > "$T/delete.log" 2>&1
+    local status=$?
+    cat "$T/delete.log"
+    if [ "$status" -ne 0 ]; then
+        is_not_found "$status" "$T/delete.log"
+        return $?
+    fi
+    local group=$1 verb=$2 name=$3
+    shift 3
+    case "$group:$verb" in
+        users:roles) absent users roles get "$1";;
+        parsers:delete) absent conf get props "$name" --app search;;
+        kvstore:delete) absent kvstore query "$name" --app search;;
+        apps:uninstall) absent apps get "$name";;
+        search:cancel) return 0;;
+        *) absent "$group" get "$name";;
+    esac
 }
 finish() {
     local status=$?
     trap - EXIT
     [ "$status" -eq 0 ] || bad "script exited $status"
-    "$PY" -c 'import sys; print("".join(reversed(open(sys.argv[1]).readlines())), end="")' \
-        "$T/cleanup.sh" > "$T/reverse.sh"
-    while IFS= read -r command; do
-        eval "$command" || bad "cleanup: $command"
-    done < "$T/reverse.sh"
-    rm -rf "$T"
+    local cleanup_failed=0
+    if "$PY" -c 'import sys; print("".join(reversed(open(sys.argv[1]).readlines())), end="")' \
+        "$T/cleanup.sh" > "$T/reverse.sh"; then
+        : > "$T/remaining.sh"
+        while IFS= read -r command; do
+            if ! eval "$command"; then
+                bad "cleanup: $command"
+                cleanup_failed=1
+                printf '%s\n' "$command" >> "$T/remaining.sh"
+            fi
+        done < "$T/reverse.sh"
+    else
+        bad 'could not reverse cleanup commands'
+        cleanup_failed=1
+        cp "$T/cleanup.sh" "$T/remaining.sh"
+    fi
+    if [ "$cleanup_failed" -eq 0 ]; then
+        rm -rf "$T"
+    else
+        printf 'Cleanup incomplete; retained %s\nRemaining commands:\n' "$T"
+        cat "$T/remaining.sh"
+    fi
     printf '\nRESULT: %s failure(s)\n' "$fail"
     [ "$fail" -eq 0 ]
     exit $?
@@ -96,7 +139,13 @@ import sys
 from splunkctl.client import SplunkClient
 from splunkctl.commands.conf_ops import get_stanza
 assert sys.argv[2].startswith('sc_live_')
-get_stanza(SplunkClient(), sys.argv[1], sys.argv[2], app='search').delete()
+try:
+    get_stanza(SplunkClient(), sys.argv[1], sys.argv[2], app='search').delete()
+except KeyError:
+    pass
+except Exception as exc:
+    if getattr(exc, 'status', None) != 404:
+        raise
 PY
 }
 "$PY" -c 'import splunkctl.client, yaml' || { bad '"$PY" needs splunkctl and PyYAML'; exit 1; }

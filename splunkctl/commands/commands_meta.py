@@ -20,7 +20,7 @@ def _param_entry(p: click.Parameter) -> dict[str, Any]:
     elif isinstance(p, click.Option):
         entry["kind"] = "option"
         if p.opts:
-            entry["flags"] = p.opts
+            entry["flags"] = p.opts + p.secondary_opts
         if p.is_flag:
             entry["type"] = "flag"
         if p.required:

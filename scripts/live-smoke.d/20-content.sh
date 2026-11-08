@@ -1,17 +1,21 @@
 # shellcheck shell=bash
 ensure_lookup() {
     if [ "${lookup_ready:-0}" = 0 ]; then
-        if run "$S" lookups upload "$N.csv" --file "$T/lk.csv" --app search --yes; then
-            lookup_ready=1
+        if absent lookups get "$N.csv" --app search && {
             defer "$S" lookups delete "$N.csv" --app search --yes
+            run "$S" lookups upload "$N.csv" --file "$T/lk.csv" --app search --yes
+        }; then
+            lookup_ready=1
         else bad 'upload fixture lookup'; return 1; fi
     fi
 }
 ensure_dashboard() {
     if [ "${dashboard_ready:-0}" = 0 ]; then
-        if run "$S" dashboards create --name "$N" --file "$T/dash.xml" --app search --yes; then
-            dashboard_ready=1
+        if absent dashboards get "$N" --app search && {
             defer "$S" dashboards delete "$N" --app search --yes
+            run "$S" dashboards create --name "$N" --file "$T/dash.xml" --app search --yes
+        }; then
+            dashboard_ready=1
         else bad 'create fixture dashboard'; return 1; fi
     fi
 }
@@ -25,12 +29,16 @@ if selected lookups; then
         expect_ok "$S" lookups update "$N.csv" --file "$T/lk2.csv" --app search --yes
         expect_ok "$S" lookups download "$N.csv" --app search --out "$T/dl2.csv"
         expect_ok "$PY" -c 'import csv,sys; p=open(sys.argv[1]); assert p.read(1)=="i"; p.seek(0); assert list(csv.DictReader(p))==[{"ip":"10.0.0.9","label":"test-z"}]' "$T/dl2.csv"
-        if run "$S" lookups define "$N" --file "$N.csv" --app search --yes; then
+        if absent conf get transforms "$N" --app search && {
             defer stanza_delete transforms "$N"
+            run "$S" lookups define "$N" --file "$N.csv" --app search --yes
+        }; then
             check_json 'len(d)==1 and d[0]["filename"].startswith("sc_live_")' lookups definitions --app search --filter "$N"
             # Own props stanza, deleted through parsers at EXIT.
-            if run "$S" parsers create --sourcetype "${N}_auto" --yes; then
+            if absent conf get props "${N}_auto" --app search && {
                 defer "$S" parsers delete "${N}_auto" --yes
+                run "$S" parsers create --sourcetype "${N}_auto" --yes
+            }; then
                 expect_ok "$S" lookups auto "$N" --sourcetype "${N}_auto" --input ip --output label --app search --yes
                 check_json 'any(k.startswith("LOOKUP-") for k in d[0])' conf get props "${N}_auto" --app search
             else bad 'create auto lookup props fixture'; fi
@@ -97,8 +105,10 @@ if selected hec; then
                 # Register before changing settings, including a failed enable request.
                 defer restore_hec_settings "$hec_disabled"
                 case "$hec_disabled" in 1) expect_ok "$S" hec settings --enable --yes;; esac
-                if run "$S" hec create --name "$N" --index "$N" --indexes "$N" --yes; then
+                if absent hec get "$N" && {
                     defer "$S" hec delete "$N" --yes
+                    run "$S" hec create --name "$N" --index "$N" --indexes "$N" --yes
+                }; then
                     expect_ok "$S" hec list --filter "$N" --json
                     expect_ok "$S" hec get "$N" --json
                     expect_ok "$S" hec get "http://$N" --json
@@ -122,8 +132,10 @@ if selected parsers; then
     step "parsers"
     expect_ok "$S" parsers sourcetypes --json
     expect_ok "$S" parsers extractions --json
-    if run "$S" parsers create --sourcetype "$N" --category sc_live_initial --yes; then
+    if absent conf get props "$N" --app search && {
         defer "$S" parsers delete "$N" --yes
+        run "$S" parsers create --sourcetype "$N" --category sc_live_initial --yes
+    }; then
         expect_ok "$S" parsers get "$N" --json
         expect_ok "$S" parsers set "$N" SHOULD_LINEMERGE=false --yes
         check_json 'str(d[0]["SHOULD_LINEMERGE"]).lower() in ("0","false")' parsers get "$N" --explicit
@@ -140,8 +152,10 @@ if selected conf; then
     step "conf"
     expect_ok "$S" conf files --app search --json
     # props has a dedicated delete verb, unlike generic conf stanzas.
-    if run "$S" conf set props "${N}_conf" category=sc_live_conf --yes; then
+    if absent conf get props "${N}_conf" --app search && {
         defer "$S" parsers delete "${N}_conf" --yes
+        run "$S" conf set props "${N}_conf" category=sc_live_conf --yes
+    }; then
         expect_ok "$S" conf list props --app search --json
         check_json 'd[0]["category"]=="sc_live_conf"' conf get props "${N}_conf" --app search
         expect_ok "$S" conf unset props "${N}_conf" category --yes
@@ -151,24 +165,30 @@ if selected conf; then
 fi
 if selected macros; then
     step "macros"
-    if run "$S" macros set "$N" --definition 'makeresults' --yes; then
+    if absent conf get macros "$N" --app search && {
         defer stanza_delete macros "$N"
+        run "$S" macros set "$N" --definition 'makeresults' --yes
+    }; then
         expect_ok "$S" macros list --app search --json
         check_json 'd[0]["definition"]=="makeresults"' macros get "$N" --app search
     else bad 'set macro'; fi
 fi
 if selected eventtypes; then
     step "eventtypes"
-    if run "$S" conf set eventtypes "$N" "search=index=$N" --yes; then
+    if absent conf get eventtypes "$N" --app search && {
         defer stanza_delete eventtypes "$N"
+        run "$S" conf set eventtypes "$N" "search=index=$N" --yes
+    }; then
         expect_ok "$S" eventtypes list --app search --json
         check_json 'd[0]["name"].startswith("sc_live_")' eventtypes get "$N" --app search
     else bad 'create eventtype fixture'; fi
 fi
 if selected tags; then
     step "tags"
-    if run "$S" conf set tags "${N}=sc_live_value" sc_live_tag=enabled --yes; then
+    if absent conf get tags "${N}=sc_live_value" --app search && {
         defer stanza_delete tags "${N}=sc_live_value"
+        run "$S" conf set tags "${N}=sc_live_value" sc_live_tag=enabled --yes
+    }; then
         expect_ok "$S" tags list --app search --json
         check_json 'd[0]["sc_live_tag"]=="enabled"' tags get "${N}=sc_live_value" --app search
     else bad 'create tag fixture'; fi

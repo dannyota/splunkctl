@@ -227,8 +227,6 @@ def hec_send(
 ) -> None:
     """Send one event through a HEC token."""
     details = f"  token: {name}\n  event: {event[:60]}"
-    if not guard.check(ctx, "Send HEC event", details=details):
-        return
     client = get_client(ctx)
     svc = client.service
     try:
@@ -247,6 +245,9 @@ def hec_send(
     host = svc.host
     base_url = url or f"{scheme}://{host}:{port}"
     url = base_url.rstrip("/") + "/services/collector/event"
+    details += f"\n  url: {url}"
+    if not guard.check(ctx, "Send HEC event", details=details):
+        return
     payload: dict[str, str] = {"event": event}
     if index:
         payload["index"] = index

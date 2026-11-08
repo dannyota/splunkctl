@@ -38,9 +38,9 @@ splunkctl docs generate --check
   `LIVE_HEC_URL` overrides the HEC base URL; `LIVE_PYTHON` names the
   interpreter that has splunkctl installed (default `python3`).
   Set `LIVE_HEC_URL=http://127.0.0.1:18088` when HEC uses a mapped port.
-  The two known live gaps, `datamodels rebuild --yes` with populated
-  acceleration status and the `kvstore` export/import round trip, are covered
-  by `live-smoke.sh` when `CIM_TGZ` is set and the KV store is healthy.
+  `datamodels rebuild --yes` runs only when `CIM_TGZ` is set and acceleration
+  statistics populate within 90 seconds; otherwise it reports SKIPPED.
+  The `kvstore` export/import round trip requires a healthy KV store.
 - Pages under `docs/commands/` are generated. Run `splunkctl docs generate`
   after changing help text and commit the result.
 - Prose in the repository is English, plain and direct. No em dashes.

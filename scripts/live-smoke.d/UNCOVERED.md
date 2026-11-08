@@ -20,7 +20,7 @@ KV document operations require a ready KV store; built-in model reads require a 
 - `es notables update`: ES is absent; no notable fixture.
 - `es threat-intel delete`: ES is absent; no threat-intelligence fixture.
 - `es threat-intel upload`: ES is absent; no threat-intelligence collection.
-- `mcp install`: Starts a protocol server; not a SIEM command workflow.
+- `mcp install`: Writes local .mcp.json configuration; not a SIEM command workflow.
 - `mcp serve`: Starts a protocol server; not a SIEM command workflow.
 - `server serverclasses get`: No serverclass fixture exists on standalone Splunk.
 - `server serverclasses reload`: No create verb for an owned serverclass; cannot safely reload others.

@@ -372,3 +372,19 @@ def test_send_url_override_keeps_api_connection(
         "index": "sc_live_index",
     }
     assert svc.port == 18089
+
+
+@patch("splunkctl.commands.hec.req.post")
+@patch(_PATCH)
+def test_send_dry_run_shows_collector_url(
+    mock_gc: MagicMock, mock_post: MagicMock
+) -> None:
+    _setup_send_mocks(mock_gc)
+    for args, expected in [
+        (["--url", "http://127.0.0.1:18088/"], "http://127.0.0.1:18088"),
+        ([], "http://localhost:8088"),
+    ]:
+        result = CliRunner().invoke(cli, ["hec", "send", "my_token", "event", *args])
+        assert result.exit_code == 0, result.output
+        assert expected + "/services/collector/event" in result.stderr
+        mock_post.assert_not_called()

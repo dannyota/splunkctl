@@ -82,23 +82,31 @@ def _invoked_commands(source: str, leaves: set[str]) -> set[str]:
     def expand(match: re.Match) -> str:
         variable, values, body = match.groups()
         return "\n".join(
-            body.replace(f"${variable}", value) for value in shlex.split(values)
+            body.replace(f"${{{variable}}}", value).replace(f"${variable}", value)
+            for value in shlex.split(values)
         )
 
     source = re.sub(loop, expand, source, flags=re.S)
     paths = {name: name.split() for name in leaves}
     invoked = set()
     for line in source.splitlines():
-        words = shlex.split(line, comments=True)
-        if "$S" in words:
-            args = words[words.index("$S") + 1 :]
-        elif words and words[0] in {"check_json", "error_kind"}:
-            args = words[2:]
-        else:
-            continue
-        for name, path in paths.items():
-            if any(args[i : i + len(path)] == path for i in range(len(args))):
-                invoked.add(name)
+        lexer = shlex.shlex(line, posix=True, punctuation_chars=";&|")
+        lexer.whitespace_split = True
+        words = list(lexer)
+        for i, word in enumerate(words):
+            if word == "$S":
+                args = words[i + 1 :]
+            elif word in {"check_json", "error_kind"}:
+                args = words[i + 2 :]
+            else:
+                continue
+            while args and args[0].startswith("--"):
+                option = args.pop(0)
+                if option not in {"--json", "--yes"} and "=" not in option and args:
+                    args.pop(0)
+            for name, path in paths.items():
+                if args[: len(path)] == path:
+                    invoked.add(name)
     return invoked
 
 
@@ -165,7 +173,7 @@ if args[:2] == ['indexes', 'delete']:
     state['index'] = None
     respond()
 if args[:2] == ['indexes', 'get']:
-    respond([{'name': state['index']}], missing=not state['index'])
+    respond([{'name': state.get('index')}], missing=not state.get('index'))
 if args[:2] == ['hec', 'create']:
     state['token_index'] = args[args.index('--index') + 1]
     state['token'] = args[args.index('--name') + 1]
@@ -175,7 +183,8 @@ if args[:2] == ['hec', 'delete']:
     state['token'] = None
     respond()
 if args[:2] == ['hec', 'get']:
-    respond([{'disabled': state['token_disabled']}], missing=not state['token'])
+    respond([{'disabled': state.get('token_disabled', '0')}],
+            missing=not state.get('token'))
 if args[:2] == ['hec', 'list']: respond([])
 if args[:2] == ['hec', 'disable']:
     state['token_disabled'] = '1'
@@ -238,3 +247,146 @@ def test_hec_send_retries_and_restores_settings(
         else []
     )
     assert state["polls"] == (0 if send_fail else 2)
+
+
+def test_leaf_guard_matches_only_command_position() -> None:
+    source = """
+expect_ok "$S" conf get server health
+check_json 'True' conf get server cluster
+error_kind not_found conf get server shcluster
+for verb in health; do expect_ok "$S" server "${verb}"; done
+"""
+    assert _invoked_commands(
+        source, {"conf get", "server health", "server cluster", "server shcluster"}
+    ) == {"conf get", "server health"}
+
+
+@pytest.mark.parametrize("mode", ["partial", "missing", "delete_failure", "existing"])
+def test_fixture_failure_cleanup(tmp_path: Path, mode: str) -> None:
+    binary = tmp_path / "stub"
+    binary.write_text(
+        f"#!{sys.executable}\n"
+        + r"""
+import json, os, sys
+from pathlib import Path
+root = Path(os.environ['TMPDIR'])
+mode = os.environ['FIXTURE_MODE']
+args = [a for a in sys.argv[1:] if a not in ('--json', '--yes')]
+with (root / 'calls').open('a') as f:
+    f.write(' '.join(args) + '\n')
+if args[:2] == ['indexes', 'get']:
+    if mode == 'existing':
+        print('[{"name":"existing"}]')
+        sys.exit(0)
+    print('{"error":{"kind":"not_found"}}', file=sys.stderr)
+    sys.exit(1)
+if args[:2] == ['indexes', 'create']:
+    cleanup = next(root.glob('tmp.*/cleanup.sh')).read_text()
+    assert 'indexes delete' in cleanup
+    sys.exit(1)
+if args[:2] == ['indexes', 'delete']:
+    if mode == 'delete_failure': sys.exit(2)
+    if mode == 'missing':
+        print('{"error":{"kind":"not_found"}}', file=sys.stderr)
+        sys.exit(1)
+    sys.exit(0)
+raise AssertionError(args)
+"""
+    )
+    binary.chmod(0o755)
+    result = subprocess.run(  # noqa: S603
+        [BASH, str(SCRIPTS[0])],
+        capture_output=True,
+        text=True,
+        check=False,
+        env={
+            **os.environ,
+            "SPLUNKCTL": str(binary),
+            "LIVE_PYTHON": sys.executable,
+            "LIVE_ONLY": "indexes",
+            "LIVE_SKIP": "",
+            "TMPDIR": str(tmp_path),
+            "FIXTURE_MODE": mode,
+        },
+    )
+    assert result.returncode == 1, result.stdout + result.stderr
+    calls = (tmp_path / "calls").read_text()
+    assert ("indexes delete" in calls) == (mode != "existing")
+    retained = list(tmp_path.glob("tmp.*"))
+    assert bool(retained) == (mode == "delete_failure")
+    if retained:
+        assert str(retained[0]) in result.stdout
+        assert "indexes delete" in (retained[0] / "remaining.sh").read_text()
+
+
+def test_state_push_contains_only_fixture_rule(tmp_path: Path) -> None:
+    binary = tmp_path / "stub"
+    binary.write_text(
+        f"#!{sys.executable}\n"
+        + r"""
+import json, os, sys, yaml
+from pathlib import Path
+p = Path(os.environ['STATE_FILE'])
+state = json.loads(p.read_text()) if p.exists() else {}
+args = [a for a in sys.argv[1:] if a not in ('--json', '--yes')]
+group, verb = args[:2]
+def respond(rows=None):
+    p.write_text(json.dumps(state))
+    if rows is not None: print(json.dumps(rows))
+    sys.exit(0)
+if group in ('rules', 'lookups', 'dashboards'):
+    if verb in ('create', 'upload'):
+        state[group] = args[args.index('--name')+1] if '--name' in args else args[2]
+        respond()
+    if verb == 'delete':
+        state.pop(group, None)
+        respond()
+    if verb == 'get':
+        if group not in state:
+            print('{"error":{"kind":"not_found"}}', file=sys.stderr)
+            sys.exit(1)
+        respond([{'description': 'sc_live_state_changed'}])
+if group == 'state':
+    target = Path(args[args.index('--dir')+1])
+    if verb == 'pull':
+        target.mkdir()
+        (target/'rules.yml').write_text(yaml.safe_dump([
+            {'name': state['rules']}, {'name': 'unrelated', 'description': 'old'}]))
+        (target/'lookups').mkdir()
+        (target/'dashboards').mkdir()
+        respond()
+    if verb == 'diff':
+        assert len(yaml.safe_load((target/'rules.yml').read_text())) == 2
+        respond([{'name': state['rules'],
+                  'change': 'unchanged' if state.get('applied') else 'modified'}])
+    if verb == 'push':
+        docs = yaml.safe_load((target/'rules.yml').read_text())
+        assert [d['name'] for d in docs] == [state['rules']], docs
+        assert sorted(f.name for f in target.iterdir()) == ['rules.yml']
+        state['pushes'] = state.get('pushes', 0) + 1
+        applied = '--yes' in sys.argv
+        if applied: state['applied'] = True
+        report = {'applied': applied, 'changes': [{'name': state['rules']}]}
+        Path(args[args.index('--report')+1]).write_text(json.dumps(report))
+        respond()
+raise AssertionError(args)
+"""
+    )
+    binary.chmod(0o755)
+    state_file = tmp_path / "state.json"
+    result = subprocess.run(  # noqa: S603
+        [BASH, str(SCRIPTS[0])],
+        capture_output=True,
+        text=True,
+        check=False,
+        env={
+            **os.environ,
+            "SPLUNKCTL": str(binary),
+            "LIVE_PYTHON": sys.executable,
+            "LIVE_ONLY": "state",
+            "LIVE_SKIP": "",
+            "STATE_FILE": str(state_file),
+        },
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert json.loads(state_file.read_text())["pushes"] == 2
