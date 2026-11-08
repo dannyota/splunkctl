@@ -410,7 +410,7 @@ if args[:2] == ['datamodels', 'list']:
 elif args[:2] == ['--json', 'datamodels'] and args[2] == 'acceleration':
     print('[{"enabled": true}]')
 elif args[:2] == ['--json', 'datamodels'] and args[2] == 'get':
-    print('{"acceleration_enabled": true, "acceleration_earliest_time": "-15m"}')
+    print('[{"acceleration_enabled": true, "acceleration_earliest_time": "-15m"}]')
 elif args[:2] == ['--timeout', '30']:
     assert args[:2] == ['--timeout', '30'], args
     state['polls'] += 1
