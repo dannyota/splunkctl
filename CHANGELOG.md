@@ -1,39 +1,52 @@
 # Changelog
 
-## Unreleased
+## 0.16.0
+
+Live-verified against Splunk Enterprise 10.6.1.1 and SOAR 8.6.0.530: a
+maintainer smoke test for every SIEM command group, five bugs it found,
+and data model acceleration as a first-class command.
 
 ### Added
 
-- `datamodels accelerate` previews and configures datamodels.conf acceleration.
-
+- `datamodels accelerate NAME --earliest WINDOW [--cron EXPR] [--disable]`:
+  a guarded command that previews and writes the acceleration keys of
+  datamodels.conf, replacing the raw `conf set` workaround.
+- `datamodels acceleration --app` scopes the status lookup to one app and
+  refuses ambiguous model names.
+- `hec send --url` overrides the HEC base URL for hosts where the HEC port
+  is mapped away from the management port.
+- `server license --usage` reports `active_group` and `active_group_status`.
 - `scripts/live-smoke.sh` replaces `scripts/live-adapter-smoke.sh`: a
   maintainer smoke test for every SIEM command group against a throwaway
   Splunk instance, with `LIVE_ONLY`, `LIVE_SKIP`, `CIM_TGZ`,
   `LIVE_MONITOR_PATH`, `LIVE_HEC_URL` and `LIVE_PYTHON` knobs and
-  self-cleaning `sc_live_` fixtures.
-- `hec send --url` overrides the HEC base URL for hosts where the HEC port
-  is mapped differently from the management port.
+  self-cleaning `sc_live_` fixtures. A unit test keeps it in step with the
+  command tree.
+
+### Changed
+
+- `rules enable`, `rules update --enabled` and `rules create` schedule a
+  rule only when it has a cron expression; a rule without one is enabled
+  with a note instead of failing with HTTP 400.
+- `rules test` on a disabled rule runs its SPL ad hoc in the rule's app and
+  owner namespace; enabled rules still dispatch the saved search with
+  alert actions suppressed.
+- `server license --usage` counts validity, quota and the soonest expiry
+  over the active license group only.
+- `splunk-sdk>=3.0` on Python 3.13 and later; Python 3.12 installs stay on
+  `splunk-sdk>=2.1` because 3.x requires Python 3.13.
+- CI runs `pip-audit` against the installed runtime dependencies.
+- Generated command pages use no em dashes.
 
 ### Fixed
 
 - `datamodels rebuild` sent `acceleration=0` and `acceleration=1` as bare
   form fields; the `datamodel/model` endpoint takes one JSON object and
   answered HTTP 500. It now posts `{"enabled": false}` and then the
-  model's full acceleration config with `enabled` true.
-
-### Changed
-
-- Require `splunk-sdk>=3.0` on Python 3.13 and later. `splunk-sdk` 3.x
-  needs Python 3.13, so Python 3.12 installs stay on `splunk-sdk>=2.1`.
-- CI runs `pip-audit` against the installed runtime dependencies.
+  model's full acceleration configuration with `enabled` true.
+- `soar meta cef` and `soar meta features` returned only the first REST
+  page of 10 rows; every vocabulary now walks all pages.
 - The install guide no longer mentions the retired SDK fork.
-
-### Fixed
-
-- Rules enable without a cron; disabled rule tests run SPL ad hoc.
-- SOAR metadata vocabularies walk all REST pages.
-- License usage scopes validity, quota and expiry totals to the active group.
-- Live smoke skips existing inputs, accepts null conf, and tests rule paths and acceleration.
 
 ## 0.15.0
 
