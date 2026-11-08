@@ -94,7 +94,11 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.13"
-      - run: pip install -e . pip-audit
+      - run: pip install . pip-audit
+      # Audit the resolved dependency set only: a bumped splunkctl version is
+      # not on PyPI until the release is published, and --strict would fail
+      # on the package itself.
+      - run: pip uninstall -y splunkctl
       - run: pip-audit --strict --progress-spinner off
 
   semgrep:
