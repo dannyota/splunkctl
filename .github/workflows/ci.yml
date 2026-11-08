@@ -86,6 +86,17 @@ jobs:
           assert found == expected, f"packaged guides differ from docs/guides: {sorted(set(expected) ^ set(found))}"
           PY
 
+  # Known-vulnerability scan of the resolved runtime dependency set.
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+      - run: pip install -e . pip-audit
+      - run: pip-audit --strict --progress-spinner off
+
   semgrep:
     runs-on: ubuntu-latest
     steps:

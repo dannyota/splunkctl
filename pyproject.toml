@@ -25,7 +25,8 @@ classifiers = [
     "Topic :: System :: Systems Administration",
 ]
 dependencies = [
-    "splunk-sdk>=2.0",
+    "splunk-sdk>=3.0; python_version >= '3.13'",
+    "splunk-sdk>=2.1; python_version < '3.13'",
     "click>=8.2",
     "pyyaml>=6.0",
     "tabulate>=0.9",
