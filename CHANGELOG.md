@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Require `splunk-sdk>=3.0` on Python 3.13 and later. `splunk-sdk` 3.x
+  needs Python 3.13, so Python 3.12 installs stay on `splunk-sdk>=2.1`.
+- CI runs `pip-audit` against the installed runtime dependencies.
+- The install guide no longer mentions the retired SDK fork.
+
 ## 0.15.0
 
 Python 3.12 support, no more SDK fork for dashboards, lookup files, and

@@ -15,7 +15,6 @@ When to use: you are putting splunkctl on a workstation, a jump host, or a CI ru
 ```text
 python -m pip install splunkctl
 python -m pip install 'splunkctl[browser]'
-python -m pip install git+https://github.com/dannyota/splunk-sdk-python@splunkctl
 splunkctl --version
 splunkctl config init [--profile NAME] [--soar]
 splunkctl doctor [--strict]
