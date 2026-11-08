@@ -281,7 +281,7 @@ if args[:2] == ['indexes', 'get']:
     print('{"error":{"kind":"not_found"}}', file=sys.stderr)
     sys.exit(1)
 if args[:2] == ['indexes', 'create']:
-    cleanup = next(root.glob('tmp.*/cleanup.sh')).read_text()
+    cleanup = next(root.glob('sc-live.*/cleanup.sh')).read_text()
     assert 'indexes delete' in cleanup
     sys.exit(1)
 if args[:2] == ['indexes', 'delete']:
@@ -312,7 +312,7 @@ raise AssertionError(args)
     assert result.returncode == 1, result.stdout + result.stderr
     calls = (tmp_path / "calls").read_text()
     assert ("indexes delete" in calls) == (mode != "existing")
-    retained = list(tmp_path.glob("tmp.*"))
+    retained = list(tmp_path.glob("sc-live.*"))
     assert bool(retained) == (mode == "delete_failure")
     if retained:
         assert str(retained[0]) in result.stdout

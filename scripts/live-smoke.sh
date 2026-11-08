@@ -5,7 +5,8 @@
 set -uo pipefail
 S="${SPLUNKCTL:-splunkctl}"
 PY="${LIVE_PYTHON:-python3}"
-T="$(mktemp -d)" || exit 1
+# Explicit template: BSD and GNU mktemp differ on when TMPDIR applies.
+T="$(mktemp -d "${TMPDIR:-/tmp}/sc-live.XXXXXX")" || exit 1
 N="sc_live_$(date +%s)_$$"
 export SPLUNK_APP=search
 fail=0
