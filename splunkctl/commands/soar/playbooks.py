@@ -56,7 +56,13 @@ def list_cmd(
         ctx.exit(1)
         return
 
-    data = result.get("data", []) if isinstance(result, dict) else []
+    data = result.get("data") if isinstance(result, dict) else None
+    if not isinstance(data, list):
+        # Callers such as the live smoke preflight treat an empty list as
+        # "no active playbooks"; a malformed envelope must not look like that.
+        output.error("Unexpected SOAR response: no playbook data list.", kind="http")
+        ctx.exit(1)
+        return
     output.render(ctx, data, empty="No playbooks found.")
 
 
