@@ -31,7 +31,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-SOAR_VERSION=8.6.0.530
+SOAR_VERSION="$(soar_version_from_tgz "$SOAR_TGZ")" || exit 1
 VMX="$(vmx_path "$NAME")"
 dvd_attached=no
 

@@ -3,11 +3,11 @@
 
 VMLAB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 : "${INSTALLERS_DIR:=$(cd "$VMLAB_DIR/.." && pwd)}"
-# shellcheck source=/dev/null
 # Local (gitignored) overrides first, so config.env's defaults only fill gaps.
 # Tests point VMLAB_LOCAL_ENV at /dev/null so a developer's overrides never
 # leak into a test run.
 : "${VMLAB_LOCAL_ENV:=$VMLAB_DIR/config.local.env}"
+# shellcheck source=/dev/null
 [ -f "$VMLAB_LOCAL_ENV" ] && source "$VMLAB_LOCAL_ENV"
 source "$VMLAB_DIR/config.env"
 
@@ -103,6 +103,8 @@ splunk_is_ready() {
 }
 
 soar_is_ready() {
+  # The guest shell expands these expressions.
+  # shellcheck disable=SC2016
   ssh_vm "$1" 'test -x /opt/phantom/bin/phsvc && code=$(curl -sk -o /dev/null -w "%{http_code}" https://localhost:8443); [[ "$code" == 200 || "$code" == 302 ]]' \
     >/dev/null 2>&1
 }
@@ -138,4 +140,13 @@ render() {
 file_mode() {
   if stat -c '%a' "$1" 2>/dev/null; then return; fi
   stat -f '%Lp' "$1"
+}
+
+# Derive the product version from the supported SOAR installer filename.
+soar_version_from_tgz() {
+  if [[ "$1" =~ ^splunk_soar-unpriv-([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)-[[:xdigit:]]+-el9-x86_64\.tgz$ ]]; then
+    printf '%s' "${BASH_REMATCH[1]}"
+  else
+    die "cannot derive SOAR version from SOAR_TGZ: $1 (expected splunk_soar-unpriv-<version>-<sha>-el9-x86_64.tgz)"
+  fi
 }

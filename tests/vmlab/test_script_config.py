@@ -196,3 +196,21 @@ def test_provision_guard_ignores_local_env_overrides(tmp_path: Path) -> None:
     )
     assert result.returncode == 1, result.stderr
     assert "set LAB_PASSWORD in config.env before provisioning" in result.stderr
+
+
+def test_reusable_lab_files_have_no_maintainer_defaults() -> None:
+    for name in (
+        "installers/vmlab/README.md",
+        "lab/keycloak/README.md",
+        "lab/keycloak/.env.example",
+        "installers/vmlab/config.env",
+        "docs/guides/keycloak-lab.md",
+    ):
+        for forbidden in (
+            "/home/danny",
+            "/Users/danny",
+            "Documents/ISOs",
+            "Splunk@2026",
+            "Asia/Ho_Chi_Minh",
+        ):
+            assert forbidden not in (ROOT / name).read_text(), (name, forbidden)

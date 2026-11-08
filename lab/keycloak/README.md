@@ -1,7 +1,7 @@
 # Keycloak SAML lab
 
 A rootless Podman Keycloak deployment that acts as an external identity
-provider for the Splunk SIEM and SOAR VMs. Keycloak runs on the laptop and is
+provider for the Splunk SIEM and SOAR VMs. Keycloak runs on the lab host and is
 reachable at the VMware NAT host address `100.65.1.1:8080`; the products stay
 on `100.65.1.10` (SIEM) and `100.65.1.11` (SOAR).
 
@@ -15,7 +15,7 @@ on `100.65.1.10` (SIEM) and `100.65.1.11` (SOAR).
 
 ## Requirements
 
-- `podman` with `podman compose` (or `podman-compose`), `curl`, `grep`, `sed`.
+- `podman` with `podman compose` (or `podman-compose`), `curl`, `grep`, `sed`, `python3`.
 - No host root. Keycloak binds a host port in the NAT range, so the VMs can
   reach it without changes to either VM.
 
@@ -23,17 +23,18 @@ on `100.65.1.10` (SIEM) and `100.65.1.11` (SOAR).
 
 ```bash
 cd lab/keycloak
-cp .env.example .env      # then edit .env: set the two *_PASSWORD secrets
+cp .env.example .env      # then edit .env: set the three *_PASSWORD secrets
 ./labctl.sh start         # starts Postgres + Keycloak, waits for health
 ./labctl.sh configure     # imports the splunklab realm + SAML clients
 ./labctl.sh verify        # confirms health, admin login, and both clients
 ```
 
-The `.env` file is gitignored. Set at least:
+The `.env` file is gitignored. Set the three `*_PASSWORD` secrets:
 
 ```bash
 KEYCLOAK_ADMIN_PASSWORD='...'
 POSTGRES_PASSWORD='...'
+TEST_USER_PASSWORD='...'
 ```
 
 All other defaults are in `.env.example`; export any setting to override it.
@@ -45,7 +46,7 @@ All other defaults are in `.env.example`; export any setting to override it.
 - two SAML clients, `splunk-siem` and `splunk-soar`, with product-specific
   assertion consumer URLs;
 - realm roles `splunk-admin` and `soar-admin`;
-- a test user `samluser` with a plain password (no second factor — the lab
+- a test user `samluser` with a plain password (no second factor; the lab
   exercises the browser SAML flow without MFA).
 
 ## Point the products at Keycloak
@@ -59,7 +60,7 @@ on the VM).
 
 `soar-configure.sh` builds SOAR's `SystemSettings.auth` JSON (with the Keycloak
 IdP metadata inlined) and writes it to the SOAR VM. Idempotent. It SSHes as
-`labadmin` with `~/vmware/.vmlab_key` (override with `SSH_KEY`), and maps the
+`labadmin` with the vmlab key under `$VM_BASE_DIR` (default `~/vmware/.vmlab_key`; override with `SSH_KEY`), and maps the
 SAML `splunk-admin`/`soar-admin` roles to SOAR `Administrator` (role id 1).
 
 ## Daily use

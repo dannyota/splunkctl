@@ -139,20 +139,21 @@ verify_siem() {
 }
 
 verify_soar() {
-  local version response code
+  local version response code expected
+  expected="$(soar_version_from_tgz "$SOAR_TGZ")" || exit 1
   require_running_vm soar "$SOAR_IP"
   version="$(ssh_vm "$SOAR_IP" "cd /tmp && sudo -u soar /opt/phantom/bin/phenv python -c \
     'import sys; sys.path.insert(0, \"/opt/phantom/www\"); \
 from phantom_ui.product_version import PRODUCT_VERSION; print(PRODUCT_VERSION)'")"
-  [[ "$version" == 8.6.0.530 ]] ||
-    die "SOAR version mismatch: expected 8.6.0.530, got $version"
+  [[ "$version" == "$expected" ]] ||
+    die "SOAR version mismatch: expected $expected, got $version"
   response="$(authenticated_curl "$SOAR_IP" soar_local_admin "$LAB_PASSWORD" \
     "https://$SOAR_IP:8443/rest/version")"
-  python3 - "$response" <<'PY'
+  python3 - "$response" "$expected" <<'PY'
 import json
 import sys
 
-if json.loads(sys.argv[1]).get("version") != "8.6.0.530":
+if json.loads(sys.argv[1]).get("version") != sys.argv[2]:
     raise SystemExit("SOAR authenticated version response is invalid")
 PY
   code="$(curl -sk -o /dev/null -w '%{http_code}' "https://$SOAR_IP:8443")"

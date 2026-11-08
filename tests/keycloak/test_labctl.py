@@ -1,9 +1,12 @@
 """Tests for the Keycloak labctl.sh dispatcher."""
 
+import json
 import os
 import shutil
 import subprocess
 from pathlib import Path
+
+import pytest
 
 from tests.vmlab.script_helpers import ROOT, write_executable
 
@@ -61,7 +64,19 @@ def test_start_requires_podman(tmp_path: Path) -> None:
     assert "required command not found: podman" in result.stderr
 
 
-def test_configure_renders_and_imports_realm(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "password",
+    [
+        "test-secret",
+        'double"quote',
+        r"back\b",
+        "amp&ersand",
+        "dollar$ign",
+        "with space",
+        "",
+    ],
+)
+def test_configure_renders_and_imports_realm(tmp_path: Path, password: str) -> None:
     lab = tmp_path / "keycloak"
     lab.mkdir()
     for name in ("labctl.sh", "lib.sh", "realm-template.json", ".env.example"):
@@ -91,11 +106,17 @@ def test_configure_renders_and_imports_realm(tmp_path: Path) -> None:
             "HOME": str(tmp_path),
             "FAKE_CURL_LOG": str(log_file),
             "KEYCLOAK_ADMIN_PASSWORD": "pw",
+            "TEST_USER_PASSWORD": password,
         },
         check=False,
         capture_output=True,
         text=True,
     )
+    if not password:
+        assert result.returncode != 0
+        assert "missing TEST_USER_PASSWORD" in result.stderr
+        assert not log_file.exists()
+        return
     assert result.returncode == 0, result.stderr
     calls = log_file.read_text()
     assert "realms/master/protocol/openid-connect/token" in calls
@@ -105,6 +126,8 @@ def test_configure_renders_and_imports_realm(tmp_path: Path) -> None:
     rendered = list(runtime.glob("*-realm.json"))
     assert len(rendered) == 1
     assert rendered[0].stat().st_mode & 0o777 == 0o600
+    realm = json.loads(rendered[0].read_text())
+    assert realm["users"][0]["credentials"][0]["value"] == password
 
 
 def test_verify_fails_when_health_is_down(tmp_path: Path) -> None:

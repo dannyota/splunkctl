@@ -2,8 +2,18 @@
 
 ## Unreleased
 
+### Added
+
+- `installers/vmlab/fetch-installers.sh` downloads public installers and
+  verifies selected artifacts, with a download-free `--check` mode.
+
 ### Changed
 
+- VMware lab pins: Splunk Enterprise 10.6.1.1 and SOAR 8.8.0.282.
+- Reusable single-host Ubuntu 24.04 setup docs for VMware and Keycloak.
+- Lab timezone defaults to UTC; SOAR RAM defaults to 8 GB.
+- Keycloak realm configuration requires an explicit `TEST_USER_PASSWORD`;
+  the example file no longer ships a default.
 - Security scanning: CodeQL (Python and GitHub Actions, security-extended
   queries) and gitleaks replace semgrep. pip-audit continues to cover
   dependency vulnerabilities.
