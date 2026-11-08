@@ -173,6 +173,9 @@ def kvstore_status(ctx: click.Context) -> None:
 
     c: dict[str, Any] = entries[0].get("content", {})
     current: dict[str, Any] = c.get("current") or {}
+    cohosted_raw = c.get("cohosted")
+    cohosted: dict[str, Any] = cohosted_raw if isinstance(cohosted_raw, dict) else {}
+    service_info = cohosted.get("serviceInfo")
     status_raw = current.get("status")
     status = "unknown" if not status_raw else str(status_raw).lower()
     row: dict[str, Any] = {
@@ -181,6 +184,12 @@ def kvstore_status(ctx: click.Context) -> None:
         "version": current.get("version", ""),
         "storage_engine": current.get("storageEngine", ""),
         "db_path": current.get("dbPath", ""),
+        "cohosted_type": (
+            service_info.get("type", "") if isinstance(service_info, dict) else ""
+        ),
+        "cohosted_status": cohosted.get("status", ""),
+        "migration_status": current.get("migrationStatus", ""),
+        "backup_restore_status": current.get("backupRestoreStatus", ""),
     }
     output.render(ctx, row)
 

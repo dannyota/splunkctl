@@ -35,7 +35,10 @@ _HINTS: dict[str, str] = {
         "Dismiss with 'splunkctl server messages --dismiss NAME --yes'."
     ),
     "Web UI reachable": ("Web UI is optional; lookup-upload and some ops need it."),
-    "KV Store": ("Ask your Splunk admin to restart Splunk or check mongod.log."),
+    "KV Store": (
+        "Ask your Splunk admin to restart Splunk or check splunkd.log and "
+        "mongod.log for KV store errors."
+    ),
     "MCP registered": "Run 'splunkctl mcp install' to register the MCP server.",
     "SOAR connection": ("Check SOAR_HOST/SOAR_PORT and that SOAR is running."),
     "SOAR auth": "Verify SOAR_TOKEN or SOAR_USER/SOAR_PASS credentials.",
@@ -216,12 +219,23 @@ def doctor_cmd(ctx: click.Context, *, strict: bool = False) -> None:
     try:
         resp = svc.get("/services/kvstore/status", output_mode="json")
         kv_data = json.loads(resp.body.read())
-        kv_status = kv_data["entry"][0]["content"].get("current", {})
+        kv_content = kv_data["entry"][0]["content"]
+        kv_status = kv_content.get("current", {})
         kv_state = kv_status.get("status", "unknown")
         kv_ok = kv_state == "ready"
         kv_detail = kv_state
-        if not kv_ok and kv_state == "failed":
-            kv_detail = "failed — restart Splunk or check mongod.log"
+        cohosted = kv_content.get("cohosted")
+        if isinstance(cohosted, dict):
+            cohosted_state = cohosted.get("status", "unknown")
+            service_info = cohosted.get("serviceInfo")
+            cohosted_type = (
+                service_info.get("type", "") if isinstance(service_info, dict) else ""
+            )
+            migration = kv_status.get("migrationStatus", "")
+            kv_ok = kv_ok and cohosted_state == "ready"
+            kv_detail += (
+                f" (cohosted {cohosted_type}: {cohosted_state}, migration: {migration})"
+            )
         results.append(_check("KV Store", kv_ok, kv_detail, warn=not kv_ok))
     except Exception:
         results.append(_check("KV Store", False, "could not query status", warn=True))
