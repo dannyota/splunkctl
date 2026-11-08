@@ -1220,6 +1220,16 @@
               "name": "name",
               "type": "text",
               "kind": "argument"
+            },
+            {
+              "name": "app",
+              "type": "text",
+              "kind": "option",
+              "flags": [
+                "--app"
+              ],
+              "help": "Splunk app context (default: all apps).",
+              "default": "-"
             }
           ]
         },

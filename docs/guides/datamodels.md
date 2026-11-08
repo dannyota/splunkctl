@@ -15,7 +15,7 @@ When to use: your detections run on accelerated CIM data models through `| tstat
 ```text
 splunkctl datamodels list [--app APP] [--filter SUBSTRING] [--limit N] [--offset N]
 splunkctl datamodels get <NAME> [--app APP] [--definition]
-splunkctl datamodels acceleration [NAME]
+splunkctl datamodels acceleration [NAME] [--app APP]
 splunkctl datamodels accelerate <NAME> [--app APP] [--earliest -1mon] [--cron '*/5 * * * *'] [--disable] [--yes]
 splunkctl datamodels rebuild <NAME> [--app APP] [--yes]
 ```
@@ -64,7 +64,7 @@ Expected result: without a name, one row per model whose acceleration configurat
 - `size`, `earliest_summarized`, `latest_summarized`: raw `summary.size`, `summary.earliest_time`, and `summary.latest_time`, unmodified (epoch seconds)
 - `last_error`: `summary.last_error` (a list server side, one entry per distributed peer) joined with `; `; empty when clean
 
-Two REST resources are involved because `datamodel/model`'s `acceleration` field holds only the configuration (`enabled`, `earliest_time`, `cron_schedule`) and never build progress. Percent complete, the summarized range, size, and the last build error live on a separate `admin/summarization` entity per accelerated model, named `tstats:DM_<app>_<model>`, the same source Splunk Web's Data Model Manager page reads. If nothing is accelerated, the command renders an empty result, never an error, and skips the `admin/summarization` fetch. `acceleration <name>` on a non-accelerated model returns `enabled: false` with the other fields blank or `null`; that is a valid answer to "is this model accelerated at all", so an agent auditing coverage does not need a special case. Only a model that does not exist is an error (`not_found`).
+Two REST resources are involved because `datamodel/model`'s `acceleration` field holds only the configuration (`enabled`, `earliest_time`, `cron_schedule`) and never build progress. Percent complete, the summarized range, size, and the last build error live on a separate `admin/summarization` entity per accelerated model, named `tstats:DM_<app>_<model>`, the same source Splunk Web's Data Model Manager page reads. If nothing is accelerated, the command renders an empty result, never an error, and skips the `admin/summarization` fetch. `acceleration <name>` on a non-accelerated model returns `enabled: false` with the other fields blank or `null`; that is a valid answer to "is this model accelerated at all", so an agent auditing coverage does not need a special case. `--app` defaults to all apps and scopes both named lookups and listings. An ambiguous name across apps is an error (`conflict`); pass `--app` to select one. A model that does not exist is an error (`not_found`).
 
 ### Configure acceleration
 

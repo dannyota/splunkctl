@@ -41,14 +41,16 @@ if selected datamodels; then
                 expect_ok "$S" datamodels get "$model" --app Splunk_SA_CIM --json
                 expect_ok "$S" datamodels accelerate "$model" --app Splunk_SA_CIM \
                     --earliest -15m --cron '*/5 * * * *' --yes
-                deadline=$((SECONDS+90))
+                accel_wait=${LIVE_ACCEL_WAIT:-90}
+                deadline=$((SECONDS+accel_wait))
                 populated=0
-                printf '[]\n' > "$T/acceleration.json"
+                poll_status=0
+                last_status=''
                 while [ "$SECONDS" -lt "$deadline" ]; do
-                    remaining=$((deadline-SECONDS))
-                    if capture "$T/acceleration.json" "$S" --timeout "$remaining" \
-                        datamodels acceleration "$model" --app Splunk_SA_CIM --json; then
-                        if "$PY" - "$T/acceleration.json" <<'PYSTATS'
+                    if "$S" --timeout 30 datamodels acceleration "$model" \
+                        --app Splunk_SA_CIM --json > "$T/acceleration.json" 2> "$T/acceleration.err"; then
+                        last_status=$(cat "$T/acceleration.json")
+                        if "$PY" - "$T/acceleration.json" 2>/dev/null <<'PYSTATS'
 import json, sys
 rows = json.load(open(sys.argv[1]))
 assert len(rows) == 1
@@ -58,14 +60,20 @@ assert all(r[k] not in (None, '') for k in (
     'percent_complete', 'size', 'earliest_summarized', 'latest_summarized'))
 PYSTATS
                         then populated=1; break; fi
+                    else
+                        poll_status=$?
+                        last_error=$(tail -n 1 "$T/acceleration.err")
                     fi
-                    [ "$SECONDS" -lt "$deadline" ] && sleep 1
+                    [ "$SECONDS" -lt "$deadline" ] && sleep "${LIVE_ACCEL_INTERVAL:-5}"
                 done
+                if [ "$poll_status" -ne 0 ]; then
+                    bad "datamodels acceleration poll exited $poll_status: $last_error"
+                fi
                 if [ "$populated" = 1 ]; then
                     expect_ok "$S" datamodels rebuild "$model" --app Splunk_SA_CIM --yes
                     expect_ok "$S" datamodels acceleration "$model" --app Splunk_SA_CIM --json
                 else
-                    skip "datamodels rebuild: no populated statistics within 90 seconds; last status: $(cat "$T/acceleration.json")"
+                    skip "datamodels rebuild: no populated statistics within $accel_wait seconds; last status: ${last_status:-${last_error:-no attempts}}"
                 fi
             else bad 'CIM package contains no models'; fi
         fi

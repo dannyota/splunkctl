@@ -237,19 +237,21 @@ def get_model(ctx: click.Context, name: str, *, app: str, definition: bool) -> N
 
 @datamodels_group.command("acceleration")
 @click.argument("name", required=False, default=None)
+@click.option("--app", default="-", help="Splunk app context (default: all apps).")
 @click.pass_context
-def acceleration_status(ctx: click.Context, name: str | None) -> None:
+def acceleration_status(ctx: click.Context, name: str | None, *, app: str) -> None:
     """Acceleration build status: percent complete, summarized range, errors.
 
-    Without NAME, shows every accelerated model on the instance (or
-    cleanly reports none). With NAME, shows that one model regardless of
+    Without NAME, shows accelerated models in --app (default: all apps).
+    With NAME, resolves that model in --app; ambiguous names across apps
+    fail with conflict. Shows that one model regardless of
     whether it's accelerated; ``enabled: false`` is a valid, non-error
     answer to "is this model accelerated at all".
     """
     client = get_client(ctx)
 
     if name is not None:
-        entry = _resolve(client, name, app="-")
+        entry = _resolve(client, name, app=app)
         if entry is None:
             output.error(f"Data model '{name}' not found.", kind="not_found")
             ctx.exit(1)
@@ -257,7 +259,7 @@ def acceleration_status(ctx: click.Context, name: str | None) -> None:
         candidates = [entry]
     else:
         body = rest_get_json(
-            client.service, "datamodel/model", owner=_OWNER, app="-", count=0
+            client.service, "datamodel/model", owner=_OWNER, app=app, count=0
         )
         all_entries: list[dict[str, Any]] = body.get("entry", [])
         candidates = [

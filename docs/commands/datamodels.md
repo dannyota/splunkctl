@@ -33,11 +33,18 @@ splunkctl datamodels acceleration [OPTIONS] [NAME]
 ```
 
 ```text
-Without NAME, shows every accelerated model on the instance (or
-cleanly reports none). With NAME, shows that one model regardless of
+Without NAME, shows accelerated models in --app (default: all apps).
+With NAME, resolves that model in --app; ambiguous names across apps
+fail with conflict. Shows that one model regardless of
 whether it's accelerated; ``enabled: false`` is a valid, non-error
 answer to "is this model accelerated at all".
 ```
+
+**Flags**
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--app` | text | - | Splunk app context (default: all apps). |
 
 ## datamodels get
 

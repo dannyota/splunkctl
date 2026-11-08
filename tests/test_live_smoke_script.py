@@ -390,3 +390,101 @@ raise AssertionError(args)
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert json.loads(state_file.read_text())["pushes"] == 2
+
+
+@pytest.mark.parametrize("mode", ["populates", "empty", "error", "transient"])
+def test_datamodel_acceleration_poll(tmp_path: Path, mode: str) -> None:
+    binary = tmp_path / "stub"
+    binary.write_text(
+        f"#!{sys.executable}\n"
+        + r"""
+import json, os, sys
+from pathlib import Path
+p = Path(os.environ['ACCEL_STATE'])
+state = json.loads(p.read_text())
+args = sys.argv[1:]
+state['calls'].append(args)
+mode = os.environ['ACCEL_MODE']
+if args[:2] == ['datamodels', 'list']:
+    print('[{"name":"Alerts"}]' if '--app' in args else '[]')
+elif args[:2] == ['--timeout', '30']:
+    assert args[:2] == ['--timeout', '30'], args
+    state['polls'] += 1
+    if mode == 'error' or (mode == 'transient' and state['polls'] > 1):
+        p.write_text(json.dumps(state))
+        print('Error: poll failed', file=sys.stderr)
+        sys.exit(2)
+    populated = mode == 'populates' and state['polls'] >= 3
+    row = {'enabled': True, 'has_summary': populated,
+           'percent_complete': 100 if populated else None,
+           'size': '1' if populated else None,
+           'earliest_summarized': '1' if populated else None,
+           'latest_summarized': '2' if populated else None}
+    state['last_json'] = json.dumps([row])
+    print(state['last_json'])
+elif args[:2] not in (['datamodels', 'acceleration'], ['datamodels', 'get'],
+                       ['datamodels', 'accelerate'], ['datamodels', 'rebuild']):
+    raise AssertionError(args)
+p.write_text(json.dumps(state))
+"""
+    )
+    binary.chmod(0o755)
+    state_file = tmp_path / "state.json"
+    state_file.write_text(json.dumps({"calls": [], "polls": 0}))
+    # Source only the admin steps, with CIM already installed by this harness.
+    harness = r"""
+set -uo pipefail
+S=$SPLUNKCTL PY=$LIVE_PYTHON T=$POLL_TMP
+fail=0
+selected() { [ "$1" = datamodels ]; }
+step() { :; }
+run() { "$@"; }
+bad() { echo "FAIL $*"; fail=$((fail+1)); }
+skip() { echo "SKIPPED $*"; }
+expect_ok() { "$@" || bad 'expected exit 0'; }
+capture() { local file=$1; shift; "$@" > "$file" || { bad 'capture'; return 1; }; }
+cim_installed=1
+. "$ADMIN_SCRIPT"
+exit "$fail"
+"""
+    result = subprocess.run(  # noqa: S603
+        [BASH, "-c", harness],
+        capture_output=True,
+        text=True,
+        check=False,
+        env={
+            **os.environ,
+            "SPLUNKCTL": str(binary),
+            "LIVE_PYTHON": sys.executable,
+            "POLL_TMP": str(tmp_path),
+            "ADMIN_SCRIPT": str(SCRIPTS[-1]),
+            "ACCEL_STATE": str(state_file),
+            "ACCEL_MODE": mode,
+            "LIVE_ACCEL_WAIT": "2",
+            "LIVE_ACCEL_INTERVAL": "0",
+        },
+        timeout=10,
+    )
+    state = json.loads(state_file.read_text())
+    assert result.returncode == (1 if mode in ("error", "transient") else 0), (
+        result.stdout + result.stderr
+    )
+    assert len(re.findall(r"^FAIL ", result.stdout, re.M)) == (
+        1 if mode in ("error", "transient") else 0
+    )
+    rebuilds = [c for c in state["calls"] if c[:2] == ["datamodels", "rebuild"]]
+    skipped = [
+        s
+        for s in result.stdout.splitlines()
+        if s.startswith("SKIPPED datamodels rebuild:")
+    ]
+    assert len(rebuilds) == (1 if mode == "populates" else 0)
+    if mode == "populates":
+        assert state["polls"] == 3
+        assert "--yes" in rebuilds[0]
+        assert not skipped
+    else:
+        assert len(skipped) == 1
+        assert (
+            state["last_json"] if mode != "error" else "Error: poll failed"
+        ) in skipped[0]
