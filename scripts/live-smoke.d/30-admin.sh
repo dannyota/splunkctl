@@ -81,6 +81,9 @@ PYSTATS
                 if [ "$enabled" = 1 ]; then
                     expect_ok "$S" datamodels rebuild "$model" --app Splunk_SA_CIM --yes
                     check_json 'd[0]["enabled"] is True' datamodels acceleration "$model" --app Splunk_SA_CIM
+                    # Disabling clears the window server-side; the re-enable must restore it.
+                    check_json 'd["acceleration_enabled"] is True and d["acceleration_earliest_time"]=="-15m"' \
+                        datamodels get "$model" --app Splunk_SA_CIM
                 elif [ "$invalid" = 0 ]; then
                     skip "datamodels rebuild: acceleration not reported enabled within $accel_wait seconds; last status: ${last_status:-${last_error:-no attempts}}"
                 fi
