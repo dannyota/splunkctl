@@ -45,21 +45,30 @@ if selected datamodels; then
                 deadline=$((SECONDS+accel_wait))
                 populated=0
                 poll_status=0
+                invalid=0
                 last_status=''
                 while [ "$SECONDS" -lt "$deadline" ]; do
                     if "$S" --timeout 30 datamodels acceleration "$model" \
                         --app Splunk_SA_CIM --json > "$T/acceleration.json" 2> "$T/acceleration.err"; then
                         last_status=$(cat "$T/acceleration.json")
-                        if "$PY" - "$T/acceleration.json" 2>/dev/null <<'PYSTATS'
+                        # 0 populated, 2 valid but pending, 1 invalid or disabled.
+                        "$PY" - "$T/acceleration.json" 2>/dev/null <<'PYSTATS'
 import json, sys
-rows = json.load(open(sys.argv[1]))
-assert len(rows) == 1
-r = rows[0]
-assert r['enabled'] and r['has_summary']
-assert all(r[k] not in (None, '') for k in (
-    'percent_complete', 'size', 'earliest_summarized', 'latest_summarized'))
+try:
+    rows = json.load(open(sys.argv[1]))
+    r, = rows
+    assert r['enabled'] is True
+except Exception:
+    sys.exit(1)
+pending = [k for k in ('percent_complete', 'size', 'earliest_summarized', 'latest_summarized')
+           if r.get(k) in (None, '')]
+sys.exit(0 if r.get('has_summary') and not pending else 2)
 PYSTATS
-                        then populated=1; break; fi
+                        case $? in
+                            0) populated=1; break;;
+                            2) ;;
+                            *) bad "datamodels acceleration returned an invalid or disabled row: $last_status"; invalid=1; break;;
+                        esac
                     else
                         poll_status=$?
                         last_error=$(tail -n 1 "$T/acceleration.err")
@@ -72,7 +81,7 @@ PYSTATS
                 if [ "$populated" = 1 ]; then
                     expect_ok "$S" datamodels rebuild "$model" --app Splunk_SA_CIM --yes
                     expect_ok "$S" datamodels acceleration "$model" --app Splunk_SA_CIM --json
-                else
+                elif [ "$invalid" = 0 ]; then
                     skip "datamodels rebuild: no populated statistics within $accel_wait seconds; last status: ${last_status:-${last_error:-no attempts}}"
                 fi
             else bad 'CIM package contains no models'; fi
