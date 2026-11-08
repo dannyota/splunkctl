@@ -245,7 +245,10 @@ cron — polling assets are the scheduler), label creation.
    (**`succeeded`**).
 2. Errors can be HTTP 200/400 with `{"failed": true, "message"}` — treat
    `failed` as authoritative.
-3. `action_run` POST returns `action_run_id`; everything else returns `id`.
+3. `action_run` POST returns `action_run_id` and `playbook_run` POST
+   returns `playbook_run_id` (a string); everything else returns `id`.
+   `SOARClient` renames both to `id`; `soar playbooks run` converts the
+   string to an integer.
 4. `/rest/audit` bare array; `/rest/search` `{results}` envelope.
 5. Artifact DELETE returns `id` as a **string**.
 
@@ -259,7 +262,8 @@ Corrections to the original discovery doc, all verified during the build:
 - **Asset record**: GET exposes `app` (name string); POST takes `app_id`
   (integer). Both verified.
 - **`playbook_run` POST return**: `{"playbook_run_id": "<string>"}` —
-  client normalizes the string to int.
+  `SOARClient` renames the key to `id`; the `playbooks run` command
+  converts the value to int.
 - **Custom function export route**: `GET /rest/custom_function/<id>/export`
   returns `x-gzip` — **confirmed live**.
 - **Task notes**: invisible on `container/<id>/notes` pseudo-field; must
@@ -295,7 +299,8 @@ Corrections to the original discovery doc, all verified during the build:
   `DELETE /rest/playbook/<id>` → 405; `POST` with `{"delete": true}`
   returns success without deleting. The CLI goes through the Web UI
   instead: Django login (GET `/login` for the csrftoken cookie, then
-  AJAX `POST /login` — username/password only), then `POST /playbooks`
+  AJAX `POST /login` with username/password, or the stored browser
+  session when the profile uses `auth_mode: browser`), then `POST /playbooks`
   with `{ids: [...], delete: true}` (X-CSRFToken + Referer headers).
   Response envelope: `{done_count, fail_count, changes[], errors[]}`
   (captured live on 8.5.0.248).

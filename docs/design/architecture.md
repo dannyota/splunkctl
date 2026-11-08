@@ -27,9 +27,10 @@ under `splunkctl/commands/soar/`. Files stay under 500 lines; a group
 that outgrows that splits into sibling modules (for example
 `rules.py`, `rules_io.py`, `rules_schedule.py`).
 
-The MCP server does not import command modules. Each tool call builds a
-`splunkctl` argv and runs the CLI as a subprocess, so the CLI is the
-single implementation and the MCP tools can never drift from it.
+The MCP server builds its tool schemas by inspecting the imported Click
+tree. The meta-tools answer locally; every generated tool builds a
+`splunkctl` argv and runs the CLI as a subprocess, so command behavior
+has one implementation.
 
 ## Request flow
 
@@ -39,14 +40,15 @@ flowchart TD
   B --> C["config.py: profile + env + flags"]
   C --> D{"Mutation?"}
   D -- "no" --> E["client.py / soar client: lazy connect"]
-  D -- "yes, no --yes" --> F["guard.py: [DRY RUN] preview, exit 0"]
-  D -- "yes, --yes" --> E
+  D -- "guarded, no --yes" --> F["guard.py: [DRY RUN] preview, exit 0\n(some previews read the server first)"]
+  D -- "guarded, --yes" --> E
   E --> G["output.py: table, JSON, CSV, JSONL"]
   E -. "exception" .-> H["errors.py: one JSON error line on stderr"]
 ```
 
 Global flags (`--json`, `--format`, `--profile`, `--config`, `--yes`,
-`--dry-run`, ...) are accepted anywhere on the command line. `main.py`
+...) are accepted anywhere on the command line. There is no `--dry-run`
+flag: a guarded command is a dry run whenever `--yes` is absent. `main.py`
 moves them in front of the command before Click parses, stopping at `--`
 and never touching a value that belongs to a subcommand option.
 
@@ -56,11 +58,13 @@ and never touching a value that belongs to a subcommand option.
   `current:`). Each profile holds the SIEM connection and an optional
   `soar:` section. Written with mode 0600 through a temp file and
   `os.replace`.
-- Precedence, highest first: CLI flags, environment (`SPLUNK_HOST`,
-  `SPLUNK_PORT`, `SPLUNK_SCHEME`, `SPLUNK_USER`, `SPLUNK_PASS`,
-  `SPLUNK_TOKEN`, `SPLUNK_APP`, `SPLUNK_OWNER`, `SPLUNK_VERIFY`, and the
-  `SOAR_*` equivalents), then the profile. The guard banner names the
-  layer that supplied the credentials.
+- Precedence, highest first: CLI flags, environment, then the profile.
+  SIEM variables: `SPLUNK_HOST`, `SPLUNK_PORT`, `SPLUNK_SCHEME`,
+  `SPLUNK_USER`, `SPLUNK_PASS`, `SPLUNK_TOKEN`, `SPLUNK_APP`,
+  `SPLUNK_OWNER`, `SPLUNK_VERIFY`. SOAR variables: `SOAR_HOST`,
+  `SOAR_PORT`, `SOAR_USER`, `SOAR_PASS`, `SOAR_TOKEN`, `SOAR_VERIFY`.
+  The SIEM guard banner names the layer (profile, env or flags) that
+  supplied the connection fields; the SOAR banner shows host and port.
 - Coexistence with Splunk's Go CLI: both tools default to
   `~/.splunkctl/config.yaml`. If that file is a flat `host`/`token`
   document written by the other tool, splunkctl treats it as foreign,
@@ -69,16 +73,19 @@ and never touching a value that belongs to a subcommand option.
 
 ## Authentication
 
-Default is username/password or a bearer token from the profile.
-Resolution happens lazily on the first API call; help, `config`, `commands`
-and `docs` never connect.
+Default is username/password or a bearer token from the profile. The
+config file is read when the CLI starts, but credentials are used only on
+the first API call. Help, `config init`, `config show`, `config use`,
+`commands` and `docs` never connect; `config test` does.
 
 Browser SAML is opt-in per profile (`auth_mode: browser`). `auth login`
 opens a temporary Chromium through Playwright, keeps only the product
 cookies, and stores a session under `~/.splunkctl/sessions/` with mode
-0600. On use, the client validates the stored session first, then falls
-back to token or password if the login route is no longer SAML. Module
-roles:
+0600. On use, the SIEM client validates the stored session first; if it
+is missing or expired it re-probes the login route and falls back to
+token or password unless the route still reports SAML. The SOAR client
+does not fall back: a missing or expired SOAR session exits with an
+`auth` error that names `auth login --target soar`. Module roles:
 
 | Module | Role |
 |---|---|
@@ -87,8 +94,9 @@ roles:
 | `auth/adapters.py` | Turns browser cookies into a Splunk session key or a SOAR Django session |
 | `auth/session.py` | Session records, store, target resolution |
 
-SOAR prefers the `ph-auth-token` header and falls back to HTTP Basic for
-`DELETE`, which the server refuses for tokens. See
+SOAR requests use the browser session cookies when present, otherwise
+the `ph-auth-token` header, with HTTP Basic for `DELETE` because the
+server refuses tokens there (except on `decided_list`). See
 [SOAR REST API notes](soar-api.md).
 
 ## Remote-first design
@@ -105,7 +113,9 @@ goes through the REST API, with the Web UI used only where REST has gaps:
 
 `_WebSession` in `client.py` handles Splunk Web login, CSRF and multipart
 upload. It honors the profile's `web_url` when the Web UI is not on the
-API host. `soar/web.py` does the same for SOAR.
+API host. `soar/web.py` handles the SOAR Web UI with the host and port of
+the REST API; it reuses a browser session when one exists and otherwise
+needs username/password.
 
 ## REST adapters
 
@@ -125,9 +135,11 @@ generic `service.confs` API or raw REST helpers in `client.py`.
 
 ## Safety model
 
-- **Dry-run by default.** Every mutating command previews and exits 0
-  unless `--yes` is given. `@guarded` marks these commands so the
-  `commands --json` tree and the MCP tool schemas expose the gate.
+- **Dry-run by default.** Every command that changes a remote instance
+  is `@guarded`: it previews and exits 0 unless `--yes` is given, and the
+  marker is exposed in the `commands --json` tree and the MCP tool
+  schemas. Some previews read the server first to show the exact change.
+  Local-only writes such as `config use` are not guarded.
 - **SPL write commands.** `search run`, `export` and `oneshot` refuse SPL
   that contains `outputlookup`, `collect`, `sendalert`, `delete` and the
   other write commands in `spl_safety.py` unless `--yes` is given; the
@@ -135,10 +147,12 @@ generic `service.confs` API or raw REST helpers in `client.py`.
 - **Secrets.** Config is redacted on `config show`; SOAR asset previews
   mask keys that look like passwords or tokens; session values never
   appear in error strings.
-- **Error envelope.** In JSON mode every failure is one stderr line with
-  `kind` (auth, permission, not_found, conflict, http, connection,
-  timeout, config, confirmation_required), `http_status` and `message`.
-  See [Exit codes](../guides/exit-codes.md).
+- **Error envelope.** In JSON mode a classified failure is one stderr
+  line with `kind` (auth, permission, not_found, conflict, http,
+  connection, timeout, config, usage, confirmation_required, or the
+  fallback `error`), `http_status` and `message`. Exceptions the
+  classifier does not recognize propagate as a Python traceback. See
+  [Exit codes](../guides/exit-codes.md).
 
 ## Agent access
 
@@ -157,8 +171,8 @@ same content to agents that read the website instead.
 2. **Dual output.** TTY gets tables, pipes get JSON. Always overridable.
 3. **Lazy everything.** Auth, SDK connection and config loading are
    deferred until needed.
-4. **One implementation.** MCP, docs and the command tree all derive from
-   the Click CLI.
+4. **One implementation.** The command reference, the `commands --json`
+   tree and the MCP tool schemas all derive from the Click CLI.
 5. **SDK-first.** Use the SDK where it works; adapters and Web UI
    workarounds only for documented gaps.
 6. **Remote-first.** Never touch the server's filesystem.
