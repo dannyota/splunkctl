@@ -86,4 +86,4 @@ Install, configure, authenticate, and check the health of the instances you mana
 - [Command reference](commands/README.md), generated from the command tree
 - [Relationship to Splunk's splunkctl](guides/splunk-cli.md)
 - [Contributor lab: Keycloak SAML](guides/keycloak-lab.md)
-- [Architecture](design/architecture.md) and [catalog and status](design/catalog.md)
+- [Architecture](design/architecture.md), with contributor notes on the [SOAR REST API](design/soar-api.md) and the [SIEM to SOAR field map](design/soar-ingest-map.md)

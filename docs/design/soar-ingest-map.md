@@ -1,8 +1,12 @@
-# SIEM → SOAR ingest conventions
+<!-- summary: Why splunkctl soar ingest maps Splunk CIM fields to SOAR CEF keys the way it does: the built-in map, severity rules, dedup and grouping conventions. -->
 
-Field-mapping source of truth for `splunkctl soar ingest` (PLAN.md task
-P1). Derived 2026-07-11 from the official ecosystem so the CLI matches
-convention instead of inventing mappings:
+# SIEM to SOAR field map
+
+Rationale for the mappings shipped in `splunkctl/soar/cimcef.py` and
+used by `splunkctl soar ingest` (see the
+[ingest guide](../guides/soar-ingest.md)). Derived 2026-07-11 from the
+official ecosystem so the CLI matches convention instead of inventing
+mappings:
 
 - **Splunk SOAR Connector for Splunk** — `CIM_CEF_MAP` /
   `SPLUNK_SEVERITY_MAP` in
@@ -15,6 +19,9 @@ convention instead of inventing mappings:
 
 ## CIM → CEF map (ship as the built-in default)
 
+The contains column is keyed by the CEF key (`CEF_CONTAINS_MAP`), so two
+CIM fields that map to the same CEF key get the same contains types.
+
 | CIM field | CEF key | contains |
 |---|---|---|
 | action, action_name | act | — |
@@ -23,7 +30,7 @@ convention instead of inventing mappings:
 | bytes_out | bytesOut | — |
 | category | cat | — |
 | dest | destinationAddress | ip, host name |
-| dest_ip | destinationAddress | ip |
+| dest_ip | destinationAddress | ip, host name |
 | dest_mac | destinationMacAddress | mac address |
 | dest_nt_domain | destinationNtDomain | domain |
 | dest_port | destinationPort | port |
@@ -46,7 +53,7 @@ convention instead of inventing mappings:
 | request_payload_type | requestMethod | — |
 | src | sourceAddress | ip, host name |
 | src_dns | sourceDnsDomain | domain |
-| src_ip | sourceAddress | ip |
+| src_ip | sourceAddress | ip, host name |
 | src_mac | sourceMacAddress | mac address |
 | src_nt_domain | sourceNtDomain | domain |
 | src_port | sourcePort | port |
@@ -86,9 +93,10 @@ highest wins (critical > high > medium > low > informational).
 - Default: **one container per result row** (connector behavior);
   `--grouping` = all rows into one container with N artifacts
   (`param.grouping=1` equivalent).
-- Container name: `"<rule_name|search name>: <field values>"`; connector
-  fallback `"Splunk Log Entry on <_time>: <source>"`. Scheduled-search
-  alerts use the saved-search name.
+- Container name: the connector uses `"<rule_name|search name>: <field
+  values>"`. The CLI uses `--container-name-field`, then
+  `--container-name`, then `rule_name` or `search_name` alone, then the
+  connector fallback `"Splunk Log Entry on <_time>: <source>"`.
 - Label default `"events"`; custom labels must pre-exist on SOAR
   (creation is UI-only). Whether `"notable"` exists by default is
   *(unverified)* — feature-detect via `/rest/container_options`.

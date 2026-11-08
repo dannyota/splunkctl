@@ -33,7 +33,10 @@ splunkctl docs generate --check
 - Tests must not need a live Splunk or SOAR instance. Mock the client.
   For a manual check against a real instance, run
   `SPLUNKCTL=splunkctl bash scripts/live-adapter-smoke.sh` with a profile
-  that points at a throwaway Splunk.
+  that points at a throwaway Splunk. Known gaps in live verification:
+  `datamodels rebuild --yes` and populated acceleration status, and a
+  `kvstore` export/import round trip on a healthy KV store, are covered
+  by unit tests only.
 - Pages under `docs/commands/` are generated. Run `splunkctl docs generate`
   after changing help text and commit the result.
 - Prose in the repository is English, plain and direct. No em dashes.

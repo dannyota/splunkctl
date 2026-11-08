@@ -90,6 +90,7 @@
 
 - **Design**
   - [Architecture](design/architecture.md)
-  - [Catalog & status](design/catalog.md)
+  - [SOAR REST API notes](design/soar-api.md)
+  - [SIEM to SOAR field map](design/soar-ingest-map.md)
 
 - [GitHub ↗](https://github.com/dannyota/splunkctl)

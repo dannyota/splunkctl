@@ -1,11 +1,15 @@
-# Splunk SOAR REST API — discovery reference
+<!-- summary: Contributor notes on the Splunk SOAR REST API as verified live while building splunkctl soar: auth, query semantics, write recipes, and response quirks. -->
 
-Working reference for building `splunkctl soar`. Compiled 2026-07-11 from a
-live probe of Splunk SOAR (On-premises) **8.5.0.248** (unprivileged, el9),
-a live **write-path verification** (every mutation below marked "verified"
-was executed and cleaned up on the lab), and official docs. Companion doc:
-[soar-ingest-map.md](soar-ingest-map.md) (SIEM→SOAR field-mapping
-conventions).
+# Splunk SOAR REST API notes
+
+Contributor reference behind `splunkctl soar`, implemented in
+`splunkctl/soar/client.py` and `splunkctl/commands/soar/`. Compiled
+2026-07-11 from a live probe of Splunk SOAR (On-premises) **8.5.0.248**
+(unprivileged, el9), a live **write-path verification** (every mutation
+below marked "verified" was executed and cleaned up on the lab), and
+official docs. The lab has since moved to SOAR 8.6.0.530; these notes were
+not re-probed there, so treat 8.6 differences as unverified. Companion
+page: [SIEM to SOAR field map](soar-ingest-map.md).
 
 **Legend**: unmarked = live-verified on 8.5.0.248 (reads and writes);
 *(docs)* = documented, not exercised here; *(unverified)* = confirm at
@@ -159,7 +163,7 @@ GET /rest/<type>?page=0&page_size=10&sort=<field>&order=asc|desc
 
 - `POST /rest/playbook_run` `{container_id*, playbook_id*, scope:
   "all"|"new", run: true, inputs?}` → `{"playbook_run_id": "<str>"}` —
-  note the id is a **string** (client normalizes to int); bogus
+  note the id is a **string** (the `playbooks run` command converts it to int); bogus
   playbook_id → 404 `Playbook "N" not found` (validates first). Poll
   `GET /rest/playbook_run/<id>`; block detail `.../block_results`;
   cancel POST `{"cancel": true}`. All verified live.
@@ -241,7 +245,10 @@ cron — polling assets are the scheduler), label creation.
    (**`succeeded`**).
 2. Errors can be HTTP 200/400 with `{"failed": true, "message"}` — treat
    `failed` as authoritative.
-3. `action_run` POST returns `action_run_id`; everything else returns `id`.
+3. `action_run` POST returns `action_run_id` and `playbook_run` POST
+   returns `playbook_run_id` (a string); everything else returns `id`.
+   `SOARClient` renames both to `id`; `soar playbooks run` converts the
+   string to an integer.
 4. `/rest/audit` bare array; `/rest/search` `{results}` envelope.
 5. Artifact DELETE returns `id` as a **string**.
 
@@ -255,7 +262,8 @@ Corrections to the original discovery doc, all verified during the build:
 - **Asset record**: GET exposes `app` (name string); POST takes `app_id`
   (integer). Both verified.
 - **`playbook_run` POST return**: `{"playbook_run_id": "<string>"}` —
-  client normalizes the string to int.
+  `SOARClient` renames the key to `id`; the `playbooks run` command
+  converts the value to int.
 - **Custom function export route**: `GET /rest/custom_function/<id>/export`
   returns `x-gzip` — **confirmed live**.
 - **Task notes**: invisible on `container/<id>/notes` pseudo-field; must
@@ -291,7 +299,8 @@ Corrections to the original discovery doc, all verified during the build:
   `DELETE /rest/playbook/<id>` → 405; `POST` with `{"delete": true}`
   returns success without deleting. The CLI goes through the Web UI
   instead: Django login (GET `/login` for the csrftoken cookie, then
-  AJAX `POST /login` — username/password only), then `POST /playbooks`
+  AJAX `POST /login` with username/password, or the stored browser
+  session when the profile uses `auth_mode: browser`), then `POST /playbooks`
   with `{ids: [...], delete: true}` (X-CSRFToken + Referer headers).
   Response envelope: `{done_count, fail_count, changes[], errors[]}`
   (captured live on 8.5.0.248).
