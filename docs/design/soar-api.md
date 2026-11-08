@@ -163,7 +163,7 @@ GET /rest/<type>?page=0&page_size=10&sort=<field>&order=asc|desc
 
 - `POST /rest/playbook_run` `{container_id*, playbook_id*, scope:
   "all"|"new", run: true, inputs?}` → `{"playbook_run_id": "<str>"}` —
-  note the id is a **string** (client normalizes to int); bogus
+  note the id is a **string** (the `playbooks run` command converts it to int); bogus
   playbook_id → 404 `Playbook "N" not found` (validates first). Poll
   `GET /rest/playbook_run/<id>`; block detail `.../block_results`;
   cancel POST `{"cancel": true}`. All verified live.
