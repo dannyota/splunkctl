@@ -222,7 +222,7 @@ def test_get_not_found(mock_gc: MagicMock) -> None:
         app="-",
         output_mode="json",
         search="name=nope",
-        count=1,
+        count=0,
     )
 
 
@@ -299,22 +299,23 @@ def test_get_app_option_scopes_search(mock_gc: MagicMock) -> None:
         app="Splunk_SA_CIM",
         output_mode="json",
         search="name=Authentication",
-        count=1,
+        count=0,
     )
 
 
 # --- self-discovery ---
 
 
-def test_commands_json_includes_datamodels_with_rebuild_guarded() -> None:
+def test_commands_json_includes_datamodels_with_mutations_guarded() -> None:
     result = CliRunner().invoke(cli, ["commands"])
     assert result.exit_code == 0
     data = json.loads(result.output)
     group = next(c for c in data["commands"] if c["name"] == "datamodels")
     sub_names = [s["name"] for s in group["subcommands"]]
-    assert sub_names == ["acceleration", "get", "list", "rebuild"]
-    rebuild = next(s for s in group["subcommands"] if s["name"] == "rebuild")
-    assert rebuild.get("guarded") is True
+    assert sub_names == ["accelerate", "acceleration", "get", "list", "rebuild"]
+    for verb in ("accelerate", "rebuild"):
+        mutation = next(s for s in group["subcommands"] if s["name"] == verb)
+        assert mutation.get("guarded") is True
     for verb in ("list", "get", "acceleration"):
         cmd = next(s for s in group["subcommands"] if s["name"] == verb)
         assert not cmd.get("guarded")

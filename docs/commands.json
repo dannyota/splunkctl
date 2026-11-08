@@ -309,7 +309,8 @@
               "type": "flag",
               "kind": "option",
               "flags": [
-                "--visible"
+                "--visible",
+                "--hidden"
               ],
               "help": "Set app visibility."
             },
@@ -318,7 +319,8 @@
               "type": "flag",
               "kind": "option",
               "flags": [
-                "--enabled"
+                "--enabled",
+                "--disabled"
               ],
               "help": "Enable or disable the app."
             }
@@ -742,7 +744,8 @@
               "type": "flag",
               "kind": "option",
               "flags": [
-                "--verify"
+                "--verify",
+                "--no-verify"
               ],
               "help": "Verify SSL certificate."
             },
@@ -1156,8 +1159,59 @@
     },
     {
       "name": "datamodels",
-      "help": "CIM/tstats data models \u2014 definitions and acceleration health.",
+      "help": "CIM/tstats data models: definitions and acceleration health.",
       "subcommands": [
+        {
+          "name": "accelerate",
+          "help": "Configure acceleration in the model's datamodels.conf stanza.",
+          "guarded": true,
+          "params": [
+            {
+              "name": "name",
+              "type": "text",
+              "kind": "argument"
+            },
+            {
+              "name": "app",
+              "type": "text",
+              "kind": "option",
+              "flags": [
+                "--app"
+              ],
+              "help": "Splunk app context.",
+              "default": "-"
+            },
+            {
+              "name": "earliest",
+              "type": "text",
+              "kind": "option",
+              "flags": [
+                "--earliest"
+              ],
+              "help": "Summary time range start.",
+              "default": "-1mon"
+            },
+            {
+              "name": "cron",
+              "type": "text",
+              "kind": "option",
+              "flags": [
+                "--cron"
+              ],
+              "help": "Summarization schedule.",
+              "default": "*/5 * * * *"
+            },
+            {
+              "name": "disable",
+              "type": "flag",
+              "kind": "option",
+              "flags": [
+                "--disable"
+              ],
+              "help": "Disable acceleration instead of enabling it."
+            }
+          ]
+        },
         {
           "name": "acceleration",
           "help": "Acceleration build status: percent complete, summarized range, errors.",
@@ -1166,6 +1220,16 @@
               "name": "name",
               "type": "text",
               "kind": "argument"
+            },
+            {
+              "name": "app",
+              "type": "text",
+              "kind": "option",
+              "flags": [
+                "--app"
+              ],
+              "help": "Splunk app context (default: all apps).",
+              "default": "-"
             }
           ]
         },
@@ -1334,7 +1398,8 @@
                   "type": "flag",
                   "kind": "option",
                   "flags": [
-                    "--enabled"
+                    "--enabled",
+                    "--disabled"
                   ],
                   "help": "Show only enabled or disabled correlation searches."
                 },
@@ -1830,6 +1895,15 @@
                 "--sourcetype"
               ],
               "help": "Source type."
+            },
+            {
+              "name": "url",
+              "type": "text",
+              "kind": "option",
+              "flags": [
+                "--url"
+              ],
+              "help": "HEC base URL (scheme://host:port); default: API host and HEC settings."
             }
           ]
         },
@@ -2245,7 +2319,8 @@
               "type": "flag",
               "kind": "option",
               "flags": [
-                "--enabled"
+                "--enabled",
+                "--disabled"
               ],
               "help": "Enable or disable."
             }
@@ -2599,7 +2674,8 @@
               "type": "flag",
               "kind": "option",
               "flags": [
-                "--overwrite"
+                "--overwrite",
+                "--no-overwrite"
               ],
               "help": "OUTPUT (default): always overwrite. --no-overwrite: OUTPUTNEW (only fill fields not already present on the event)."
             },
@@ -2683,7 +2759,8 @@
               "type": "flag",
               "kind": "option",
               "flags": [
-                "--case-sensitive"
+                "--case-sensitive",
+                "--no-case-sensitive"
               ],
               "help": "Case-sensitive field matching (default: Splunk's own default, unset)."
             },
@@ -3385,7 +3462,8 @@
               "type": "flag",
               "kind": "option",
               "flags": [
-                "--create"
+                "--create",
+                "--no-create"
               ],
               "help": "Create the stanza when missing (default: create)."
             }
@@ -3653,7 +3731,8 @@
               "type": "flag",
               "kind": "option",
               "flags": [
-                "--track"
+                "--track",
+                "--no-track"
               ],
               "help": "List firings under triggered alerts."
             },
@@ -3730,7 +3809,7 @@
         },
         {
           "name": "enable",
-          "help": "Enable scheduling for a saved search.",
+          "help": "Enable a saved search and schedule it when a cron exists.",
           "guarded": true,
           "params": [
             {
@@ -3834,7 +3913,8 @@
               "type": "flag",
               "kind": "option",
               "flags": [
-                "--update"
+                "--update",
+                "--no-update"
               ],
               "help": "Update existing rules (default: yes)."
             }
@@ -4088,9 +4168,10 @@
               "type": "flag",
               "kind": "option",
               "flags": [
-                "--enabled"
+                "--enabled",
+                "--disabled"
               ],
-              "help": "Enable or disable scheduling."
+              "help": "Enable or disable the saved search."
             },
             {
               "name": "earliest",
@@ -4183,7 +4264,8 @@
               "type": "flag",
               "kind": "option",
               "flags": [
-                "--track"
+                "--track",
+                "--no-track"
               ],
               "help": "List firings under triggered alerts."
             },
@@ -7028,7 +7110,8 @@
                   "type": "flag",
                   "kind": "option",
                   "flags": [
-                    "--force"
+                    "--force",
+                    "--no-force"
                   ],
                   "help": "Force overwrite (default: true)."
                 }

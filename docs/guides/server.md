@@ -75,7 +75,7 @@ splunkctl server license --usage
 splunkctl server kvstore
 ```
 
-Expected result: `license` lists pool usage (used versus quota per pool). `--usage` reports one row with `used`, `quota`, `pct_used` (today's indexed volume against the licensed daily quota), `licenses_valid`, and `soonest_expiry` (earliest expiring non-perpetual license, or `never`). `kvstore` shows status, port, version, and storage engine, with an explicit status word (`ready`, `failed`, `starting`, `unknown`) so a down KV store is never mistaken for a healthy result.
+Expected result: `license` lists pool usage (used versus quota per pool). `--usage` reports one row with `used`, `quota`, `pct_used` (today's indexed volume against the licensed daily quota), `active_group`, `active_group_status`, `licenses_valid`, and `soonest_expiry` (earliest expiring non-perpetual license, or `never`). Quota, valid-license count, and expiry include only licenses belonging to the active group, selected by `/services/licenser/groups` `is_active`. An expired active Trial stays `EXPIRED` even when inactive Free or Forwarder licenses are valid. `UNKNOWN` means the active group or its licenses are missing. See [Splunk license endpoints](https://help.splunk.com/en/splunk-enterprise/rest-api-reference/10.4/license-endpoints/license-endpoint-descriptions). `kvstore` shows status, port, version, and storage engine, with an explicit status word (`ready`, `failed`, `starting`, `unknown`) so a down KV store is never mistaken for a healthy result.
 
 ### Read and dismiss system messages
 

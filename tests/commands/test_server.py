@@ -188,6 +188,10 @@ def test_license_usage_daily_volume(mock_gc: MagicMock) -> None:
                     ]
                 }
             )
+        if "licenser/groups" in path:
+            return _resp(
+                {"entry": [{"name": "Enterprise", "content": {"is_active": "1"}}]}
+            )
         return _resp(
             {
                 "entry": [
@@ -195,6 +199,7 @@ def test_license_usage_daily_volume(mock_gc: MagicMock) -> None:
                         "name": "AAA",
                         "content": {
                             "type": "enterprise",
+                            "group_id": "Enterprise",
                             "status": "VALID",
                             "quota": 524288000,
                             "expiration_time": 1788934111,
@@ -205,6 +210,7 @@ def test_license_usage_daily_volume(mock_gc: MagicMock) -> None:
                         "name": "FFF",
                         "content": {
                             "type": "forwarder",
+                            "group_id": "Forwarder",
                             "status": "VALID",
                             "quota": 1048576,
                             "expiration_time": 2147483647,
@@ -224,7 +230,9 @@ def test_license_usage_daily_volume(mock_gc: MagicMock) -> None:
     assert row["used"] == "250.0 MB"
     assert row["quota"] == "500.0 MB"
     assert row["pct_used"] == 50.0
-    assert row["licenses_valid"] == 2
+    assert row["licenses_valid"] == 1
+    assert row["active_group"] == "Enterprise"
+    assert row["active_group_status"] == "VALID"
     assert row["soonest_expiry"].startswith("2026-")
 
 
@@ -244,6 +252,8 @@ def test_license_usage_perpetual_only_never_expires(mock_gc: MagicMock) -> None:
                     ]
                 }
             )
+        if "licenser/groups" in path:
+            return _resp({"entry": [{"name": "Free", "content": {"is_active": True}}]})
         return _resp(
             {
                 "entry": [
@@ -251,6 +261,7 @@ def test_license_usage_perpetual_only_never_expires(mock_gc: MagicMock) -> None:
                         "name": "FFF",
                         "content": {
                             "type": "free",
+                            "group_id": "Free",
                             "status": "VALID",
                             "quota": 100,
                             "expiration_time": 2147483647,

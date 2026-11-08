@@ -28,6 +28,7 @@ from splunklib.binding import UrlEncoded
 
 from splunkctl import guard, output
 from splunkctl.client import get_client, rest_get_json
+from splunkctl.commands import conf_ops
 from splunkctl.commands.common import fetch_page, list_options
 
 _OWNER = "nobody"
@@ -88,25 +89,27 @@ def _fetch_models(
 
 
 def _resolve(client: Any, name: str, app: str) -> dict[str, Any] | None:
-    """Resolve a data model by exact name, scoped to ``app`` (default: any app).
-
-    Splunk's collection ``search=name=<name>`` performs an exact,
-    case-insensitive match (confirmed live) — never a substring match —
-    so this never needs client-side re-filtering. Returns ``None`` for a
-    clean not-found (an empty entry list is a normal 200 response, not an
-    exception); an ``--app`` naming an app that doesn't exist at all does
-    raise (HTTPError 404), which is left to propagate to the central
-    classifier like any other REST failure.
-    """
+    """Resolve an exact, case-insensitive name; reject ambiguous app matches."""
     body = rest_get_json(
         client.service,
         "datamodel/model",
         owner=_OWNER,
         app=app,
         search=f"name={name}",
-        count=1,
+        count=0,
     )
     entries: list[dict[str, Any]] = body.get("entry", [])
+    entries = [
+        e for e in entries if str(e.get("name", "")).casefold() == name.casefold()
+    ]
+    if len(entries) > 1:
+        apps = sorted({str(e.get("acl", {}).get("app", "")) for e in entries})
+        output.error(
+            f"Data model '{name}' exists in multiple apps: {', '.join(apps)}. "
+            "Specify --app to select one.",
+            kind="conflict",
+        )
+        raise click.exceptions.Exit(1)
     return entries[0] if entries else None
 
 
@@ -155,7 +158,7 @@ def _acceleration_row(
 
 @click.group("datamodels")
 def datamodels_group() -> None:
-    """CIM/tstats data models — definitions and acceleration health."""
+    """CIM/tstats data models: definitions and acceleration health."""
 
 
 @datamodels_group.command("list")
@@ -234,19 +237,21 @@ def get_model(ctx: click.Context, name: str, *, app: str, definition: bool) -> N
 
 @datamodels_group.command("acceleration")
 @click.argument("name", required=False, default=None)
+@click.option("--app", default="-", help="Splunk app context (default: all apps).")
 @click.pass_context
-def acceleration_status(ctx: click.Context, name: str | None) -> None:
+def acceleration_status(ctx: click.Context, name: str | None, *, app: str) -> None:
     """Acceleration build status: percent complete, summarized range, errors.
 
-    Without NAME, shows every accelerated model on the instance (or
-    cleanly reports none). With NAME, shows that one model regardless of
-    whether it's accelerated — ``enabled: false`` is a valid, non-error
+    Without NAME, shows accelerated models in --app (default: all apps).
+    With NAME, resolves that model in --app; ambiguous names across apps
+    fail with conflict. Shows that one model regardless of
+    whether it's accelerated; ``enabled: false`` is a valid, non-error
     answer to "is this model accelerated at all".
     """
     client = get_client(ctx)
 
     if name is not None:
-        entry = _resolve(client, name, app="-")
+        entry = _resolve(client, name, app=app)
         if entry is None:
             output.error(f"Data model '{name}' not found.", kind="not_found")
             ctx.exit(1)
@@ -254,7 +259,7 @@ def acceleration_status(ctx: click.Context, name: str | None) -> None:
         candidates = [entry]
     else:
         body = rest_get_json(
-            client.service, "datamodel/model", owner=_OWNER, app="-", count=0
+            client.service, "datamodel/model", owner=_OWNER, app=app, count=0
         )
         all_entries: list[dict[str, Any]] = body.get("entry", [])
         candidates = [
@@ -278,6 +283,67 @@ def acceleration_status(ctx: click.Context, name: str | None) -> None:
     output.render(ctx, rows, empty="No accelerated data models found.")
 
 
+@datamodels_group.command("accelerate")
+@guard.guarded
+@click.argument("name")
+@click.option("--app", default="-", help="Splunk app context.")
+@click.option(
+    "--earliest", default="-1mon", show_default=True, help="Summary time range start."
+)
+@click.option(
+    "--cron", default="*/5 * * * *", show_default=True, help="Summarization schedule."
+)
+@click.option(
+    "--disable", is_flag=True, help="Disable acceleration instead of enabling it."
+)
+@click.pass_context
+def accelerate_model(
+    ctx: click.Context,
+    name: str,
+    *,
+    app: str,
+    earliest: str,
+    cron: str,
+    disable: bool,
+) -> None:
+    """Configure acceleration in the model's datamodels.conf stanza."""
+    client = get_client(ctx)
+    entry = _resolve(client, name, app)
+    if entry is None:
+        output.error(f"Data model '{name}' not found.", kind="not_found")
+        ctx.exit(1)
+        return
+
+    resolved_app = str(entry.get("acl", {}).get("app", ""))
+    resolved_name = str(entry.get("name", name))
+    kv = {
+        "acceleration": "false" if disable else "true",
+        "acceleration.earliest_time": earliest,
+        "acceleration.cron_schedule": cron,
+    }
+    try:
+        entity = conf_ops.get_stanza(
+            client, "datamodels", resolved_name, app=resolved_app
+        )
+        current: dict[str, Any] = dict(entity.content)
+    except KeyError:
+        current = {}
+    diff = "\n".join(conf_ops.diff_lines(current, kv))
+    details = (
+        f"  app: {resolved_app}\n"
+        f"  file: datamodels.conf\n  stanza: {resolved_name}\n{diff}"
+    )
+    if not guard.check(
+        ctx, f"Configure acceleration for data model '{resolved_name}'", details=details
+    ):
+        return
+
+    conf_ops.set_keys(client, "datamodels", resolved_name, kv, app=resolved_app)
+    output.info(
+        f"Updated acceleration for data model '{resolved_name}' (app '{resolved_app}')."
+    )
+
+
 @datamodels_group.command("rebuild")
 @guard.guarded
 @click.argument("name")
@@ -286,7 +352,7 @@ def acceleration_status(ctx: click.Context, name: str | None) -> None:
 def rebuild_model(ctx: click.Context, name: str, *, app: str) -> None:
     """Rebuild an accelerated data model's summary (re-summarizes from scratch).
 
-    Only meaningful for an already-accelerated model — there is no
+    Only meaningful for an already-accelerated model. There is no
     dedicated rebuild REST verb; this disables then re-enables
     acceleration with the same ``earliest_time`` window, exactly what
     Splunk Web's own "Rebuild" button does (confirmed against the
@@ -322,18 +388,21 @@ def rebuild_model(ctx: click.Context, name: str, *, app: str) -> None:
     ):
         return
 
+    # datamodel/model takes the acceleration config as one JSON object; a
+    # bare "0"/"1" is answered with HTTP 500 "Unexpected EOF" (verified on
+    # Splunk 10.6). Disabling clears earliest_time server-side, so the
+    # re-enable resends the full original config.
     client.service.post(
         "datamodel/model/" + _seg(resolved_name),
         owner=_OWNER,
         app=resolved_app,
-        acceleration="0",
+        acceleration=json.dumps({"enabled": False}),
     )
     client.service.post(
         "datamodel/model/" + _seg(resolved_name),
         owner=_OWNER,
         app=resolved_app,
-        acceleration="1",
-        **{"acceleration.earliest_time": earliest},
+        acceleration=json.dumps({**accel, "enabled": True}),
     )
     output.info(
         f"Rebuild triggered for data model '{resolved_name}' (app '{resolved_app}')."

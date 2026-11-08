@@ -32,11 +32,21 @@ splunkctl docs generate --check
   or under 450 lines. Split by topic instead of trimming tests.
 - Tests must not need a live Splunk or SOAR instance. Mock the client.
   For a manual check against a real instance, run
-  `SPLUNKCTL=splunkctl bash scripts/live-adapter-smoke.sh` with a profile
-  that points at a throwaway Splunk. Known gaps in live verification:
-  `datamodels rebuild --yes` and populated acceleration status, and a
-  `kvstore` export/import round trip on a healthy KV store, are covered
-  by unit tests only.
+  `SPLUNKCTL=splunkctl bash scripts/live-smoke.sh` with a throwaway profile.
+  `LIVE_ONLY`/`LIVE_SKIP` select comma-separated groups; `LIVE_MONITOR_PATH`
+  is an existing server path (default `/tmp`), monitored disabled initially;
+  the inputs step skips if that exact input already exists.
+  `CIM_TGZ` optionally supplies a Splunk_SA_CIM package;
+  `LIVE_HEC_URL` overrides the HEC base URL; `LIVE_PYTHON` names the
+  interpreter that has splunkctl installed (default `python3`).
+  The `LIVE_HEC_URL` scheme must match `hec settings` `enableSSL`: use
+  `https` on a default install, or `http` when SSL is disabled.
+  For a mapped port, for example, set `LIVE_HEC_URL=https://127.0.0.1:18088`.
+  `datamodels rebuild --yes` runs only when `CIM_TGZ` is set and the server
+  reports acceleration enabled within 90 seconds; otherwise it reports
+  SKIPPED. A populated acceleration summary is not awaited, so the
+  populated-status fields stay covered by unit tests only.
+  The `kvstore` export/import round trip requires a healthy KV store.
 - Pages under `docs/commands/` are generated. Run `splunkctl docs generate`
   after changing help text and commit the result.
 - Prose in the repository is English, plain and direct. No em dashes.

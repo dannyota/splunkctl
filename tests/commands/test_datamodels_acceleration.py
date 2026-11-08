@@ -310,18 +310,16 @@ def test_rebuild_applies_with_yes_disables_then_reenables(mock_gc: MagicMock) ->
     first = svc.post.call_args_list[0]
     second = svc.post.call_args_list[1]
     assert first.args == ("datamodel/model/Authentication",)
-    assert first.kwargs == {
-        "owner": "nobody",
-        "app": "Splunk_SA_CIM",
-        "acceleration": "0",
-    }
+    assert first.kwargs["owner"] == "nobody"
+    assert first.kwargs["app"] == "Splunk_SA_CIM"
+    # The endpoint takes one JSON object; a bare 0/1 is a server error.
+    assert json.loads(first.kwargs["acceleration"]) == {"enabled": False}
+    assert set(first.kwargs) == {"owner", "app", "acceleration"}
     assert second.args == ("datamodel/model/Authentication",)
-    assert second.kwargs == {
-        "owner": "nobody",
-        "app": "Splunk_SA_CIM",
-        "acceleration": "1",
-        "acceleration.earliest_time": "-30d",
-    }
+    re_enabled = json.loads(second.kwargs["acceleration"])
+    assert re_enabled["enabled"] is True
+    assert re_enabled["earliest_time"] == "-30d"
+    assert set(second.kwargs) == {"owner", "app", "acceleration"}
 
 
 @patch(_PATCH)
@@ -376,3 +374,49 @@ def test_rebuild_permission_denied_classified_envelope(mock_gc: MagicMock) -> No
     err = json.loads(last_line)["error"]
     assert err["kind"] == "permission"
     assert err["http_status"] == 403
+
+
+@patch(_PATCH)
+def test_acceleration_app_scopes_named_and_listing(mock_gc: MagicMock) -> None:
+    svc = mock_gc.return_value.service
+    for name in ([], ["authentication"]):
+        svc.reset_mock()
+        svc.get.side_effect = [
+            _resp(
+                {
+                    "entry": [
+                        _model_entry(
+                            "Authentication", app="Splunk_SA_CIM", accelerated=True
+                        )
+                    ]
+                }
+            ),
+            _resp({"entry": []}),
+        ]
+        result = CliRunner().invoke(
+            cli,
+            ["--json", "datamodels", "acceleration", *name, "--app", "Splunk_SA_CIM"],
+        )
+        assert result.exit_code == 0, result.output
+        assert json.loads(result.output)[0]["app"] == "Splunk_SA_CIM"
+        assert svc.get.call_args_list[0].kwargs["app"] == "Splunk_SA_CIM"
+        assert svc.get.call_args_list[1].kwargs["app"] == "-"
+
+
+@patch(_PATCH)
+def test_acceleration_ambiguous_name_is_conflict(mock_gc: MagicMock) -> None:
+    svc = mock_gc.return_value.service
+    svc.get.return_value = _resp(
+        {
+            "entry": [
+                _model_entry("Authentication", app=app)
+                for app in ("security", "Splunk_SA_CIM")
+            ]
+        }
+    )
+    result = CliRunner().invoke(
+        cli, ["--json", "datamodels", "acceleration", "authentication"]
+    )
+    assert result.exit_code == 1
+    assert json.loads(result.stderr)["error"]["kind"] == "conflict"
+    svc.get.assert_called_once()

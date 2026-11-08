@@ -129,7 +129,7 @@ def test_generate_marks_guarded_mutations(tmp_path: Path) -> None:
     _, out, _ = _generate(tmp_path)
     indexes = (out / "indexes.md").read_text()
     create = indexes.split("## indexes create")[1].split("## ")[0]
-    assert "Guarded mutation — dry-run by default" in create
+    assert "Guarded mutation: dry-run by default" in create
 
 
 def test_generate_renders_flags_table(tmp_path: Path) -> None:

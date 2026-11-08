@@ -146,14 +146,12 @@ def meta(ctx: click.Context, *, vocabulary: str) -> None:
 
 
 def _meta_severities(ctx: click.Context, client: SOARClient) -> None:
-    data = client.get("severity")
-    rows: list[dict[str, Any]] = data.get("data", []) if isinstance(data, dict) else []
+    rows = list(client.iter_pages("severity"))
     output.render(ctx, rows, empty="No severities found.")
 
 
 def _meta_statuses(ctx: click.Context, client: SOARClient) -> None:
-    data = client.get("container_status")
-    rows: list[dict[str, Any]] = data.get("data", []) if isinstance(data, dict) else []
+    rows = list(client.iter_pages("container_status"))
     output.render(ctx, rows, empty="No statuses found.")
 
 
@@ -174,14 +172,12 @@ def _meta_tags(ctx: click.Context, client: SOARClient) -> None:
 
 
 def _meta_cef(ctx: click.Context, client: SOARClient) -> None:
-    data = client.get("cef")
-    rows: list[dict[str, Any]] = data.get("data", []) if isinstance(data, dict) else []
+    rows = list(client.iter_pages("cef"))
     output.render(ctx, rows, empty="No CEF fields found.")
 
 
 def _meta_features(ctx: click.Context, client: SOARClient) -> None:
-    data = client.get("feature_flag")
-    rows: list[dict[str, Any]] = data.get("data", []) if isinstance(data, dict) else []
+    rows = list(client.iter_pages("feature_flag"))
     output.render(ctx, rows, empty="No feature flags found.")
 
 

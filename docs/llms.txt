@@ -84,7 +84,7 @@
 - [conf](https://splunkctl.danny.vn/commands/conf.md): Reference for `splunkctl conf`: Generic conf file/stanza editor (any conf, including sensitive ones).
 - [config](https://splunkctl.danny.vn/commands/config.md): Reference for `splunkctl config`: Manage splunkctl configuration.
 - [dashboards](https://splunkctl.danny.vn/commands/dashboards.md): Reference for `splunkctl dashboards`: Dashboard management.
-- [datamodels](https://splunkctl.danny.vn/commands/datamodels.md): Reference for `splunkctl datamodels`: CIM/tstats data models — definitions and acceleration health.
+- [datamodels](https://splunkctl.danny.vn/commands/datamodels.md): Reference for `splunkctl datamodels`: CIM/tstats data models: definitions and acceleration health.
 - [es](https://splunkctl.danny.vn/commands/es.md): Reference for `splunkctl es`: Enterprise Security — notable-event triage (requires ES installed).
 - [eventtypes](https://splunkctl.danny.vn/commands/eventtypes.md): Reference for `splunkctl eventtypes`: Event classification rules (eventtypes.conf) — read-only.
 - [global](https://splunkctl.danny.vn/commands/global.md): Reference for the top-level splunkctl commands: commands, completion, doctor, info.

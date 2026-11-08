@@ -7,15 +7,16 @@ When to use: your detections run on accelerated CIM data models through `| tstat
 ## Prerequisites
 
 - A profile that passes `splunkctl doctor` (see [Configure](configure.md)).
-- Read access to data models for `list`, `get`, and `acceleration`; write access to the model's app (for example `Splunk_SA_CIM`) for `rebuild`.
-- Every command is a thin, typed wrapper around the `datamodel/model` and `admin/summarization` REST collections.
+- Read access to data models for `list`, `get`, and `acceleration`; write access to the model's app (for example `Splunk_SA_CIM`) for `accelerate` and `rebuild`.
+- Reads use the `datamodel/model` and `admin/summarization` REST collections; `accelerate` writes `datamodels.conf` through the same shared conf writer as `conf set`.
 
 ## Synopsis
 
 ```text
 splunkctl datamodels list [--app APP] [--filter SUBSTRING] [--limit N] [--offset N]
 splunkctl datamodels get <NAME> [--app APP] [--definition]
-splunkctl datamodels acceleration [NAME]
+splunkctl datamodels acceleration [NAME] [--app APP]
+splunkctl datamodels accelerate <NAME> [--app APP] [--earliest -1mon] [--cron '*/5 * * * *'] [--disable] [--yes]
 splunkctl datamodels rebuild <NAME> [--app APP] [--yes]
 ```
 
@@ -63,7 +64,22 @@ Expected result: without a name, one row per model whose acceleration configurat
 - `size`, `earliest_summarized`, `latest_summarized`: raw `summary.size`, `summary.earliest_time`, and `summary.latest_time`, unmodified (epoch seconds)
 - `last_error`: `summary.last_error` (a list server side, one entry per distributed peer) joined with `; `; empty when clean
 
-Two REST resources are involved because `datamodel/model`'s `acceleration` field holds only the configuration (`enabled`, `earliest_time`, `cron_schedule`) and never build progress. Percent complete, the summarized range, size, and the last build error live on a separate `admin/summarization` entity per accelerated model, named `tstats:DM_<app>_<model>`, the same source Splunk Web's Data Model Manager page reads. If nothing is accelerated, the command renders an empty result, never an error, and skips the `admin/summarization` fetch. `acceleration <name>` on a non-accelerated model returns `enabled: false` with the other fields blank or `null`; that is a valid answer to "is this model accelerated at all", so an agent auditing coverage does not need a special case. Only a model that does not exist is an error (`not_found`).
+Two REST resources are involved because `datamodel/model`'s `acceleration` field holds only the configuration (`enabled`, `earliest_time`, `cron_schedule`) and never build progress. Percent complete, the summarized range, size, and the last build error live on a separate `admin/summarization` entity per accelerated model, named `tstats:DM_<app>_<model>`, the same source Splunk Web's Data Model Manager page reads. If nothing is accelerated, the command renders an empty result, never an error, and skips the `admin/summarization` fetch. `acceleration <name>` on a non-accelerated model returns `enabled: false` with the other fields blank or `null`; that is a valid answer to "is this model accelerated at all", so an agent auditing coverage does not need a special case. `--app` defaults to all apps and scopes both named lookups and listings. An ambiguous name across apps is an error (`conflict`); pass `--app` to select one. A model that does not exist is an error (`not_found`).
+
+### Configure acceleration
+
+> **Safety:** Target is the Splunk host in the active profile and the model selected by `--app`. Impact: enabling acceleration starts scheduled summary work and consumes storage; disabling stops that work. Preview with `splunkctl datamodels accelerate Authentication --app Splunk_SA_CIM`, apply by adding `--yes`, and verify with `splunkctl datamodels get Authentication --app Splunk_SA_CIM` and `splunkctl datamodels acceleration Authentication`.
+
+```bash
+splunkctl datamodels accelerate Authentication --app Splunk_SA_CIM
+splunkctl datamodels accelerate Authentication --app Splunk_SA_CIM --earliest -15m --cron '*/5 * * * *' --yes
+splunkctl datamodels acceleration Authentication
+splunkctl datamodels accelerate Authentication --app Splunk_SA_CIM --disable --yes
+```
+
+Expected result: the default dry run previews the app, canonical model name, and old and new values for `acceleration`, `acceleration.earliest_time`, and `acceleration.cron_schedule` in `datamodels.conf`. Add `--yes` to apply through the shared `conf set` writer. The defaults are `--earliest -1mon` and `--cron '*/5 * * * *'`; all three keys are written on every apply, including `--disable`, which sets `acceleration=false`. An absent configuration stanza is created in the resolved model's app. An absent model exits 1 without creating a stanza. A name found in multiple apps exits with `conflict` and lists the apps; pass `--app` to select one. The same ambiguity check applies to `rebuild`.
+
+Enabling acceleration starts summary work on the configured cron. Check `acceleration NAME` for progress; summary creation may not be immediate.
 
 ### Rebuild a stale summary
 
@@ -85,7 +101,7 @@ Because a rebuild is two separate POSTs, a failure between them (for example a p
 
 - `http` with status 503 from `list`: the instance is down or starting; the error envelope carries `kind`, `http_status`, and `message`, never a traceback.
 - `not_found` from `get`, `acceleration NAME`, or `rebuild`: the model name is case-sensitive and may live in another app; run `splunkctl datamodels list --filter <text>` and pass `--app`.
-- `Data model 'NAME' is not accelerated`: `rebuild` exits 1 and does nothing; enable acceleration in Splunk Web first.
+- `Data model 'NAME' is not accelerated`: `rebuild` exits 1 and does nothing; enable acceleration with `splunkctl datamodels accelerate NAME --yes` first.
 - `percent_complete` stays below 100 after a rebuild: the summarization cron has not caught up; check `last_error` for a peer-level failure before rebuilding again.
 - `acceleration_enabled` is `false` after a failed `rebuild --yes`: the second POST failed; fix the `permission` or `connection` error and run `rebuild --yes` again once acceleration is re-enabled in Splunk Web.
 - `has_summary: false` with `enabled: true`: acceleration was just enabled; wait for the first cron run.
