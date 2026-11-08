@@ -70,5 +70,6 @@
   <url><loc>https://splunkctl.danny.vn/#/commands/tags</loc><priority>0.6</priority></url>
   <url><loc>https://splunkctl.danny.vn/#/commands/users</loc><priority>0.6</priority></url>
   <url><loc>https://splunkctl.danny.vn/#/design/architecture</loc><priority>0.6</priority></url>
-  <url><loc>https://splunkctl.danny.vn/#/design/catalog</loc><priority>0.6</priority></url>
+  <url><loc>https://splunkctl.danny.vn/#/design/soar-api</loc><priority>0.6</priority></url>
+  <url><loc>https://splunkctl.danny.vn/#/design/soar-ingest-map</loc><priority>0.6</priority></url>
 </urlset>

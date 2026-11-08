@@ -1,11 +1,15 @@
-# Splunk SOAR REST API — discovery reference
+<!-- summary: Contributor notes on the Splunk SOAR REST API as verified live while building splunkctl soar: auth, query semantics, write recipes, and response quirks. -->
 
-Working reference for building `splunkctl soar`. Compiled 2026-07-11 from a
-live probe of Splunk SOAR (On-premises) **8.5.0.248** (unprivileged, el9),
-a live **write-path verification** (every mutation below marked "verified"
-was executed and cleaned up on the lab), and official docs. Companion doc:
-[soar-ingest-map.md](soar-ingest-map.md) (SIEM→SOAR field-mapping
-conventions).
+# Splunk SOAR REST API notes
+
+Contributor reference behind `splunkctl soar`, implemented in
+`splunkctl/soar/client.py` and `splunkctl/commands/soar/`. Compiled
+2026-07-11 from a live probe of Splunk SOAR (On-premises) **8.5.0.248**
+(unprivileged, el9), a live **write-path verification** (every mutation
+below marked "verified" was executed and cleaned up on the lab), and
+official docs. The lab has since moved to SOAR 8.6.0.530; these notes were
+not re-probed there, so treat 8.6 differences as unverified. Companion
+page: [SIEM to SOAR field map](soar-ingest-map.md).
 
 **Legend**: unmarked = live-verified on 8.5.0.248 (reads and writes);
 *(docs)* = documented, not exercised here; *(unverified)* = confirm at

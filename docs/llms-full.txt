@@ -96,7 +96,7 @@ Install, configure, authenticate, and check the health of the instances you mana
 - [Command reference](https://splunkctl.danny.vn/commands/README.md), generated from the command tree
 - [Relationship to Splunk's splunkctl](https://splunkctl.danny.vn/guides/splunk-cli.md)
 - [Contributor lab: Keycloak SAML](https://splunkctl.danny.vn/guides/keycloak-lab.md)
-- [Architecture](https://splunkctl.danny.vn/design/architecture.md) and [catalog and status](https://splunkctl.danny.vn/design/catalog.md)
+- [Architecture](https://splunkctl.danny.vn/design/architecture.md), with contributor notes on the [SOAR REST API](https://splunkctl.danny.vn/design/soar-api.md) and the [SIEM to SOAR field map](https://splunkctl.danny.vn/design/soar-ingest-map.md)
 
 ## Install
 
@@ -3131,6 +3131,7 @@ Expected result: notables with their native fields: SDI from `event_id` (the def
 - [Run playbooks](https://splunkctl.danny.vn/guides/soar-playbooks.md)
 - [Configure assets and monitor ingestion](https://splunkctl.danny.vn/guides/soar-assets.md)
 - [Command reference: soar](https://splunkctl.danny.vn/commands/soar.md)
+- [SIEM to SOAR field map](https://splunkctl.danny.vn/design/soar-ingest-map.md), the rationale behind the built-in mapping
 
 ## Manage configuration as code
 

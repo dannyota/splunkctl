@@ -106,8 +106,9 @@
 
 ## Design
 
-- [Architecture](https://splunkctl.danny.vn/design/architecture.md): How splunkctl is built: the layers, the request flow, and the design decisions behind them.
-- [Catalog & status](https://splunkctl.danny.vn/design/catalog.md): Status of every splunkctl command group and core module, updated with the commits that move them forward.
+- [Architecture](https://splunkctl.danny.vn/design/architecture.md): How splunkctl is built: the layers, the request flow, auth resolution, and the design decisions behind them.
+- [SOAR REST API notes](https://splunkctl.danny.vn/design/soar-api.md): Contributor notes on the Splunk SOAR REST API as verified live while building splunkctl soar: auth, query semantics, write recipes, and response quirks.
+- [SIEM to SOAR field map](https://splunkctl.danny.vn/design/soar-ingest-map.md): Why splunkctl soar ingest maps Splunk CIM fields to SOAR CEF keys the way it does: the built-in map, severity rules, dedup and grouping conventions.
 
 ## Links
 

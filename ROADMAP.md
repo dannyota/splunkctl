@@ -1,7 +1,7 @@
 # splunkctl — Roadmap
 
-Forward plan and wave sequencing. Build status lives in
-[docs/design/catalog.md](docs/design/catalog.md).
+Forward plan and wave sequencing. The shipped command surface is the
+generated [command reference](docs/commands/README.md).
 
 > **Scope of this file.** What ships and in what order — not implementation
 > detail. Completed waves are trimmed; full history remains in git.
@@ -9,7 +9,7 @@ Forward plan and wave sequencing. Build status lives in
 ## Wave map
 
 Waves are done in order. Each ships a working increment with tests and updated
-docs. Per-command status is in [docs/design/catalog.md](docs/design/catalog.md).
+docs. Per-command detail is in the [command reference](docs/commands/README.md).
 
 ```
 Phase 1 (1–3)   foundation ─► plumbing, config, info

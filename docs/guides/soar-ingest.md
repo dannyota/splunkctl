@@ -142,3 +142,4 @@ Expected result: notables with their native fields: SDI from `event_id` (the def
 - [Run playbooks](soar-playbooks.md)
 - [Configure assets and monitor ingestion](soar-assets.md)
 - [Command reference: soar](../commands/soar.md)
+- [SIEM to SOAR field map](../design/soar-ingest-map.md), the rationale behind the built-in mapping

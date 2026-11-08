@@ -1,8 +1,12 @@
-# SIEM → SOAR ingest conventions
+<!-- summary: Why splunkctl soar ingest maps Splunk CIM fields to SOAR CEF keys the way it does: the built-in map, severity rules, dedup and grouping conventions. -->
 
-Field-mapping source of truth for `splunkctl soar ingest` (PLAN.md task
-P1). Derived 2026-07-11 from the official ecosystem so the CLI matches
-convention instead of inventing mappings:
+# SIEM to SOAR field map
+
+Rationale for the mappings shipped in `splunkctl/soar/cimcef.py` and
+used by `splunkctl soar ingest` (see the
+[ingest guide](../guides/soar-ingest.md)). Derived 2026-07-11 from the
+official ecosystem so the CLI matches convention instead of inventing
+mappings:
 
 - **Splunk SOAR Connector for Splunk** — `CIM_CEF_MAP` /
   `SPLUNK_SEVERITY_MAP` in
