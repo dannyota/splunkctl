@@ -101,15 +101,18 @@ jobs:
       - run: pip uninstall -y splunkctl
       - run: pip-audit --strict --progress-spinner off
 
-  semgrep:
+  # Secret scan of the commits in this push or pull request (full history on
+  # the first run). GitHub secret scanning with push protection also runs.
+  gitleaks:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: returntocorp/semgrep-action@713efdd345f3035192eaa63f56867b88e63e4e5d # v1
         with:
-          config: >-
-            p/python
-            p/secrets
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_COMMENTS: "false"
 
   docs:
     runs-on: ubuntu-latest

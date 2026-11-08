@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Security scanning: CodeQL (Python and GitHub Actions, security-extended
+  queries) and gitleaks replace semgrep. pip-audit continues to cover
+  dependency vulnerabilities.
+
 ## 0.16.0
 
 Live-verified against Splunk Enterprise 10.6.1.1 and SOAR 8.6.0.530: a
