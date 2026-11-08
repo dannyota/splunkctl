@@ -28,6 +28,6 @@ KV document operations require a ready KV store; built-in model reads require a 
 - `server tokens revoke`: No token fixture is issued.
 - `soar *`: requires a SOAR instance; see [docs/design/soar-api.md](../../docs/design/soar-api.md).
 
-Monitor child-path acceptance and CIM acceleration enablement through `conf set`
-have not been verified against a server. CIM retains upstream app/model names;
-other named fixtures use `sc_live_`.
+A populated acceleration summary (percent complete, size, summarized range) is
+not awaited, so those fields are covered by unit tests only. CIM retains
+upstream app/model names; other named fixtures use `sc_live_`.

@@ -41,9 +41,11 @@ if selected datamodels; then
                 expect_ok "$S" datamodels get "$model" --app Splunk_SA_CIM --json
                 expect_ok "$S" datamodels accelerate "$model" --app Splunk_SA_CIM \
                     --earliest -15m --cron '*/5 * * * *' --yes
+                # rebuild needs acceleration enabled, not a populated summary
+                # (the first summary search can take a full cron period).
                 accel_wait=${LIVE_ACCEL_WAIT:-90}
                 deadline=$((SECONDS+accel_wait))
-                populated=0
+                enabled=0
                 poll_status=0
                 invalid=0
                 last_status=''
@@ -51,23 +53,21 @@ if selected datamodels; then
                     if "$S" --timeout 30 datamodels acceleration "$model" \
                         --app Splunk_SA_CIM --json > "$T/acceleration.json" 2> "$T/acceleration.err"; then
                         last_status=$(cat "$T/acceleration.json")
-                        # 0 populated, 2 valid but pending, 1 invalid or disabled.
+                        # 0 enabled, 2 valid but not enabled yet, 1 invalid row.
                         "$PY" - "$T/acceleration.json" 2>/dev/null <<'PYSTATS'
 import json, sys
 try:
     rows = json.load(open(sys.argv[1]))
     r, = rows
-    assert r['enabled'] is True
+    assert isinstance(r.get('enabled'), bool)
 except Exception:
     sys.exit(1)
-pending = [k for k in ('percent_complete', 'size', 'earliest_summarized', 'latest_summarized')
-           if r.get(k) in (None, '')]
-sys.exit(0 if r.get('has_summary') and not pending else 2)
+sys.exit(0 if r['enabled'] else 2)
 PYSTATS
                         case $? in
-                            0) populated=1; break;;
+                            0) enabled=1; break;;
                             2) ;;
-                            *) bad "datamodels acceleration returned an invalid or disabled row: $last_status"; invalid=1; break;;
+                            *) bad "datamodels acceleration returned an invalid row: $last_status"; invalid=1; break;;
                         esac
                     else
                         poll_status=$?
@@ -78,11 +78,11 @@ PYSTATS
                 if [ "$poll_status" -ne 0 ]; then
                     bad "datamodels acceleration poll exited $poll_status: $last_error"
                 fi
-                if [ "$populated" = 1 ]; then
+                if [ "$enabled" = 1 ]; then
                     expect_ok "$S" datamodels rebuild "$model" --app Splunk_SA_CIM --yes
-                    expect_ok "$S" datamodels acceleration "$model" --app Splunk_SA_CIM --json
+                    check_json 'd[0]["enabled"] is True' datamodels acceleration "$model" --app Splunk_SA_CIM
                 elif [ "$invalid" = 0 ]; then
-                    skip "datamodels rebuild: no populated statistics within $accel_wait seconds; last status: ${last_status:-${last_error:-no attempts}}"
+                    skip "datamodels rebuild: acceleration not reported enabled within $accel_wait seconds; last status: ${last_status:-${last_error:-no attempts}}"
                 fi
             else bad 'CIM package contains no models'; fi
         fi

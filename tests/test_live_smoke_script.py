@@ -392,7 +392,7 @@ raise AssertionError(args)
     assert json.loads(state_file.read_text())["pushes"] == 2
 
 
-@pytest.mark.parametrize("mode", ["populates", "empty", "error", "transient"])
+@pytest.mark.parametrize("mode", ["enables", "empty", "error", "transient"])
 def test_datamodel_acceleration_poll(tmp_path: Path, mode: str) -> None:
     binary = tmp_path / "stub"
     binary.write_text(
@@ -407,6 +407,8 @@ state['calls'].append(args)
 mode = os.environ['ACCEL_MODE']
 if args[:2] == ['datamodels', 'list']:
     print('[{"name":"Alerts"}]' if '--app' in args else '[]')
+elif args[:2] == ['--json', 'datamodels'] and args[2] == 'acceleration':
+    print('[{"enabled": true}]')
 elif args[:2] == ['--timeout', '30']:
     assert args[:2] == ['--timeout', '30'], args
     state['polls'] += 1
@@ -414,12 +416,9 @@ elif args[:2] == ['--timeout', '30']:
         p.write_text(json.dumps(state))
         print('Error: poll failed', file=sys.stderr)
         sys.exit(2)
-    populated = mode == 'populates' and state['polls'] >= 3
-    row = {'enabled': True, 'has_summary': populated,
-           'percent_complete': 100 if populated else None,
-           'size': '1' if populated else None,
-           'earliest_summarized': '1' if populated else None,
-           'latest_summarized': '2' if populated else None}
+    enabled = mode == 'enables' and state['polls'] >= 3
+    row = {'enabled': enabled, 'has_summary': False, 'percent_complete': None,
+           'size': None, 'earliest_summarized': None, 'latest_summarized': None}
     state['last_json'] = json.dumps([row])
     print(state['last_json'])
 elif args[:2] not in (['datamodels', 'acceleration'], ['datamodels', 'get'],
@@ -443,6 +442,12 @@ bad() { echo "FAIL $*"; fail=$((fail+1)); }
 skip() { echo "SKIPPED $*"; }
 expect_ok() { "$@" || bad 'expected exit 0'; }
 capture() { local file=$1; shift; "$@" > "$file" || { bad 'capture'; return 1; }; }
+check_json() {
+    local e=$1; shift
+    "$S" --json "$@" > "$T/result.json" || bad 'check_json'
+    local chk='import json,sys;d=json.load(open(sys.argv[1]));assert eval(sys.argv[2])'
+    "$PY" -c "$chk" "$T/result.json" "$e" || bad "JSON assertion: $e"
+}
 cim_installed=1
 . "$ADMIN_SCRIPT"
 exit "$fail"
@@ -478,8 +483,8 @@ exit "$fail"
         for s in result.stdout.splitlines()
         if s.startswith("SKIPPED datamodels rebuild:")
     ]
-    assert len(rebuilds) == (1 if mode == "populates" else 0)
-    if mode == "populates":
+    assert len(rebuilds) == (1 if mode == "enables" else 0)
+    if mode == "enables":
         assert state["polls"] == 3
         assert "--yes" in rebuilds[0]
         assert not skipped

@@ -42,8 +42,10 @@ splunkctl docs generate --check
   The `LIVE_HEC_URL` scheme must match `hec settings` `enableSSL`: use
   `https` on a default install, or `http` when SSL is disabled.
   For a mapped port, for example, set `LIVE_HEC_URL=https://127.0.0.1:18088`.
-  `datamodels rebuild --yes` runs only when `CIM_TGZ` is set and acceleration
-  statistics populate within 90 seconds; otherwise it reports SKIPPED.
+  `datamodels rebuild --yes` runs only when `CIM_TGZ` is set and the server
+  reports acceleration enabled within 90 seconds; otherwise it reports
+  SKIPPED. A populated acceleration summary is not awaited, so the
+  populated-status fields stay covered by unit tests only.
   The `kvstore` export/import round trip requires a healthy KV store.
 - Pages under `docs/commands/` are generated. Run `splunkctl docs generate`
   after changing help text and commit the result.
