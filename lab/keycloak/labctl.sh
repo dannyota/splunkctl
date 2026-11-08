@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Keycloak lab control — start, stop, status, configure, verify.
+# Keycloak lab control - start, stop, status, configure, verify.
 # Usage: ./labctl.sh <start|stop|status|configure|verify>
 
 LAB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -69,21 +69,25 @@ admin_token() {
 do_configure() {
   require_podman
   [ -n "${KEYCLOAK_ADMIN_PASSWORD:-}" ] || die "missing KEYCLOAK_ADMIN_PASSWORD (copy .env.example to .env and fill secrets)"
+  [ -n "${TEST_USER_PASSWORD:-}" ] || die "missing TEST_USER_PASSWORD (set it in lab/keycloak/.env)"
   umask 077
   mkdir -p "$LAB_DIR/.runtime"
   chmod 700 "$LAB_DIR/.runtime"
   local out="$LAB_DIR/.runtime/${REALM}-realm.json" token
   rm -f "$out"
-  render "$LAB_DIR/realm-template.json" \
+  if ! render "$LAB_DIR/realm-template.json" \
     "REALM=$REALM" \
     "SIEM_ACS=$SIEM_ACS" "SOAR_ACS=$SOAR_ACS" \
-    "TEST_USER=$TEST_USER" "TEST_USER_PASSWORD=$TEST_USER_PASSWORD" > "$out"
+    "TEST_USER=$TEST_USER" "TEST_USER_PASSWORD=$TEST_USER_PASSWORD" > "$out"; then
+    rm -f "$out"
+    die "could not render realm configuration"
+  fi
   log "importing realm '$REALM'"
   token="$(admin_token)"
   code="$(curl -s -o /dev/null -w '%{http_code}' -X POST "$KC_URL/admin/realms" \
     -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
     --data-binary "@$out")"
-  # 201 created, 409 already exists (idempotent) — anything else is an error.
+  # 201 created, 409 already exists (idempotent) - anything else is an error.
   case "$code" in
     201) log "realm '$REALM' created" ;;
     409) log "realm '$REALM' already exists (skipping import)" ;;

@@ -3,9 +3,12 @@
 
 LAB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Local (gitignored) secrets first, so .env.example's defaults only fill gaps.
+# shellcheck source=/dev/null
 [ -f "$LAB_DIR/.env" ] && source "$LAB_DIR/.env"
 source "$LAB_DIR/.env.example"
 
+# Used by scripts that source this library.
+# shellcheck disable=SC2034
 KC_URL="http://${KEYCLOAK_HOST}:${KEYCLOAK_PORT}"
 
 log()  { printf '\033[1;34m[keycloak]\033[0m %s\n' "$*"; }
@@ -16,11 +19,22 @@ require_podman() {
   command -v podman >/dev/null 2>&1 || die "required command not found: podman"
 }
 
-# Render a template: replace @@KEY@@ tokens from the given key=value pairs.
+# Render JSON templates whose @@KEY@@ tokens occur inside JSON strings.
 render() {
-  local tmpl="$1"; shift
-  local out; out="$(cat "$tmpl")"
-  local pair k v
-  for pair in "$@"; do k="${pair%%=*}"; v="${pair#*=}"; out="${out//@@${k}@@/$v}"; done
-  printf '%s\n' "$out"
+  python3 - "$@" <<'PYTHON'
+import json
+from pathlib import Path
+import re
+import sys
+
+values = dict(pair.split("=", 1) for pair in sys.argv[2:])
+text = Path(sys.argv[1]).read_text()
+text = re.sub(
+    r"@@([^@]+)@@",
+    lambda match: json.dumps(values[match[1]])[1:-1],
+    text,
+)
+json.loads(text)
+print(text, end="" if text.endswith("\n") else "\n")
+PYTHON
 }

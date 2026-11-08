@@ -133,5 +133,7 @@ vmrun -T ws start "$VMX" nogui
 wait_ssh "$IP"
 log "seeding SSH key"
 seed_ssh_key "$IP" || die "failed to seed ssh key"
+# The guest shell expands these expressions.
+# shellcheck disable=SC2016
 ssh_vm "$IP" 'echo "  guest: $(cat /etc/redhat-release) | selinux=$(getenforce)"'
 log "VM '$NAME' ready at $IP (ssh labadmin@$IP with $LAB_SSH_KEY)"

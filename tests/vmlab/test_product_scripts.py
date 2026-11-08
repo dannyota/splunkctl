@@ -3,13 +3,15 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from tests.vmlab.script_helpers import ROOT, VMLAB, write_executable
+import pytest
+
+from tests.vmlab.script_helpers import ROOT, VMLAB, run_bash, write_executable
 
 
 def test_splunk_install_skips_copy_when_pinned_version_is_ready(
     tmp_path: Path,
 ) -> None:
-    rpm_name = "splunk-10.4.2-33c3bf42cd73.x86_64.rpm"
+    rpm_name = "splunk-10.6.1.1-b2ae2962645c.x86_64.rpm"
     (tmp_path / rpm_name).write_bytes(b"rpm")
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
@@ -24,7 +26,7 @@ def test_splunk_install_skips_copy_when_pinned_version_is_ready(
         fake_bin / "ssh",
         "#!/bin/sh\n"
         'case "$*" in\n'
-        "  *'rpm -q --qf'*) printf '10.4.2-33c3bf42cd73.x86_64\\n' ;;\n"
+        "  *'rpm -q --qf'*) printf '10.6.1.1-b2ae2962645c.x86_64\\n' ;;\n"
         "esac\n"
         "exit 0\n",
     )
@@ -52,8 +54,11 @@ def test_splunk_install_skips_copy_when_pinned_version_is_ready(
     assert not scp_log.exists()
 
 
-def test_soar_install_changes_directory_after_switching_user(tmp_path: Path) -> None:
-    tgz_name = "splunk_soar-unpriv-8.6.0.530-test-el9-x86_64.tgz"
+@pytest.mark.parametrize("version", ["8.8.0.282", "9.1.2.345"])
+def test_soar_install_changes_directory_after_switching_user(
+    tmp_path: Path, version: str
+) -> None:
+    tgz_name = f"splunk_soar-unpriv-{version}-81cb9deb-el9-x86_64.tgz"
     (tmp_path / tgz_name).write_bytes(b"tgz")
     vm_base = tmp_path / "vms"
     vm_dir = vm_base / "soar"
@@ -78,7 +83,8 @@ def test_soar_install_changes_directory_after_switching_user(tmp_path: Path) -> 
         "  *'test -x /home/soar/splunk-soar/soar-install'*) exit 0 ;;\n"
         "  *'./soar-install'*) : > \"$FAKE_SOAR_INSTALLED\" ;;\n"
         "  *product_version*) "
-        "test -f \"$FAKE_SOAR_INSTALLED\" && printf '8.6.0.530\\n' ;;\n"
+        'test -f "$FAKE_SOAR_INSTALLED" && '
+        "printf '%s\\n' \"$EXPECTED_SOAR_VERSION\" ;;\n"
         "esac\n"
         "exit 0\n",
     )
@@ -97,6 +103,7 @@ def test_soar_install_changes_directory_after_switching_user(tmp_path: Path) -> 
         env={
             **os.environ,
             "FAKE_SOAR_INSTALLED": str(installed),
+            "EXPECTED_SOAR_VERSION": version,
             "FAKE_SSH_LOG": str(ssh_log),
             "INSTALLERS_DIR": str(tmp_path),
             "LAB_SSH_KEY": str(key),
@@ -245,3 +252,62 @@ def test_verify_help_lists_role_and_data_selection() -> None:
     assert result.returncode == 0, result.stderr
     assert "--only siem|soar|both" in result.stdout
     assert "--skip-data" in result.stdout
+
+
+def test_soar_rejects_an_unrecognized_installer_name(tmp_path: Path) -> None:
+    shutil.copy2(VMLAB / "install-soar.sh", tmp_path)
+    for name in ("lib.sh", "config.env"):
+        shutil.copy2(VMLAB / name, tmp_path / name)
+    result = run_bash(
+        f"{tmp_path / 'install-soar.sh'}", env={"SOAR_TGZ": "unknown.tgz"}
+    )
+    assert result.returncode != 0
+    assert "cannot derive SOAR version" in result.stderr
+
+
+@pytest.mark.parametrize("version", ["8.8.0.282", "9.1.2.345"])
+@pytest.mark.parametrize("mismatch", [None, "installed", "rest"])
+def test_verify_soar_uses_the_installer_version(
+    tmp_path: Path, version: str, mismatch: str | None
+) -> None:
+    installed_version = "0.0.0.1" if mismatch == "installed" else version
+    rest_version = "0.0.0.2" if mismatch == "rest" else version
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    vm_base = tmp_path / "vms"
+    vm_dir = vm_base / "soar"
+    vm_dir.mkdir(parents=True)
+    vmx = vm_dir / "soar.vmx"
+    vmx.touch()
+    write_executable(fake_bin / "vmrun", f"#!/bin/sh\nprintf '%s\\n' '{vmx}'\n")
+    write_executable(
+        fake_bin / "ssh",
+        '#!/bin/sh\ncase "$*" in\n'
+        f"*product_version*) printf '{installed_version}' ;;\nesac\n",
+    )
+    write_executable(
+        fake_bin / "curl",
+        '#!/bin/sh\ncase "$*" in\n'
+        f'*rest/version*) printf \'{{"version":"{rest_version}"}}\' ;;\n'
+        "*) printf '200' ;;\nesac\n",
+    )
+    result = run_bash(
+        f"{VMLAB / 'verify-lab.sh'} --only soar",
+        env={
+            "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            "VM_BASE_DIR": str(vm_base),
+            "SOAR_TGZ": f"splunk_soar-unpriv-{version}-81cb9deb-el9-x86_64.tgz",
+        },
+    )
+    if mismatch:
+        assert result.returncode != 0
+        expected_error = (
+            "SOAR version mismatch"
+            if mismatch == "installed"
+            else "SOAR authenticated version response is invalid"
+        )
+        assert expected_error in result.stderr
+        assert "authentication OK" not in result.stdout
+    else:
+        assert result.returncode == 0, result.stderr
+        assert f"SOAR: {version}; authentication OK" in result.stdout

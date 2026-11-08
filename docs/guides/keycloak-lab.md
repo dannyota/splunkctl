@@ -7,9 +7,9 @@ When to use: you are developing or testing splunkctl's browser SAML flow and nee
 ## Prerequisites
 
 - A clone of the repository; the lab lives under `lab/keycloak/`.
-- `podman` with `podman compose` (or `podman-compose`), `curl`, `grep`, and `sed`. No root on the host.
+- `podman` with `podman compose` (or `podman-compose`), `curl`, `grep`, `sed`, and `python3`. No root on the host.
 - Splunk SIEM and SOAR VMs that can reach a port on the host. The lab defaults assume VMware NAT addresses (`100.65.1.1` for the host, `100.65.1.10` SIEM, `100.65.1.11` SOAR); override them in `.env` for a different network.
-- For SOAR configuration over SSH: a `labadmin` account on the SOAR VM and the key at `~/vmware/.vmlab_key` (override with `SSH_KEY`).
+- For SOAR configuration over SSH: a `labadmin` account on the SOAR VM and the vmlab key under `$VM_BASE_DIR` (default `~/vmware/.vmlab_key`; override with `SSH_KEY`).
 
 ## Synopsis
 
@@ -34,7 +34,7 @@ cp .env.example .env
 ./labctl.sh verify
 ```
 
-Edit `.env` first and set at least `KEYCLOAK_ADMIN_PASSWORD` and `POSTGRES_PASSWORD`; the file is gitignored. `start` brings up Postgres and Keycloak and waits for health. `configure` imports the `splunklab` realm with two SAML clients (`splunk-siem`, `splunk-soar`), realm roles `splunk-admin` and `soar-admin`, and a test user `samluser` with a plain password and no second factor. Expected result: `verify` reports health, admin login, and both clients.
+Edit `.env` first and set the three `*_PASSWORD` secrets: `KEYCLOAK_ADMIN_PASSWORD`, `POSTGRES_PASSWORD`, and `TEST_USER_PASSWORD`; the file is gitignored. `start` brings up Postgres and Keycloak and waits for health. `configure` imports the `splunklab` realm with two SAML clients (`splunk-siem`, `splunk-soar`), realm roles `splunk-admin` and `soar-admin`, and a test user `samluser` with a plain password and no second factor. Expected result: `verify` reports health, admin login, and both clients.
 
 ### Point the products at Keycloak
 

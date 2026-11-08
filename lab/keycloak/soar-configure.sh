@@ -14,7 +14,8 @@ LAB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib.sh
 source "$LAB_DIR/lib.sh"
 
-: "${SSH_KEY:=$HOME/vmware/.vmlab_key}"
+: "${VM_BASE_DIR:=$HOME/vmware}"
+: "${SSH_KEY:=$VM_BASE_DIR/.vmlab_key}"
 : "${SOAR_HOST:=100.65.1.11}"
 : "${SOAR_PORT:=8443}"
 # The SOAR SP entity ID must match the Keycloak `splunk-soar` client ID; the
