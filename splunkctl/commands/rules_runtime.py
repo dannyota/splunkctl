@@ -25,6 +25,10 @@ def start_test(client: Any, ss: Any, earliest: str | None, latest: str | None) -
         kwargs: dict[str, Any] = {"exec_mode": "normal"}
         if app := ss.access.get("app"):
             kwargs["app"] = app
+        if owner := ss.access.get("owner"):
+            kwargs["owner"] = owner
+        if time_format := ss.content.get("dispatch.time_format"):
+            kwargs["time_format"] = time_format
         for key, override in (("earliest_time", earliest), ("latest_time", latest)):
             value = (
                 override if override is not None else ss.content.get(f"dispatch.{key}")

@@ -222,7 +222,7 @@ def test_get_not_found(mock_gc: MagicMock) -> None:
         app="-",
         output_mode="json",
         search="name=nope",
-        count=1,
+        count=0,
     )
 
 
@@ -299,7 +299,7 @@ def test_get_app_option_scopes_search(mock_gc: MagicMock) -> None:
         app="Splunk_SA_CIM",
         output_mode="json",
         search="name=Authentication",
-        count=1,
+        count=0,
     )
 
 

@@ -200,6 +200,11 @@ Dispatch a rule now (backfill/test run) without firing alert actions.
 splunkctl rules test [OPTIONS] NAME
 ```
 
+```text
+Disabled rules run ad hoc SPL in the rule's app and owner namespace.
+This does not reproduce dispatchAs permissions.
+```
+
 **Flags**
 
 | Flag | Type | Default | Description |

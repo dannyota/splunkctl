@@ -89,25 +89,27 @@ def _fetch_models(
 
 
 def _resolve(client: Any, name: str, app: str) -> dict[str, Any] | None:
-    """Resolve a data model by exact name, scoped to ``app`` (default: any app).
-
-    Splunk's collection ``search=name=<name>`` performs an exact,
-    case-insensitive match (confirmed live) — never a substring match —
-    so this never needs client-side re-filtering. Returns ``None`` for a
-    clean not-found (an empty entry list is a normal 200 response, not an
-    exception); an ``--app`` naming an app that doesn't exist at all does
-    raise (HTTPError 404), which is left to propagate to the central
-    classifier like any other REST failure.
-    """
+    """Resolve an exact, case-insensitive name; reject ambiguous app matches."""
     body = rest_get_json(
         client.service,
         "datamodel/model",
         owner=_OWNER,
         app=app,
         search=f"name={name}",
-        count=1,
+        count=0,
     )
     entries: list[dict[str, Any]] = body.get("entry", [])
+    entries = [
+        e for e in entries if str(e.get("name", "")).casefold() == name.casefold()
+    ]
+    if len(entries) > 1:
+        apps = sorted({str(e.get("acl", {}).get("app", "")) for e in entries})
+        output.error(
+            f"Data model '{name}' exists in multiple apps: {', '.join(apps)}. "
+            "Specify --app to select one.",
+            kind="conflict",
+        )
+        raise click.exceptions.Exit(1)
     return entries[0] if entries else None
 
 
@@ -156,7 +158,7 @@ def _acceleration_row(
 
 @click.group("datamodels")
 def datamodels_group() -> None:
-    """CIM/tstats data models — definitions and acceleration health."""
+    """CIM/tstats data models: definitions and acceleration health."""
 
 
 @datamodels_group.command("list")
@@ -241,7 +243,7 @@ def acceleration_status(ctx: click.Context, name: str | None) -> None:
 
     Without NAME, shows every accelerated model on the instance (or
     cleanly reports none). With NAME, shows that one model regardless of
-    whether it's accelerated — ``enabled: false`` is a valid, non-error
+    whether it's accelerated; ``enabled: false`` is a valid, non-error
     answer to "is this model accelerated at all".
     """
     client = get_client(ctx)
@@ -348,7 +350,7 @@ def accelerate_model(
 def rebuild_model(ctx: click.Context, name: str, *, app: str) -> None:
     """Rebuild an accelerated data model's summary (re-summarizes from scratch).
 
-    Only meaningful for an already-accelerated model — there is no
+    Only meaningful for an already-accelerated model. There is no
     dedicated rebuild REST verb; this disables then re-enables
     acceleration with the same ``earliest_time`` window, exactly what
     Splunk Web's own "Rebuild" button does (confirmed against the

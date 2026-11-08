@@ -149,3 +149,52 @@ def test_accelerate_missing_model_never_creates_configuration(
     assert result.exit_code == 1
     assert json.loads(result.stderr)["error"]["kind"] == "not_found"
     client.service.confs.__getitem__.assert_not_called()
+
+
+@pytest.mark.parametrize("command", ["accelerate", "rebuild"])
+@patch(_PATCH)
+def test_ambiguous_model_never_writes(mock_gc: MagicMock, command: str) -> None:
+    client = mock_gc.return_value
+    conf, stanza = _configure(client)
+    client.service.get.return_value.body.read.return_value = json.dumps(
+        {
+            "entry": [
+                {"name": "Authentication", "acl": {"app": app}}
+                for app in ("security", "Splunk_SA_CIM")
+            ]
+        }
+    ).encode()
+    result = CliRunner().invoke(
+        cli, ["--json", "datamodels", command, "authentication", "--yes"]
+    )
+    assert result.exit_code == 1, result.output
+    error = json.loads(result.stderr)["error"]
+    assert error["kind"] == "conflict"
+    assert "security" in error["message"]
+    assert "Splunk_SA_CIM" in error["message"]
+    assert "--app" in error["message"]
+    assert client.service.get.call_args.kwargs["count"] == 0
+    stanza.update.assert_not_called()
+    conf.create.assert_not_called()
+    client.service.post.assert_not_called()
+    client.service.confs.__getitem__.assert_not_called()
+
+
+@patch(_PATCH)
+def test_resolve_filters_unrelated_model_names(mock_gc: MagicMock) -> None:
+    client = mock_gc.return_value
+    conf, stanza = _configure(client)
+    response = json.loads(client.service.get.return_value.body.read.return_value)
+    response["entry"].insert(
+        0, {"name": "AuthenticationExtra", "acl": {"app": "other"}}
+    )
+    client.service.get.return_value.body.read.return_value = json.dumps(
+        response
+    ).encode()
+    result = CliRunner().invoke(
+        cli, ["datamodels", "accelerate", "authentication", "--yes"]
+    )
+    assert result.exit_code == 0, result.output
+    stanza.update.assert_called_once()
+    assert conf.__getitem__.call_args.args[0][0] == "Authentication"
+    assert conf.__getitem__.call_args.args[0][1].app == "Splunk_SA_CIM"

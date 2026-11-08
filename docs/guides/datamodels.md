@@ -68,6 +68,8 @@ Two REST resources are involved because `datamodel/model`'s `acceleration` field
 
 ### Configure acceleration
 
+> **Safety:** Target is the Splunk host in the active profile and the model selected by `--app`. Impact: enabling acceleration starts scheduled summary work and consumes storage; disabling stops that work. Preview with `splunkctl datamodels accelerate Authentication --app Splunk_SA_CIM`, apply by adding `--yes`, and verify with `splunkctl datamodels get Authentication --app Splunk_SA_CIM` and `splunkctl datamodels acceleration Authentication`.
+
 ```bash
 splunkctl datamodels accelerate Authentication --app Splunk_SA_CIM
 splunkctl datamodels accelerate Authentication --app Splunk_SA_CIM --earliest -15m --cron '*/5 * * * *' --yes
@@ -75,7 +77,7 @@ splunkctl datamodels acceleration Authentication
 splunkctl datamodels accelerate Authentication --app Splunk_SA_CIM --disable --yes
 ```
 
-Expected result: the default dry run previews the app, canonical model name, and old and new values for `acceleration`, `acceleration.earliest_time`, and `acceleration.cron_schedule` in `datamodels.conf`. Add `--yes` to apply through the shared `conf set` writer. The defaults are `--earliest -1mon` and `--cron '*/5 * * * *'`; all three keys are written on every apply, including `--disable`, which sets `acceleration=false`. An absent configuration stanza is created in the resolved model's app. An absent model exits 1 without creating a stanza.
+Expected result: the default dry run previews the app, canonical model name, and old and new values for `acceleration`, `acceleration.earliest_time`, and `acceleration.cron_schedule` in `datamodels.conf`. Add `--yes` to apply through the shared `conf set` writer. The defaults are `--earliest -1mon` and `--cron '*/5 * * * *'`; all three keys are written on every apply, including `--disable`, which sets `acceleration=false`. An absent configuration stanza is created in the resolved model's app. An absent model exits 1 without creating a stanza. A name found in multiple apps exits with `conflict` and lists the apps; pass `--app` to select one. The same ambiguity check applies to `rebuild`.
 
 Enabling acceleration starts summary work on the configured cron. Check `acceleration NAME` for progress; summary creation may not be immediate.
 

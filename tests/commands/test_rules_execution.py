@@ -22,6 +22,8 @@ def _rule_client(mock_gc: MagicMock, *, cron: str = "") -> tuple[MagicMock, Magi
         "dispatch.earliest_time": "-2h",
         "dispatch.latest_time": "-5m",
     }
+    service.namespace = {"owner": "connection_owner", "app": "search"}
+    rule.update.side_effect = lambda **kwargs: rule.content.update(kwargs) or rule
     rule.access = {"app": "security", "owner": "analyst"}
     return service, rule
 
@@ -126,6 +128,7 @@ def test_disabled_rule_runs_spl_in_app_with_same_window(
     service.jobs.create.assert_called_once_with(
         "search index=main | stats count",
         app="security",
+        owner="analyst",
         exec_mode="normal",
         earliest_time="-7d" if overrides else "-2h",
         latest_time="now" if overrides else "-5m",
@@ -154,3 +157,47 @@ def test_enabled_rule_keeps_saved_search_dispatch_without_actions(
         **{"dispatch.earliest_time": "-7d", "dispatch.latest_time": "now"},
     )
     service.jobs.create.assert_not_called()
+
+
+@patch(_PATCH)
+def test_disabled_rule_preserves_absolute_time_format(mock_gc: MagicMock) -> None:
+    service, rule = _rule_client(mock_gc)
+    rule.content.update(
+        {
+            "disabled": "1",
+            "dispatch.earliest_time": "11/01/2026:00:00:00",
+            "dispatch.latest_time": "11/02/2026:00:00:00",
+            "dispatch.time_format": "%m/%d/%Y:%H:%M:%S",
+        }
+    )
+    job = service.jobs.create.return_value
+    job.is_done.return_value = True
+    job.results.return_value = io.BytesIO(b'{"results":[]}')
+    result = CliRunner().invoke(cli, ["rules", "test", "r1"])
+    assert result.exit_code == 0, result.output
+    service.jobs.create.assert_called_once_with(
+        "search index=main | stats count",
+        exec_mode="normal",
+        app="security",
+        owner="analyst",
+        earliest_time="11/01/2026:00:00:00",
+        latest_time="11/02/2026:00:00:00",
+        time_format="%m/%d/%Y:%H:%M:%S",
+    )
+
+
+@pytest.mark.parametrize("disabled", ["0", "1"])
+@patch(_PATCH)
+def test_update_clear_cron_advises_from_refreshed_state(
+    mock_gc: MagicMock, disabled: str
+) -> None:
+    _, rule = _rule_client(mock_gc, cron="*/5 * * * *")
+    rule.content["disabled"] = disabled
+    result = CliRunner().invoke(cli, ["--yes", "rules", "update", "r1", "--cron", ""])
+    assert result.exit_code == 0, result.output
+    rule.update.assert_called_once_with(cron_schedule="", is_scheduled="0")
+    rule.refresh.assert_called_once()
+    if disabled == "0":
+        _assert_no_cron_advisory(result.stderr)
+    else:
+        assert "enabled but not scheduled" not in result.stderr

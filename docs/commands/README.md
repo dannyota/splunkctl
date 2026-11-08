@@ -16,7 +16,7 @@ the standard dry-run/`--yes` gate; everything else is a read.
 | [conf](conf.md) | 6 | Generic conf file/stanza editor (any conf, including sensitive ones). |
 | [config](config.md) | 4 | Manage splunkctl configuration. |
 | [dashboards](dashboards.md) | 7 | Dashboard management. |
-| [datamodels](datamodels.md) | 5 | CIM/tstats data models — definitions and acceleration health. |
+| [datamodels](datamodels.md) | 5 | CIM/tstats data models: definitions and acceleration health. |
 | [es](es.md) | 10 | Enterprise Security — notable-event triage (requires ES installed). |
 | [eventtypes](eventtypes.md) | 2 | Event classification rules (eventtypes.conf) — read-only. |
 | [hec](hec.md) | 8 | Manage HTTP Event Collector tokens. |

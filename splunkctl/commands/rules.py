@@ -309,7 +309,13 @@ def update(
         ss = _resolve_rule(ctx, client, name, app)
     ss.update(**kwargs).refresh()
     output.info(f"Updated saved search '{name}'.")
-    warn_unscheduled(name, kwargs)
+    warn_unscheduled(
+        name,
+        {
+            "disabled": str(ss.content.get("disabled", "0")),
+            "is_scheduled": schedule_flag(ss.content.get("cron_schedule")),
+        },
+    )
 
 
 @rules_group.command()
@@ -420,7 +426,11 @@ def test_rule(
     latest: str | None,
     limit: int,
 ) -> None:
-    """Dispatch a rule now (backfill/test run) without firing alert actions."""
+    """Dispatch a rule now (backfill/test run) without firing alert actions.
+
+    Disabled rules run ad hoc SPL in the rule's app and owner namespace.
+    This does not reproduce dispatchAs permissions.
+    """
     client = get_client(ctx)
     try:
         ss = client.service.saved_searches[name]

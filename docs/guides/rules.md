@@ -113,7 +113,7 @@ splunkctl rules test 'Rule'
 splunkctl rules test 'Rule' --earliest -7d --latest now --limit 500
 ```
 
-Expected result: an enabled saved search is dispatched with `trigger_actions=0`. For a disabled rule, stderr announces an ad hoc search of its SPL in the rule's app, using its saved earliest/latest times unless overridden. Both paths print results without firing alert actions or changing the rule. Use this to backfill or tune a threshold before enabling.
+Expected result: an enabled saved search is dispatched with `trigger_actions=0`. For a disabled rule, stderr announces an ad hoc search of its SPL in the rule's app and owner namespace, using its saved earliest/latest times unless overridden. The ad hoc path does not reproduce `dispatchAs` permissions. Both paths print results without firing alert actions or changing the rule. Use this to backfill or tune a threshold before enabling.
 
 ### Change sharing
 

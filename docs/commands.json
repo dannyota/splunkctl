@@ -1159,7 +1159,7 @@
     },
     {
       "name": "datamodels",
-      "help": "CIM/tstats data models \u2014 definitions and acceleration health.",
+      "help": "CIM/tstats data models: definitions and acceleration health.",
       "subcommands": [
         {
           "name": "accelerate",
