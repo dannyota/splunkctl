@@ -1,20 +1,41 @@
 # Changelog
 
-## Unreleased
+## 0.17.1
 
-- Fix `soar workbook-templates update --add-phase` deleting existing phases; `get` now shows phases.
+SOAR fixes from the first live run of `scripts/live-smoke-soar.sh`. The SOAR
+live smoke now passes with 0 failures on SOAR 8.8.0.282 (indicators and
+licensed actions skipped).
 
-- Fix `soar cases promote --template` to apply the selected workbook using `template_id`.
+### Fixed
 
-- Add exact scoped name and result limit filters to `soar playbooks list --name/--limit`.
+- `soar workbook-templates update --add-phase` deleted the template's
+  existing phases and their tasks. It now adds each phase through
+  `workbook_phase_template` and leaves existing phases untouched.
+- `soar cases promote --template` sent `template`, which SOAR ignores, so the
+  default workbook was applied. It now sends `template_id`.
+- Workbook template names and the default template resolve with server
+  filters, so templates beyond the first page are found.
+- `soar audit` paginates JSON and CSV (1-based pages). SOAR 8.8 rejects
+  unpaginated audit queries longer than 24 hours.
+- `soar evidence list` adds `object_type` (artifact, note, action_run), since
+  SOAR returns `content_type` as a numeric id.
+- `soar vault list` adds `vault_id`, the hash that `vault get` and
+  `vault download` take.
+- `soar playbooks enable|disable|trigger` explain a 404 from a stale id after
+  a forced import, and `soar functions import` warns when SOAR saves the
+  function as a draft.
 
-- Resolve workbook template names and defaults with server filters on SOAR 8.8.
-- Paginate JSON and CSV audit queries with guards for older SOAR servers.
-- Enrich evidence with object types while preserving numeric content types.
-- Resolve vault attachment hashes for vault list output.
-- Allow custom function Python version overrides and warn on draft imports.
-- Explain stale playbook ids after forced imports in mutation errors.
-- Update SOAR smoke fixtures for soft deletes, Python 3.13 and safe manual playbook runs.
+### Added
+
+- `soar workbook-templates get` shows phases and tasks.
+- `soar functions update --python-version`.
+- `soar playbooks list --name` (exact scoped name) and `--limit`.
+
+### Changed
+
+- SOAR live smoke: asset soft delete, Python 3.13 function fixture, playbook
+  ids re-resolved by exact name after each import, and the manual run uses an
+  inactive playbook with the `events` label.
 
 ## 0.17.0
 
@@ -329,112 +350,4 @@ PyPI presentation and packaging polish — no functional changes.
 - Development Status classifier raised to Beta.
 - Publish workflow runs `twine check --strict` before uploading.
 
-## 0.11.0
-
-Whole-repo hardening + feature expansion, driven by a max-effort code
-review (75 agents, 25 verified findings) and two feature-gap scouts
-(SIEM + SOAR/MCP/DX). Live smoke-tested against Splunk 10.4.1 and
-SOAR 8.5.0.248: 23 pass, 0 failures.
-
-### Breaking
-
-- **TLS verification defaults to ON** — new profiles verify server
-  certificates by default. Self-signed lab instances need explicit
-  `verify: false` in the profile (`config init` now asks). A one-time
-  stderr warning fires when verification is disabled.
-
-### Security
-
-- **GitHub Actions pinned to commit SHAs** — all third-party actions
-  use immutable refs; workflow-level `permissions:` blocks enforce
-  least privilege (`contents: read` default; `id-token: write` only
-  for PyPI OIDC).
-- **SPL injection fixed** — lookup names in `| inputlookup` are now
-  quoted via a shared helper; names with SPL metacharacters are
-  rejected with a typed error.
-- **Password handling** — `users create/update` gains `--password-stdin`
-  and interactive prompt; passwords never appear in dry-run previews,
-  error envelopes, or MCP tool output.
-
-### Fixed
-
-- `hec send` no longer crashes with NameError on connection errors;
-  TLS verification reads from the profile (not a missing SDK attribute).
-- Web-session failures (lookup upload, app install with expired creds)
-  produce typed error envelopes instead of raw tracebacks.
-- SOAR client sets HTTP timeouts (10s connect, 60s read) — no more
-  indefinite hangs on unresponsive servers.
-- `soar ingest` run_automation triggers correctly when the last input
-  row is deduplicated.
-- Tag read-modify-write aborts on fetch failure instead of silently
-  wiping all tags.
-- Broad `except Exception` in dashboards, lookups, and SOAR views
-  narrowed to specific errors — auth failures no longer masquerade as
-  "not found" or "unavailable".
-- `soar functions list` paging aligned with other SOAR commands.
-- Vault upload warns based on base64-encoded size (not raw); download
-  `--out` handles directory paths.
-- `mcp install` handles `"mcpServers": null` in existing config.
-- Network reads moved after the guard in SOAR cases/artifacts/assets
-  so dry-run stays offline.
-- `_resolve_template` routes through the structured error envelope.
-
-### Added
-
-- **Doctor SOAR section** — connection, auth, health, and license
-  checks with graceful skip when no SOAR profile is configured.
-- **MCP output cap** — success output > 4 MiB spills to a temp file
-  with a JSON pointer and steering hint; error output is UTF-8-safe
-  truncated; subprocess timeout raised to 300s with clean messaging;
-  stale spill files swept on startup (24h).
-- **MCP prompts** — four `@mcp.prompt` workflows: `investigate-ioc`,
-  `triage-notable`, `audit-detection`, `export-state`.
-- **MCP streamable-HTTP transport** — `mcp serve --transport http`
-  for team/remote use; `mcp install` generates URL-based config.
-- **ES correlation-search admin** — `es correlations list/get/
-  enable/disable` with security_domain and severity fields.
-- **ES threat-intel management** — `es threat-intel list/upload/
-  delete` via `/services/data/threat_intel`.
-- **Scheduler health** — `rules schedule` view (cron, next_run,
-  window, enabled) and `--scheduled` filter on `rules list`.
-- **Auth-token management** — `server tokens list/create/revoke`
-  via `/services/authorization/tokens`.
-- **Deployment-server serverclasses** — `server serverclasses
-  list/get/reload` with feature detection for disabled deployment
-  server.
-- **SAML/LDAP auth config read** — `server auth show/ldap/saml/
-  role-mapping` for compliance visibility.
-- **Workload management read** — `server workloads pools/rules/
-  status` for resource allocation visibility (Splunk 8.1+).
-- **Metrics catalog** — `search metrics --index` wraps `| mcatalog`
-  for metric name and dimension discovery.
-- **SOAR workbook-template CRUD** — `soar workbook-templates
-  list/get/create/update/delete`.
-- **SOAR app install/uninstall** — tgz upload and deletion via
-  `/rest/app`.
-- **Watch mode** — `--watch N` re-runs read-only commands every N
-  seconds; rejects mutations; requires TTY.
-- **Shell completion** — `splunkctl completion bash/zsh/fish` prints
-  activation scripts.
-- **Exit-code contract** — documented and normalized: 0 = success,
-  1 = error, 2 = usage.
-- **SOAR config-as-code** — `state pull/diff/push` extended with
-  `soar-playbooks` (tgz round-trip), `soar-lists` (JSON round-trip),
-  and `soar-assets` (JSON with secret masking, fetch-merge-post).
-  Mixed SIEM+SOAR type requests work in one call.
-
-### Structure
-
-- Server-side paths removed from user output (remote-first).
-- Duplicated `read_results` helpers consolidated.
-- Phase/ticket-named test files renamed to feature names.
-- Near-cap files split: `soar/admin.py` → users + roles/audit;
-  oversized test files split by topic.
-- Private cross-module imports promoted to public API.
-
-### Stats
-
-- 1728 tests (was 1424), ruff + mypy-strict + file-length budget
-  all clean.
-
-Older releases (0.10.1 and earlier): [changelog archive](docs/changelog-archive.md).
+Older releases (0.11.0 and earlier): [changelog archive](docs/changelog-archive.md).
