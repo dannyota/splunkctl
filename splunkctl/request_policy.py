@@ -133,7 +133,13 @@ def check_request(
 
         if len(params.get("search", [])) != 1:
             raise ReadOnlyError("search dispatch requires exactly one search")
-        # Prevent search-job metadata mutations alongside the search.
+        # Splunk 10.0 REST reference, search/jobs POST and job result options:
+        # https://help.splunk.com/en/splunk-enterprise/rest-api-reference/10.0/search-endpoints/search-endpoint-descriptions
+        # Retain only search inputs and execution/result options: time bounds
+        # and format, required fields, search level, execution/output mode,
+        # result counts and segmentation. These do not configure persistence
+        # or server mutations. In particular, timeout is job retention, not
+        # an HTTP deadline, so it must remain refused.
         allowed = {
             "search",
             "exec_mode",
@@ -143,7 +149,6 @@ def check_request(
             "rf",
             "adhoc_search_level",
             "segmentation",
-            "timeout",
             "time_format",
             "earliest_time",
             "latest_time",

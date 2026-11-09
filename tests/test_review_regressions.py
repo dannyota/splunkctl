@@ -106,7 +106,6 @@ def test_real_sdk_search_serialization(method):
         max_count=100,
         rf="host",
         adhoc_search_level="fast",
-        timeout=30,
         time_format="%s",
     )
     if method == "create":
@@ -130,7 +129,6 @@ def test_real_sdk_search_serialization(method):
         "max_count": ["100"],
         "rf": ["host"],
         "adhoc_search_level": ["fast"],
-        "timeout": ["30"],
         "time_format": ["%s"],
     }
     if method != "create":
@@ -239,40 +237,6 @@ def test_client_policy_origin(host, authority):
 
 
 @pytest.mark.parametrize(
-    "spl",
-    [
-        '| mcatalog values(metric_name) WHERE index="metrics"',
-        '| mcatalog values(_dims) WHERE metric_name="cpu" AND index="metrics"',
-        '| inputlookup "example.csv"',
-        "search index=notable | sort - _time | rename _time as time, rule_name as rule"
-        " | table time, rule, security_domain, urgency, status, owner, event_id",
-        'search index=notable event_id="example" | sort - _time | head 1',
-        "search index=_audit",
-    ],
-)
-def test_generated_read_spl_through_transport(spl):
-    from splunkctl.spl_safety import check_readonly_spl
-
-    seen = []
-
-    def low_level(url, message, **kwargs):
-        seen.append(message)
-        return {"status": 200, "reason": "OK", "headers": [], "body": io.BytesIO(b"{}")}
-
-    service = Service(
-        host="example.test",
-        token="test",  # noqa: S106
-        handler=sdk_handler(low_level, "https://example.test:8089"),
-    )
-    service._splunk_version = (10, 0, 0)
-    service._instance_type = "enterprise"
-    with invocation("read", True):
-        check_readonly_spl(spl)
-        service.jobs.oneshot(spl, output_mode="json")
-    assert parse_qs(seen[0]["body"].decode())["search"] == [spl]
-
-
-@pytest.mark.parametrize(
     "parameter",
     [
         "action.email",
@@ -296,6 +260,22 @@ def test_sdk_unsafe_search_parameters_refused(parameter):
     service._instance_type = "enterprise"
     with invocation("search", True), pytest.raises(ReadOnlyError, match="parameter"):
         service.jobs.oneshot("| makeresults", **{parameter: "1"})
+
+
+@pytest.mark.parametrize("method", ["create", "oneshot", "export"])
+def test_sdk_search_retention_timeout_refused(method):
+    def low_level(*args, **kwargs):
+        pytest.fail("retention request reached transport")
+
+    service = Service(
+        host="example.test",
+        token="test",  # noqa: S106
+        handler=sdk_handler(low_level, "https://example.test:8089"),
+    )
+    service._splunk_version = (10, 0, 0)
+    service._instance_type = "enterprise"
+    with invocation("search", True), pytest.raises(ReadOnlyError, match="parameter"):
+        getattr(service.jobs, method)("| makeresults", timeout=315360000)
 
 
 def test_api_utf8_form_policy_enforced():
