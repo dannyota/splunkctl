@@ -701,6 +701,7 @@ fetches the existing record, and posts only the changed fields
 |---|---|---|---|
 | `--python` | path | - | Python source file to upload. [required] |
 | `--message` | text | - | Commit message (required by SOAR SCM). [required] |
+| `--python-version` | text | - | Override the stored Python version. |
 
 ## soar health
 
@@ -1103,6 +1104,8 @@ splunkctl soar playbooks list [OPTIONS]
 | `--active` | flag | false | Only active playbooks. |
 | `--label` | text | - | Filter by label. |
 | `--repo` | text | - | Filter by SCM repo name. |
+| `--name` | text | - | Exact scoped name (dir/module). |
+| `--limit` | integer range | - | Max results. |
 
 ## soar playbooks repos
 

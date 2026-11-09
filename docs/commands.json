@@ -6428,6 +6428,15 @@
                   ],
                   "required": true,
                   "help": "Commit message (required by SOAR SCM)."
+                },
+                {
+                  "name": "python_version",
+                  "type": "text",
+                  "kind": "option",
+                  "flags": [
+                    "--python-version"
+                  ],
+                  "help": "Override the stored Python version."
                 }
               ]
             }
@@ -7156,6 +7165,24 @@
                     "--repo"
                   ],
                   "help": "Filter by SCM repo name."
+                },
+                {
+                  "name": "name",
+                  "type": "text",
+                  "kind": "option",
+                  "flags": [
+                    "--name"
+                  ],
+                  "help": "Exact scoped name (dir/module)."
+                },
+                {
+                  "name": "limit",
+                  "type": "integer range",
+                  "kind": "option",
+                  "flags": [
+                    "--limit"
+                  ],
+                  "help": "Max results."
                 }
               ]
             },

@@ -2,13 +2,13 @@
 # Only the exact runtime-generated names are eligible for cleanup.
 cleanup_owned_playbook() {
     local name=$1 id failed=0
-    "$S" soar playbooks list --repo local --label "$N" --json > "$T/cleanup-playbooks.json" || return
+    "$S" soar playbooks list --repo local --name "$name" --json > "$T/cleanup-playbooks.json" || return
     id=$(json_value "$T/cleanup-playbooks.json" \
         "next((str(r['id']) for r in d if r.get('name') == '$name'), '')") || return
     [ -n "$id" ] || return 0
     "$S" soar playbooks disable "$id" --cancel-runs --yes || failed=1
     "$S" soar playbooks delete "$id" --yes || failed=1
-    "$S" soar playbooks list --repo local --label "$N" --json > "$T/cleanup-playbooks.json" || return
+    "$S" soar playbooks list --repo local --name "$name" --json > "$T/cleanup-playbooks.json" || return
     "$PY" - "$T/cleanup-playbooks.json" "$name" <<'PY' || failed=1
 import json, sys
 assert not any(r.get('name') == sys.argv[2] for r in json.load(open(sys.argv[1])))
@@ -71,7 +71,7 @@ cf = root / function
 cf.mkdir()
 (cf / f'{function}.json').write_text(json.dumps({
     'name': function, 'module': function, 'description': name,
-    'python_version': '3', 'draft_mode': False, 'inputs': [], 'outputs': [],
+    'python_version': '3.13', 'draft_mode': False, 'inputs': [], 'outputs': [],
     'outputs_type': 'item', 'tags': []}))
 (cf / f'{function}.py').write_text(
     f'def {function}(**kwargs):\n    return {{}}\n')
@@ -79,7 +79,7 @@ PY
     # Register both exact names before either import, including lost replies.
     # Reverse cleanup disables/cancels/deletes the playbook before the function.
     capture "$T/preexisting-functions.json" "$S" soar functions list --limit 100000 --json || return
-    capture "$T/preexisting-playbooks.json" "$S" soar playbooks list --repo local --label "$N" --json || return
+    capture "$T/preexisting-playbooks.json" "$S" soar playbooks list --repo local --name "$N/$N" --json || return
     if ! "$PY" - "$T/preexisting-functions.json" "$T/preexisting-playbooks.json" "$N" <<'PY'
 import json, sys
 functions, playbooks = (json.load(open(p)) for p in sys.argv[1:3])
@@ -105,8 +105,8 @@ assert gzip.decompress(open(sys.argv[1], 'rb').read())
 PY
     expect_ok "$S" soar functions update "$function_id" --python "$T/${N}_function/${N}_function.py" \
         --message "$N update" --yes --json
-    capture "$T/playbook-import.json" "$S" soar playbooks import "$T/$N" --scm local --yes --json || return
-    capture "$T/playbooks.json" "$S" soar playbooks list --repo local --label "$N" --json || return
+    capture "$T/playbook-import.json" "$S" soar playbooks import "$T/$N" --scm local --no-force --yes --json || return
+    capture "$T/playbooks.json" "$S" soar playbooks list --repo local --name "$N/$N" --json || return
     pb_id=$(json_value "$T/playbooks.json" \
         "next(int(r['id']) for r in d if r.get('name') == '$N/$N')") || { bad 'imported playbook missing'; return; }
     expect_ok "$S" soar playbooks get "$pb_id" --json
@@ -119,10 +119,26 @@ data = json.loads(path.read_text())
 data['description'] += ' updated'
 path.write_text(json.dumps(data))
 PY
-    expect_ok "$S" soar playbooks import "$T/$N" --scm local --force --yes --json
+    capture "$T/playbook-import.json" "$S" soar playbooks import "$T/$N" --scm local --force --yes --json || return
+    capture "$T/playbooks.json" "$S" soar playbooks list --repo local --name "$N/$N" --json || return
+    pb_id=$(json_value "$T/playbooks.json" \
+        "next(int(r['id']) for r in d if r.get('name') == '$N/$N')") || { bad 'current playbook missing'; return; }
     expect_ok "$S" soar playbooks enable "$pb_id" --yes --json
     expect_ok "$S" soar playbooks disable "$pb_id" --yes --json
     expect_ok "$S" soar playbooks trigger "$pb_id" --on artifact_created --yes --json
+    # Manual execution uses the known events label, with automation inactive.
+    "$PY" - "$T/$N/$N.json" <<'PY' || { bad 'playbook run metadata'; return; }
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+data = json.loads(path.read_text())
+data['labels'] = ['events']
+data['active'] = False
+path.write_text(json.dumps(data))
+PY
+    capture "$T/playbook-import.json" "$S" soar playbooks import "$T/$N" --scm local --force --yes --json || return
+    capture "$T/playbooks.json" "$S" soar playbooks list --repo local --name "$N/$N" --json || return
+    pb_id=$(json_value "$T/playbooks.json" \
+        "next(int(r['id']) for r in d if r.get('name') == '$N/$N')") || { bad 'current playbook missing'; return; }
     if capture "$T/playbook-run.json" "$S" soar playbooks run "$N/$N" --container "$C" --wait --timeout 30 --yes --json; then
         run_id=$(json_value "$T/playbook-run.json" "int(d[0]['id'])") || { bad 'invalid playbook run id'; return; }
         expect_ok "$S" soar playbooks runs list --container "$C" --json

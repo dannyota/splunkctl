@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import click
@@ -13,38 +14,38 @@ from splunkctl.soar.client import SOARError
 _EP = "workbook_template"
 
 
-def _resolve_template_id(
-    ctx: click.Context,
-    client: Any,
-    ref: str,
-) -> int | None:
-    """Resolve a name-or-id reference to a workbook_template id.
-
-    Returns the integer id, or None after printing an error.
-    """
-    if ref.isascii() and ref.isdigit():
+def resolve_template(client: Any, ref: str | None) -> int | None:
+    """Resolve a template using server filters, including the default template."""
+    if ref is not None and ref.isascii() and ref.isdigit():
         return int(ref)
-
-    # Name lookup.
+    params = (
+        {"_filter_name": json.dumps(ref)}
+        if ref is not None
+        else {"_filter_is_default": "True"}
+    )
     try:
-        result = client.get(_EP, params={})
+        result = client.get(_EP, params=params)
     except SOARError as exc:
         output.error(exc.message, kind=exc.kind, http_status=exc.http_status)
-        ctx.exit(1)
         return None
-
     data = result.get("data", []) if isinstance(result, dict) else []
-    for t in data:
-        if t.get("name") == ref:
-            return int(t["id"])
-
-    names = ", ".join(t.get("name", "?") for t in data) if data else "(none)"
-    output.error(
-        f"Workbook template '{ref}' not found. Available: {names}",
-        kind="not_found",
+    for template in data:
+        if (ref is None and template.get("is_default")) or template.get("name") == ref:
+            return int(template["id"])
+    message = (
+        f"Workbook template '{ref}' not found."
+        if ref is not None
+        else "No default workbook template found. Specify --template."
     )
-    ctx.exit(1)
+    output.error(message, kind="not_found")
     return None
+
+
+def _resolve_template_id(ctx: click.Context, client: Any, ref: str) -> int | None:
+    template_id = resolve_template(client, ref)
+    if template_id is None:
+        ctx.exit(1)
+    return template_id
 
 
 @click.group("workbook-templates")

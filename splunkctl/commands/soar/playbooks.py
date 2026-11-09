@@ -29,6 +29,8 @@ def playbooks_group() -> None:
 @click.option("--active", is_flag=True, default=False, help="Only active playbooks.")
 @click.option("--label", default=None, help="Filter by label.")
 @click.option("--repo", default=None, help="Filter by SCM repo name.")
+@click.option("--name", default=None, help="Exact scoped name (dir/module).")
+@click.option("--limit", default=None, type=click.IntRange(min=1), help="Max results.")
 @click.pass_context
 def list_cmd(
     ctx: click.Context,
@@ -36,6 +38,8 @@ def list_cmd(
     active: bool,
     label: str | None,
     repo: str | None,
+    name: str | None,
+    limit: int | None,
 ) -> None:
     """List playbooks with optional filters."""
     client = get_soar_client(ctx)
@@ -45,6 +49,10 @@ def list_cmd(
         params["_filter_active"] = "True"
     if label is not None:
         params["_filter_labels__contains"] = json.dumps(label)
+    if name is not None:
+        params["_filter_name"] = json.dumps(name)
+    if limit is not None:
+        params["page_size"] = limit
 
     try:
         if repo is not None:
@@ -106,6 +114,16 @@ def get_cmd(ctx: click.Context, *, playbook_id: int) -> None:
     output.render(ctx, result, empty=f"Playbook {playbook_id} not found.")
 
 
+def _mutation_error(exc: SOARError) -> str:
+    message = exc.message
+    if exc.http_status == 404:
+        message += (
+            " (hint: a forced import creates a new playbook id; the old id is a "
+            "read-only previous version. Find the current id with soar playbooks list)"
+        )
+    return message
+
+
 # ─── enable / disable ────────────────────────────────────────────────
 
 
@@ -123,7 +141,7 @@ def enable_cmd(ctx: click.Context, *, playbook_id: int) -> None:
     try:
         client.post(f"playbook/{playbook_id}", body=body)
     except SOARError as exc:
-        msg = exc.message
+        msg = _mutation_error(exc)
         if "draft" in msg.lower():
             msg += (
                 " (hint: playbooks in draft_mode cannot be activated; "
@@ -166,7 +184,7 @@ def disable_cmd(
     try:
         client.post(f"playbook/{playbook_id}", body=body)
     except SOARError as exc:
-        output.error(exc.message, kind=exc.kind, http_status=exc.http_status)
+        output.error(_mutation_error(exc), kind=exc.kind, http_status=exc.http_status)
         ctx.exit(1)
         return
 
@@ -207,7 +225,7 @@ def trigger_cmd(
     try:
         client.post(f"playbook/{playbook_id}", body=body)
     except SOARError as exc:
-        output.error(exc.message, kind=exc.kind, http_status=exc.http_status)
+        output.error(_mutation_error(exc), kind=exc.kind, http_status=exc.http_status)
         ctx.exit(1)
         return
 

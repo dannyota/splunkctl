@@ -21,6 +21,8 @@ import json
 import sys
 from pathlib import Path
 text = Path(sys.argv[1]).read_text()
+if not text.strip():
+    sys.exit(0)
 try:
     json.loads(text)
 except ValueError:

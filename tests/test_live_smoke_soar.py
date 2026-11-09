@@ -2,12 +2,16 @@
 
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
+import click
 import pytest
+
+from splunkctl.main import cli
 
 BASH = shutil.which("bash")
 if BASH is None:
@@ -16,6 +20,55 @@ if BASH is None:
 ROOT = Path(__file__).parents[1]
 RUNNER = ROOT / "scripts/live-smoke-soar.sh"
 LIBRARY = ROOT / "scripts/live-smoke-lib.sh"
+
+
+@pytest.mark.parametrize(
+    "script",
+    sorted((ROOT / "scripts/live-smoke-soar.d").glob("*.sh")),
+    ids=lambda p: p.name,
+)
+def test_smoke_cli_options(script: Path) -> None:
+    """Check static command paths and options without executing live mutations."""
+    for line in script.read_text().replace("\\\n", " ").splitlines():
+        if '"$S" soar ' not in line:
+            continue
+        invocation = line.split('"$S" ', 1)[1]
+        lexer = shlex.shlex(invocation, posix=True, punctuation_chars=";&|<>")
+        lexer.whitespace_split = True
+        tokens = []
+        for token in lexer:
+            if token and token[0] in ";&|<>":
+                break
+            tokens.append(token)
+        command = cli
+        while isinstance(command, click.Group):
+            name = tokens.pop(0)
+            if "$" in name:
+                break  # Dynamic command names cannot be resolved statically.
+            child = command.get_command(click.Context(command), name)
+            assert child is not None, f"{script.name}: unknown command {name}"
+            command = child
+        else:
+            options = {
+                opt: param
+                for owner in (cli, command)
+                for param in owner.params
+                if isinstance(param, click.Option)
+                for opt in (*param.opts, *param.secondary_opts)
+            }
+            while tokens:
+                token = tokens.pop(0)
+                if not token.startswith("--") or "$" in token:
+                    continue
+                option = token.split("=", 1)[0]
+                assert option in options, (
+                    f"{script.name}: {invocation}: unknown {option}"
+                )
+                param = options[option]
+                if not param.is_flag and "=" not in token:
+                    del tokens[: param.nargs]
+
+
 STUB = r"""
 import json, os, sys
 from pathlib import Path
@@ -74,6 +127,54 @@ def stub_environment(tmp_path: Path) -> tuple[dict[str, str], Path]:
 
 def recorded_calls(path: Path) -> list[list[str]]:
     return [json.loads(line) for line in path.read_text().splitlines()]
+
+
+def test_playbook_collision_blocks_import_and_cleanup(tmp_path: Path) -> None:
+    env, calls = stub_environment(tmp_path)
+    binary = Path(env["SPLUNKCTL"])
+    binary.write_text(
+        f"#!{sys.executable}\n"
+        "import json, os, sys\n"
+        "from pathlib import Path\n"
+        "args = sys.argv[1:]\n"
+        "with Path(os.environ['SMOKE_CALLS']).open('a') as f:\n"
+        "    f.write(json.dumps(args) + '\\n')\n"
+        "rows = [{'id': 7, 'name': 'fixture/fixture', 'labels': ['events']}]\n"
+        "print(json.dumps(rows\n"
+        "      if '--name' in args else []))\n"
+    )
+    env.update(
+        SMOKE_SCRIPT=str(ROOT / "scripts/live-smoke-soar.d/80-playbooks-functions.sh"),
+        SMOKE_TMP=str(tmp_path),
+    )
+    harness = r"""
+S=$SPLUNKCTL PY=$LIVE_PYTHON T=$SMOKE_TMP N=fixture
+soar_selected() { return 1; }
+ensure_event() { return 0; }
+expect_ok() { "$@"; }
+capture() { local out=$1; shift; "$@" > "$out"; }
+bad() { echo "FAIL $*"; }
+defer() { echo "UNEXPECTED cleanup registration"; }
+. "$SMOKE_SCRIPT"
+soar_playbooks_functions
+"""
+    result = subprocess.run(  # noqa: S603
+        [BASH, "-c", harness], env=env, capture_output=True, text=True, check=False
+    )
+    assert "automation fixture name already exists" in result.stdout
+    assert "UNEXPECTED" not in result.stdout
+    actual = recorded_calls(calls)
+    assert [
+        "soar",
+        "playbooks",
+        "list",
+        "--repo",
+        "local",
+        "--name",
+        "fixture/fixture",
+        "--json",
+    ] in actual
+    assert not any("import" in call for call in actual)
 
 
 @pytest.mark.parametrize("skip", ["", "90-users-roles"])
@@ -229,3 +330,45 @@ def test_active_playbooks_override(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stdout + result.stderr
     assert ["soar", "actions", "list"] in recorded_calls(calls)
     assert "SKIPPED 70-assets-actions: active playbooks" not in result.stdout
+
+
+@pytest.mark.parametrize(
+    "mode,listed,expected",
+    [
+        ("disabled", False, 0),
+        ("missing", False, 0),
+        ("active", False, 1),
+        ("disabled", True, 1),
+        ("error", False, 1),
+    ],
+)
+def test_asset_absence(tmp_path: Path, mode: str, listed: bool, expected: int) -> None:
+    env, _ = stub_environment(tmp_path)
+    binary = Path(env["SPLUNKCTL"])
+    binary.write_text(
+        f"#!{sys.executable}\n"
+        "import json, sys\n"
+        "if 'get' in sys.argv:\n"
+        + (
+            "    print(json.dumps({'error': {'kind': 'not_found'}})); sys.exit(1)\n"
+            if mode == "missing"
+            else "    print(json.dumps({'error': {'kind': 'auth'}})); sys.exit(1)\n"
+            if mode == "error"
+            else "    print(json.dumps("
+            + repr({"id": 7, "disabled": mode == "disabled"})
+            + "))\n"
+        )
+        + f"else: print(json.dumps({[{'id': 7}] if listed else []}))\n"
+    )
+    # Load helper definitions without starting the runner or its EXIT trap.
+    prefix = RUNNER.read_text().split('command -v "$S"')[0]
+    harness = tmp_path / "asset-helper.sh"
+    prefix = prefix.replace(
+        'HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"',
+        f'HERE="{ROOT / "scripts"}"',
+    ).replace("trap soar_finish EXIT", "")
+    harness.write_text(prefix + "\nasset_absent 7\n")
+    result = subprocess.run(  # noqa: S603
+        [BASH, str(harness)], env=env, capture_output=True, text=True, check=False
+    )
+    assert result.returncode == expected, result.stdout + result.stderr

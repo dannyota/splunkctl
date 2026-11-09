@@ -51,6 +51,28 @@ def list_cmd(ctx: click.Context, *, container: str | None) -> None:
         return
 
     data = result.get("data", []) if isinstance(result, dict) else []
+    document_ids = sorted(
+        {row["vault_document"] for row in data if row.get("vault_document") is not None}
+    )
+    if document_ids:
+        try:
+            documents = client.get(
+                "vault_document",
+                params={
+                    "_filter_id__in": json.dumps(document_ids),
+                    "page_size": len(document_ids),
+                },
+            )
+            hashes = {
+                row["id"]: row["hash"]
+                for row in documents.get("data", [])
+                if row.get("hash")
+            }
+            for row in data:
+                if row.get("vault_document") in hashes:
+                    row["vault_id"] = hashes[row["vault_document"]]
+        except SOARError as exc:
+            output.warning(f"Could not resolve vault ids: {exc.message}")
     output.render(ctx, data, empty="No vault items found.")
 
 
