@@ -4,7 +4,7 @@ from splunkctl import __version__
 
 
 def test_version() -> None:
-    assert __version__ == "0.17.2"
+    assert __version__ == "0.18.0"
 
 
 def test_alternate_script_declared() -> None:
