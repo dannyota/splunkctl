@@ -16,7 +16,7 @@ PY
     return "$failed"
 }
 soar_assets_actions() {
-    local app_id asset_id='' configured_asset='' run_id
+    local app_id asset_id='' configured_asset='' run_id cancel_status
     local -a action_params=()
     capture "$T/apps.json" "$S" soar apps list --installed --json || return
     capture "$T/assets.json" "$S" soar assets list --limit 100000 --json || return
@@ -105,7 +105,15 @@ PY
                 run_id=$(json_value "$T/action.json" "int(d[0]['id'])") || return
                 expect_ok "$S" soar actions status "$run_id" --json
                 expect_ok "$S" soar actions results "$run_id" --json
-                expect_ok "$S" soar actions cancel "$run_id" --yes --json
+                # A fast action can finish first: SOAR then answers HTTP 400
+                # "Action is already finished executing", which also passes.
+                printf '$ %s\n' "$S soar actions cancel $run_id --yes --json"
+                "$S" soar actions cancel "$run_id" --yes --json > "$T/cancel.json" 2> "$T/cancel.err"
+                cancel_status=$?
+                cat "$T/cancel.json" "$T/cancel.err"
+                if [ "$cancel_status" -ne 0 ] && ! grep -q 'already finished' "$T/cancel.err"; then
+                    bad "actions cancel exited $cancel_status"
+                fi
             fi
         else
             bad 'LIVE_SOAR_ACTION_PARAMS must be a JSON object'

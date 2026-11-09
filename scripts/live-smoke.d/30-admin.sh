@@ -147,6 +147,47 @@ if selected users; then
         check_json 'd[0]["defaultApp"]=="search"' users roles get "$N"
     else bad 'create role'; fi
 fi
+# Revoke any token with our audience, including one whose create reply was lost.
+token_cleanup() {
+    "$S" --json server tokens list > "$T/token-cleanup.json" || return
+    "$PY" -c 'import json,sys; [print(r["id"]) for r in json.load(open(sys.argv[1])) if r["audience"]==sys.argv[2]]' \
+        "$T/token-cleanup.json" "$1" > "$T/token-cleanup.ids" || return
+    while IFS= read -r id; do "$S" server tokens revoke "$id" --yes || return; done < "$T/token-cleanup.ids"
+}
+# The token value is a credential: its reply is never printed, only its id.
+server_tokens() {
+    local state user id
+    state=$("$PY" - <<'PYTOKENS'
+import json
+from splunkctl.client import SplunkClient
+service = SplunkClient().service
+def content(path):
+    return json.loads(service.get(path, output_mode='json').body.read())['entry'][0]['content']
+disabled = str(content('/services/admin/token-auth/tokens_auth')['disabled']).lower() in ('1', 'true')
+print('disabled' if disabled else content('/services/authentication/current-context')['username'])
+PYTOKENS
+    ) || { bad 'read token authentication state'; return; }
+    if [ "$state" = disabled ]; then
+        skip 'server tokens create/revoke: token authentication is disabled'
+        return
+    fi
+    user=$state
+    defer token_cleanup "$N"
+    printf '$ %s\n' "$S server tokens create --user $user --audience $N --expires-in 1 --yes --json"
+    if "$S" --json server tokens create --user "$user" --audience "$N" --expires-in 1 --yes \
+        > "$T/token.json"; then
+        id=$("$PY" -c 'import json,sys; print(json.load(open(sys.argv[1]))[0]["id"])' "$T/token.json")
+        rm -f "$T/token.json"
+        [ -n "$id" ] || { bad 'token create returned no id'; return; }
+        check_json "any(r['id']=='$id' and r['audience']=='$N' for r in d)" server tokens list --user "$user"
+        expect_ok "$S" server tokens revoke "$id" --yes
+        check_json "not any(r['id']=='$id' for r in d)" server tokens list
+        error_kind not_found server tokens revoke "$id" --yes
+    else
+        rm -f "$T/token.json"
+        bad 'server tokens create'
+    fi
+}
 if selected server; then
     step "server"
     for verb in messages license kvstore health cluster shcluster deployment search-peers; do
@@ -156,6 +197,7 @@ if selected server; then
     for verb in show ldap saml role-mapping; do expect_ok "$S" server auth "$verb" --json; done
     expect_ok "$S" server serverclasses list --json
     expect_ok "$S" server tokens list --json
+    server_tokens
     for verb in pools rules status; do expect_ok "$S" server workloads "$verb" --json; done
 fi
 if selected audit; then

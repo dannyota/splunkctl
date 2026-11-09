@@ -22,6 +22,15 @@ found the fixes below on Splunk Enterprise 10.6.1.1 and SOAR 8.8.0.282.
   prompt answers with `--response`, and requires `--message` or
   `--response`, as SOAR does.
 
+### Tests
+
+- The SIEM live smoke covers `alerts get` with an owned scheduled alert
+  and `server tokens create`/`revoke`. The SOAR smoke covers `soar approvals
+  get`/`respond` with `LIVE_SOAR_APPROVALS=1`, and tolerates a fast licensed
+  action finishing before `soar actions cancel`.
+- `lab/keycloak/auth-smoke.sh` runs browser `auth login`, `status` and
+  `logout` for SIEM and SOAR against the Keycloak lab.
+
 ## 0.17.2
 
 Browser SAML auth verified live on Splunk Enterprise 10.6.1.1 and SOAR

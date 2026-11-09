@@ -162,6 +162,8 @@ PYACTIVE
 . "$HERE/live-smoke-soar.d/70-assets-actions.sh"
 # shellcheck source=live-smoke-soar.d/80-playbooks-functions.sh
 . "$HERE/live-smoke-soar.d/80-playbooks-functions.sh"
+# shellcheck source=live-smoke-soar.d/85-approvals.sh
+. "$HERE/live-smoke-soar.d/85-approvals.sh"
 # shellcheck source=live-smoke-soar.d/90-users-roles.sh
 . "$HERE/live-smoke-soar.d/90-users-roles.sh"
 # shellcheck source=live-smoke-soar.d/100-ingest.sh

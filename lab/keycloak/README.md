@@ -106,6 +106,14 @@ unset TEST_USER_PASSWORD
 Expected: login stores a session, status reports `valid`, and logout clears
 it. Set `E2E_HEADLESS=1` on hosts without a display.
 
+`auth-smoke.sh` runs the same loop with assertions and writes its own
+throwaway profile, so no `lab` profile is needed:
+
+```bash
+uv sync --extra dev --extra browser
+uv run bash lab/keycloak/auth-smoke.sh
+```
+
 ## Daily use
 
 ```bash

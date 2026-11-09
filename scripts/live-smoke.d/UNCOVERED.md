@@ -6,10 +6,9 @@ an entry below. The pytest coverage guard also rejects stale entries.
 CIM install, update, acceleration enable/rebuild and uninstall require `CIM_TGZ`.
 KV document operations require a ready KV store; built-in model reads require a model.
 
-- `alerts get`: No fired-alert fixture; the test rule is unscheduled.
-- `auth login`: Authentication/session changes are outside this live smoke test.
-- `auth logout`: Authentication/session changes are outside this live smoke test.
-- `auth status`: Authentication/session changes are outside this live smoke test.
+- `auth login`: Browser SAML; covered against the Keycloak lab by `lab/keycloak/auth-smoke.sh`.
+- `auth logout`: Browser SAML; covered against the Keycloak lab by `lab/keycloak/auth-smoke.sh`.
+- `auth status`: Browser SAML; covered against the Keycloak lab by `lab/keycloak/auth-smoke.sh`.
 - `completion`: Local shell setup; no live Splunk behavior.
 - `config init`: Would replace the throwaway connection profile.
 - `config use`: Would change the active profile during the run.
@@ -24,8 +23,6 @@ KV document operations require a ready KV store; built-in model reads require a 
 - `mcp serve`: Starts a protocol server; not a SIEM command workflow.
 - `server serverclasses get`: No serverclass fixture exists on standalone Splunk.
 - `server serverclasses reload`: No create verb for an owned serverclass; cannot safely reload others.
-- `server tokens create`: Requires enabled token authentication; does not change authentication settings.
-- `server tokens revoke`: No token fixture is issued.
 
 A populated acceleration summary (percent complete, size, summarized range) is
 not awaited, so those fields are covered by unit tests only. CIM retains

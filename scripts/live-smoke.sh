@@ -62,3 +62,4 @@ printf '<dashboard version="1.1"><label>sc_live_v2</label></dashboard>\n' > "$T/
 . "$HERE/live-smoke.d/10-core.sh"
 . "$HERE/live-smoke.d/20-content.sh"
 . "$HERE/live-smoke.d/30-admin.sh"
+if [ -n "${alert_started:-}" ]; then finish_fired_alert; fi
