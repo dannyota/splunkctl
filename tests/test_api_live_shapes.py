@@ -96,22 +96,63 @@ def test_real_sdk_job_reads(accessor, route, api_version):
 
 
 @pytest.mark.parametrize("readonly", [False, True])
-@pytest.mark.parametrize("writer", [False, True])
-def test_cli_generating_macro(readonly, writer):
+@pytest.mark.parametrize("command", ["oneshot", "export", "run"])
+@pytest.mark.parametrize(
+    "spl,winning,generating",
+    [
+        ("`outer`", "search `outer`", False),
+        ("`gen`", "`gen`", True),
+        (
+            "  ```note``` error | stats count",
+            "search ```note``` error | stats count",
+            False,
+        ),
+        ("```note``` | makeresults", "```note``` | makeresults", False),
+        ("```one```  ```two``` `gen`", "```one```  ```two``` `gen`", True),
+    ],
+)
+def test_cli_macro_and_comment_normalization(
+    readonly, command, spl, winning, generating
+):
     seen = []
 
     def network(url, message, **kwargs):
         body = message.get("body", "")
         params = parse_qs(body.decode() if isinstance(body, bytes) else body)
-        params.update(parse_qs(urlsplit(str(url)).query))
-        seen.append((str(url), message, params))
-        if str(url).endswith("/parser"):
-            assert params["q"] == ["`generate`"]
-            commands = ["makeresults", "eval", "outputlookup" if writer else "stats"]
-            body = json.dumps({"commands": [{"command": c} for c in commands]}).encode()
-        else:
-            assert params["search"] == ["`generate`"]
-            body = b'{"result":{"count":"1"}}\n'
+        parser = str(url).endswith("/parser")
+        query = params["q" if parser else "search"][0]
+        seen.append((parser, query))
+        if generating and query.startswith("search "):
+            body = (
+                b'<response><messages><msg type="ERROR">'
+                b"Error in 'makeresults' command: This command must be the first "
+                b"command of a search.</msg></messages></response>"
+            )
+            return {
+                "status": 400,
+                "reason": "Bad Request",
+                "headers": [],
+                "body": io.BytesIO(body),
+            }
+        assert query == winning
+        body = (
+            json.dumps(
+                {
+                    "commands": [
+                        {"command": c}
+                        for c in (
+                            ["makeresults"]
+                            if generating
+                            else ["search", "head", "stats"]
+                        )
+                    ]
+                }
+            ).encode()
+            if parser
+            else b"<response><sid>mine</sid></response>"
+            if command == "run"
+            else b'{"result":{"count":"1"}}\n'
+        )
         return {"status": 200, "reason": "OK", "headers": [], "body": io.BytesIO(body)}
 
     service = Service(
@@ -129,12 +170,81 @@ def test_cli_generating_macro(readonly, writer):
                 "--json",
                 *(["--read-only"] if readonly else []),
                 "search",
-                "oneshot",
-                "`generate`",
+                command,
+                *(["--detach"] if command == "run" else []),
+                spl,
             ],
         )
-    assert result.exit_code == (1 if readonly and writer else 0), result.output
-    assert len(seen) == (1 if readonly and writer else 2 if readonly else 1)
+    assert result.exit_code == 0, result.output
+    assert seen[-1] == (False, winning)
+    assert len([x for x in seen if not x[0]]) == (
+        2 if generating and not readonly else 1
+    )
+    assert len([x for x in seen if x[0]]) == (
+        (2 if generating else 1)
+        if readonly and ("`gen`" in spl or "`outer`" in spl)
+        else 0
+    )
+
+
+@pytest.mark.parametrize("readonly", [False, True])
+@pytest.mark.parametrize("spl", ["`outer`", "search `outer`", "error", "| makeresults"])
+@pytest.mark.parametrize(
+    "status,message",
+    [
+        (400, "Unknown search command 'index'."),
+        (403, "must be the first command"),
+        (400, "must be the first command"),
+    ],
+)
+def test_search_error_retry_scope(readonly, spl, status, message):
+    seen = []
+
+    def network(url, request, **kwargs):
+        seen.append(str(url))
+        body = (
+            '<response><messages><msg type="ERROR">'
+            + message
+            + "</msg></messages></response>"
+        ).encode()
+        return {
+            "status": status,
+            "reason": "Bad Request",
+            "headers": [],
+            "body": io.BytesIO(body),
+        }
+
+    service = Service(
+        host="example.test",
+        token="test",  # noqa: S106
+        handler=sdk_handler(network, "https://example.test:8089"),
+    )
+    service._splunk_version = (10, 6, 1)
+    service._instance_type = "enterprise"
+    with patch("splunkctl.commands.search.get_client") as client:
+        client.return_value.service = service
+        result = CliRunner().invoke(
+            cli,
+            [
+                "--json",
+                *(["--read-only"] if readonly else []),
+                "search",
+                "oneshot",
+                spl,
+            ],
+        )
+    assert result.exit_code == 1
+    assert len(seen) == (
+        2
+        if spl == "`outer`" and status == 400 and message == "must be the first command"
+        else 1
+    )
+    if readonly and spl == "`outer`":
+        error = json.loads(result.stderr.splitlines()[-1])
+        assert error["error"]["kind"] == "permission"
+        assert (
+            "read-only: search/parser rejected the search: " + message in result.stderr
+        )
 
 
 @pytest.mark.parametrize("method", ["GET", "POST"])
@@ -167,4 +277,40 @@ def test_rest_guidance():
     assert (
         str(error.value)
         == "read-only: SPL command rest is refused; use `splunkctl api get` instead"
+    )
+
+
+@pytest.mark.parametrize("encoding", ["xml", "json"])
+def test_parser_error_message_truncated(encoding):
+    detail = "Unknown search command: " + "x" * 250
+
+    def network(url, request, **kwargs):
+        body = (
+            json.dumps({"messages": [{"type": "ERROR", "text": detail}]}).encode()
+            if encoding == "json"
+            else (
+                '<response><messages><msg type="ERROR">'
+                + detail
+                + "</msg></messages></response>"
+            ).encode()
+        )
+        return {
+            "status": 400,
+            "reason": "Bad Request",
+            "headers": [],
+            "body": io.BytesIO(body),
+        }
+
+    service = Service(
+        host="example.test",
+        token="test",  # noqa: S106
+        handler=sdk_handler(network, "https://example.test:8089"),
+    )  # noqa: S106
+    service._splunk_version = (10, 6, 1)
+    service._instance_type = "enterprise"
+    with invocation("test", True), pytest.raises(ReadOnlyError) as error:
+        service.jobs.oneshot("search `outer`", output_mode="json")
+    assert (
+        str(error.value)
+        == "read-only: search/parser rejected the search: " + detail[:200]
     )

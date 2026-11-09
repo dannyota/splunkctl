@@ -12,6 +12,7 @@ import requests
 import urllib3
 
 from splunkctl.errors import WebSessionError
+from splunkctl.request_context import Invocation
 from splunkctl.transport import PolicySession
 
 
@@ -29,6 +30,7 @@ class _WebSession:
         self,
         service: Any,
         *,
+        identity: Invocation | None = None,
         verify: bool = True,
         debug: bool = False,
         timeout: int = 30,
@@ -53,7 +55,7 @@ class _WebSession:
 
         self._debug = debug
         self._timeout = timeout
-        self._session = PolicySession(self._base_url, kind="web")
+        self._session = PolicySession(self._base_url, kind="web", identity=identity)
         self._session.verify = verify
         if not verify:
             # verify=false is an explicit config choice (lab/self-signed);

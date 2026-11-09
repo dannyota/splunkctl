@@ -261,7 +261,7 @@
               "flags": [
                 "--describe"
               ],
-              "help": "List required and optional fields from PATH/_new."
+              "help": "List required, optional and wildcard fields from PATH/_new."
             }
           ]
         },

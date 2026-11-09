@@ -90,11 +90,7 @@ def _describe(data: Any) -> list[dict[str, Any]]:
             attrs = entry.get("fields") if isinstance(entry, dict) else None
             if not isinstance(attrs, dict):
                 continue
-            for key, required in (
-                ("required", True),
-                ("optional", False),
-                ("wildcard", False),
-            ):
+            for key in ("required", "optional", "wildcard"):
                 fields = attrs.get(key)
                 if not isinstance(fields, list) or any(
                     not isinstance(f, str) for f in fields
@@ -104,14 +100,7 @@ def _describe(data: Any) -> list[dict[str, Any]]:
                         kind="http",
                     )
                 found = True
-                rows.extend(
-                    {
-                        "field": field,
-                        "required": required,
-                        **({"wildcard": True} if key == "wildcard" else {}),
-                    }
-                    for field in fields
-                )
+                rows.extend({"field": field, "kind": key} for field in fields)
     if not found:
         raise WebSessionError("Endpoint does not support field discovery", kind="http")
     return rows
@@ -121,7 +110,9 @@ def _describe(data: Any) -> list[dict[str, Any]]:
 @click.argument("path")
 @click.option("--param", multiple=True, help="Add a request parameter.")
 @click.option(
-    "--describe", is_flag=True, help="List required and optional fields from PATH/_new."
+    "--describe",
+    is_flag=True,
+    help="List required, optional and wildcard fields from PATH/_new.",
 )
 @click.pass_context
 def api_get(

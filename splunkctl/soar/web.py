@@ -42,7 +42,7 @@ def ensure_web_login(client: SOARClient) -> requests.Session:
     # Browser-mode clients already hold a Django session; reuse it instead of
     # attempting username/password login (which browser profiles don't have).
     if client._cookies:  # noqa: SLF001
-        sess = PolicySession(base, kind="soar")
+        sess = PolicySession(base, kind="soar", identity=client._session.identity)
         sess.verify = client._verify  # noqa: SLF001
         for name, value in client._cookies.items():  # noqa: SLF001
             sess.cookies.set(name, value)
@@ -57,7 +57,7 @@ def ensure_web_login(client: SOARClient) -> requests.Session:
             kind="auth",
         )
 
-    sess = PolicySession(base, kind="soar")
+    sess = PolicySession(base, kind="soar", identity=client._session.identity)
     sess.verify = client._verify  # noqa: SLF001
     base = f"https://{client._host}:{client._port}"  # noqa: SLF001
 

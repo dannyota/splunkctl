@@ -161,10 +161,10 @@ def test_describe() -> None:
     result, svc = invoke(["get", "saved/searches", "--describe"], data)
     assert result.exit_code == 0, result.output
     assert json.loads(result.stdout) == [
-        {"field": "name", "required": True},
-        {"field": "search", "required": True},
-        {"field": "description", "required": False},
-        {"field": "action\\..*", "required": False, "wildcard": True},
+        {"field": "name", "kind": "required"},
+        {"field": "search", "kind": "required"},
+        {"field": "description", "kind": "optional"},
+        {"field": "action\\..*", "kind": "wildcard"},
     ]
     assert str(svc.request.call_args.args[0]).startswith(
         "/services/saved/searches/_new?"

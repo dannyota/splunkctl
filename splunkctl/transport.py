@@ -4,18 +4,19 @@ import io
 import json
 from collections.abc import Callable
 from typing import Any
-from urllib.parse import urlencode, urlsplit
+from urllib.parse import parse_qsl, urlencode, urlsplit
 from xml.etree import ElementTree
 
 import requests
 
-from splunkctl.request_context import current, readonly, user_agent
+from splunkctl.request_context import Invocation, current, readonly, user_agent
 from splunkctl.request_policy import (
     ReadOnlyError,
     canonical_path,
     check_request,
     endpoint,
 )
+from splunkctl.search_forms import macro_fallback, splunk_message
 
 
 def _parser_url(url: str) -> str:
@@ -49,17 +50,24 @@ def _remember_sid(url: str, body: bytes) -> None:
 class PolicySession(requests.Session):
     """Check every prepared request, including each redirect hop."""
 
-    def __init__(self, configured_origin: str, *, kind: str = "siem") -> None:
+    def __init__(
+        self,
+        configured_origin: str,
+        *,
+        kind: str = "siem",
+        identity: Invocation | None = None,
+    ) -> None:
         """Bind requests to the configured server and product policy."""
         super().__init__()
         self.configured_origin = configured_origin
         self.kind = kind
+        self.identity = identity or Invocation("library", False)
 
     def send(
         self, request: requests.PreparedRequest, **kwargs: Any
     ) -> requests.Response:
         """Enforce method/origin policy and replace competing User-Agents."""
-        request.headers["User-Agent"] = user_agent()
+        request.headers["User-Agent"] = user_agent(self.identity)
         url = request.url or ""
 
         def parser(spl: str) -> Any:
@@ -80,6 +88,12 @@ class PolicySession(requests.Session):
                 timeout=kwargs.get("timeout"),
                 verify=kwargs.get("verify", True),
             )
+            if 400 <= response.status_code < 500:
+                detail = splunk_message(response.content)
+                if detail:
+                    raise ReadOnlyError(
+                        "search/parser rejected the search: " + detail[:200]
+                    )
             response.raise_for_status()
             return response.json()
 
@@ -100,17 +114,23 @@ class PolicySession(requests.Session):
 
 
 def sdk_handler(
-    handler: Callable[..., Any], configured_origin: str
+    handler: Callable[..., Any],
+    configured_origin: str,
+    identity: Invocation | None = None,
 ) -> Callable[..., Any]:
     """Wrap either supported SDK version's handler protocol."""
+    identity = identity or Invocation("library", False)
 
     def dispatch(url: str, message: dict[str, Any], **kwargs: Any) -> Any:
         message = dict(message)
         message["headers"] = [
             (k, v) for k, v in message.get("headers", []) if k.lower() != "user-agent"
-        ] + [("User-Agent", user_agent())]
+        ] + [("User-Agent", user_agent(identity))]
+
+        winning: str | None = None
 
         def parser(spl: str) -> Any:
+            nonlocal winning
             target = _parser_url(url)
             body = urlencode(
                 {
@@ -131,6 +151,21 @@ def sdk_handler(
                 **kwargs,
             )
             if int(response["status"]) >= 300:
+                raw = response["body"].read()
+                detail = splunk_message(raw)
+                fallback = macro_fallback(spl)
+                if (
+                    int(response["status"]) == 400
+                    and fallback is not None
+                    and "must be the first command" in detail
+                ):
+                    result = parser(fallback)
+                    winning = fallback
+                    return result
+                if 400 <= int(response["status"]) < 500 and detail:
+                    raise ReadOnlyError(
+                        "search/parser rejected the search: " + detail[:200]
+                    )
                 raise ReadOnlyError("search/parser request failed")
             return json.loads(response["body"].read())
 
@@ -138,7 +173,34 @@ def sdk_handler(
         check_request(
             method, url, configured_origin, body=message.get("body"), parser=parser
         )
+        search_dispatch = method == "POST" and endpoint(canonical_path(url)) in {
+            "search/jobs",
+            "search/v2/jobs",
+            "search/jobs/export",
+            "search/v2/jobs/export",
+        }
+        body = message.get("body", "")
+        pairs = (
+            parse_qsl(body.decode() if isinstance(body, bytes) else body)
+            if search_dispatch and isinstance(body, (str, bytes))
+            else []
+        )
+        if winning is not None:
+            message["body"] = urlencode(
+                [(k, winning if k == "search" else v) for k, v in pairs]
+            )
         response = handler(url, message, **kwargs)
+        if not readonly() and search_dispatch and int(response["status"]) == 400:
+            searches = [v for k, v in pairs if k == "search"]
+            fallback = macro_fallback(searches[0]) if len(searches) == 1 else None
+            if fallback is not None:
+                raw = response["body"].read()
+                response = dict(response, body=io.BytesIO(raw))
+                if "must be the first command" in splunk_message(raw):
+                    message["body"] = urlencode(
+                        [(k, fallback if k == "search" else v) for k, v in pairs]
+                    )
+                    response = handler(url, message, **kwargs)
         if readonly() and method == "POST" and int(response["status"]) < 300:
             if endpoint(canonical_path(url)) in {"search/jobs", "search/v2/jobs"}:
                 stream = response["body"]

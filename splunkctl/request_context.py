@@ -64,7 +64,7 @@ def invocation(command: str, read_only: bool = False) -> Iterator[Invocation]:
         _context.reset(token)
 
 
-def user_agent() -> str:
+def user_agent(fallback: Invocation | None = None) -> str:
     """Build the exact final-dispatch User-Agent."""
-    ctx = current() or Invocation("library", env_readonly())
+    ctx = current() or fallback or Invocation("library", env_readonly())
     return f"splunkctl/{__version__} (cmd={ctx.command}; requestID={ctx.request_id})"

@@ -177,3 +177,22 @@ def test_requests_parser_posts_safe_form(namespace):
         )
         assert ctx.owned_sids == {"mine"}
     assert len(adapter.calls) == 2
+
+
+def test_sdk_binary_upload_body_unchanged():
+    """Search retry inspection must leave unrelated binary requests alone."""
+    from splunklib.client import Service
+
+    bodies = []
+
+    def network(url, message, **kwargs):
+        bodies.append(message["body"])
+        return {"status": 200, "reason": "OK", "headers": [], "body": io.BytesIO(b"{}")}
+
+    service = Service(
+        host="example.test",
+        token="test",  # noqa: S106
+        handler=sdk_handler(network, "https://example.test:8089"),
+    )
+    service.post("receivers/simple", body=b"\xff\x00")
+    assert bodies == [b"\xff\x00"]

@@ -34,7 +34,7 @@ splunkctl api get [OPTIONS] PATH
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--param` | text | - | Add a request parameter. |
-| `--describe` | flag | - | List required and optional fields from PATH/_new. |
+| `--describe` | flag | - | List required, optional and wildcard fields from PATH/_new. |
 
 ## api post
 

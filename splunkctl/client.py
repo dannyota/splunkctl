@@ -17,7 +17,7 @@ from splunklib.binding import handler
 
 from splunkctl import config as cfg_mod
 from splunkctl.errors import WebSessionError
-from splunkctl.request_context import readonly
+from splunkctl.request_context import Invocation, readonly
 from splunkctl.rest_adapters import Dashboards, HECTokens, LookupTableFiles
 from splunkctl.transport import sdk_handler
 from splunkctl.web_session import _WebSession
@@ -60,6 +60,7 @@ class SplunkClient:
         timeout: int = 30,
         debug: bool = False,
     ) -> None:
+        self._identity = Invocation("library", False)
         self._config_path = config_path
         self._profile = profile
         self._overrides: dict[str, Any] = {
@@ -122,6 +123,7 @@ class SplunkClient:
             connect_args["handler"] = sdk_handler(
                 handler(timeout=self._timeout or None, verify=connect_args["verify"]),
                 origin,
+                self._identity,
             )
             connect_args["autologin"] = False
             self._service = splunk_client.connect(**connect_args)
@@ -217,6 +219,7 @@ class SplunkClient:
             cfg.update(self._overrides)
             self._web_session = _WebSession(
                 self.service,
+                identity=self._identity,
                 verify=bool(cfg.get("verify", True)),
                 debug=self._debug,
                 timeout=self._timeout or 30,

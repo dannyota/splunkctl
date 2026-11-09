@@ -30,7 +30,7 @@ Check the endpoint's documented body contract before applying a request. The CLI
 
 ## Field discovery and output
 
-`get PATH --describe` reads `PATH/_new` and parses JSON `entry[].fields.required`, `optional` and `wildcard`. Each field becomes `{"field":"name","required":true}` or `{"field":"description","required":false}`. Wildcard regexes become `{"field":"action.*","required":false,"wildcard":true}`. This JSON shape was verified on Splunk 10.6.1.1; `eai:attributes.requiredFields` belongs to XML Atom output. Endpoints without supported discovery return a classified error.
+`get PATH --describe` reads `PATH/_new` and parses JSON `entry[].fields.required`, `optional` and `wildcard`. Each row has `field` and `kind`, where `kind` is `required`, `optional` or `wildcard`. Wildcard regexes use `{"field":"action.*","kind":"wildcard"}`. This JSON shape was verified on Splunk 10.6.1.1; `eai:attributes.requiredFields` belongs to XML Atom output. Endpoints without supported discovery return a classified error.
 
 Output defaults to JSON. Response dictionaries retain their envelope as one row in the output list; empty responses render as `[]`. The normal `--fields`, `--format` and `--out` options apply.
 

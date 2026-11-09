@@ -9,6 +9,7 @@ import click
 from splunkctl import guard, output
 from splunkctl.client import get_client
 from splunkctl.commands.common import fetch_page, list_options, read_results, spl_quote
+from splunkctl.search_forms import effective_spl, macro_retry
 from splunkctl.spl_safety import check_spl
 
 _GENERATING = (
@@ -36,9 +37,10 @@ _GENERATING = (
 def _normalize_spl(spl: str) -> str:
     """Auto-prepend ``search`` when the query needs it."""
     stripped = spl.strip()
-    if stripped.startswith(("|", "`")):
+    effective = effective_spl(stripped)
+    if effective.startswith("|"):
         return stripped
-    first_word = stripped.split()[0].lower() if stripped else ""
+    first_word = effective.split()[0].lower() if effective else ""
     if first_word == "search" or first_word in _GENERATING:
         return stripped
     return f"search {stripped}"
@@ -95,7 +97,8 @@ def run_search(
     }
 
     output.info(f"Running: {query}")
-    job: Any = svc.jobs.create(query, **kwargs)
+    with macro_retry(spl):
+        job: Any = svc.jobs.create(query, **kwargs)
 
     if detach:
         output.render(ctx, {"sid": job.sid, "status": "running"})
@@ -150,7 +153,8 @@ def export_search(
     }
 
     output.info(f"Exporting: {query}")
-    stream: Any = svc.jobs.export(query, **kwargs)
+    with macro_retry(spl):
+        stream: Any = svc.jobs.export(query, **kwargs)
     rows = read_results(stream)
     output.render(ctx, rows)
 
@@ -186,7 +190,8 @@ def oneshot_search(
     }
 
     output.info(f"Oneshot: {query}")
-    stream: Any = svc.jobs.oneshot(query, **kwargs)
+    with macro_retry(spl):
+        stream: Any = svc.jobs.oneshot(query, **kwargs)
     rows = read_results(stream)
     output.render(ctx, rows)
 
