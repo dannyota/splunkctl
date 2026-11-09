@@ -121,7 +121,7 @@ PY
     fi
     if [ -n "$asset_id" ]; then
         expect_ok "$S" soar assets delete "$asset_id" --yes --json
-        absent soar assets get "$asset_id"
+        asset_absent "$asset_id" || bad "asset $asset_id still present"
     fi
 }
 if soar_selected 70-assets-actions; then

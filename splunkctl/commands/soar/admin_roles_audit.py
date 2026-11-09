@@ -13,19 +13,6 @@ from splunkctl import output
 from splunkctl.commands.soar._client import get_soar_client
 from splunkctl.soar.client import SOARError
 
-
-def _cap_csv(text: str, limit: int) -> str:
-    """Truncate CSV *text* to header + *limit* rows (quote-aware)."""
-    reader = csv.reader(io.StringIO(text))
-    buf = io.StringIO()
-    writer = csv.writer(buf, lineterminator="\n")
-    for i, row in enumerate(reader):
-        if i > limit:
-            break
-        writer.writerow(row)
-    return buf.getvalue()
-
-
 # ── roles ────────────────────────────────────────────────────────────
 
 
@@ -125,37 +112,47 @@ def audit_cmd(
         params["start"] = start
     if end is not None:
         params["end"] = end
-    if limit is not None:
-        params["page_size"] = limit
-
-    # CSV: the server returns raw CSV text (Content-Type: application/csv),
-    # not JSON. Fetch as bytes and print directly.
+    page_size = min(limit or 100, 100)
+    params["page_size"] = page_size
+    rows: list[Any] = []
+    previous: list[Any] | None = None
+    header: list[str] | None = None
+    page = 1
     if out_format == "csv":
         params["format"] = "csv"
-        try:
-            raw = client.get_bytes("audit", params=params)
-        except SOARError as exc:
-            output.error(exc.message, kind=exc.kind, http_status=exc.http_status)
-            ctx.exit(1)
-            return
-        text = raw.decode("utf-8")
-        if limit is not None:
-            # The bare-array audit endpoint ignores page_size — enforce
-            # the row cap client-side here too, not just for JSON.
-            text = _cap_csv(text, limit)
-        click.echo(text, nl=False)
-        return
-
     try:
-        result = client.get("audit", params=params)
+        while True:
+            # Audit uses 1-based pages; num_pages is synthetic for bare arrays.
+            page_params = {**params, "page": page}
+            if out_format == "csv":
+                raw = client.get_bytes("audit", params=page_params)
+                parsed = list(csv.reader(io.StringIO(raw.decode("utf-8"))))
+                if header is None and parsed:
+                    header = parsed[0]
+                batch = parsed[1:]
+            else:
+                result = client.get("audit", params=page_params)
+                batch = result.get("data", []) if isinstance(result, dict) else []
+            # Older servers may ignore page or page_size. Avoid duplicate pages.
+            if not batch or batch == previous:
+                break
+            rows.extend(batch)
+            if (limit is not None and len(rows) >= limit) or len(batch) != page_size:
+                break
+            previous = batch
+            page += 1
     except SOARError as exc:
         output.error(exc.message, kind=exc.kind, http_status=exc.http_status)
         ctx.exit(1)
         return
-
-    rows = result.get("data", []) if isinstance(result, dict) else []
     if limit is not None:
-        # The bare-array audit endpoint ignores page_size — enforce
-        # the row cap client-side.
         rows = rows[:limit]
+    if out_format == "csv":
+        buf = io.StringIO()
+        writer = csv.writer(buf, lineterminator="\n")
+        if header is not None:
+            writer.writerow(header)
+        writer.writerows(rows)
+        click.echo(buf.getvalue(), nl=False)
+        return
     output.render(ctx, rows, empty="No audit entries found.")

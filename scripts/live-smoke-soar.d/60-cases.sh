@@ -7,6 +7,7 @@ cases_group() {
     expect_ok "$S" soar workbook-templates get "$N" --json
     expect_ok "$S" soar workbook-templates list --json
     expect_ok "$S" soar workbook-templates update "$N" --add-phase "${N}_second" --yes
+    check_json "any(p.get('name') == '$N' for p in d[0]['phases']) and any(p.get('name') == '${N}_second' for p in d[0]['phases'])" soar workbook-templates get "$N"
     capture "$T/case-precheck.json" "$S" soar containers list --filter "_filter_name=\"${N}_case\"" --json || return
     [ "$(json_value "$T/case-precheck.json" 'len(d)')" = 0 ] || { bad 'case name already exists'; return; }
     defer soar_cleanup containers "${N}_case"
@@ -21,6 +22,7 @@ cases_group() {
         return
     fi
     expect_ok "$S" soar cases promote "$CASE" --template "$N" --yes
+    check_json "any(p.get('name') == '$N' for p in d) and any(p.get('name') == '${N}_second' for p in d)" soar cases workbook "$CASE"
     capture "$T/case-promoted.json" "$S" soar containers get "$CASE" --json || return
     if [ "$(json_value "$T/case-promoted.json" 'd[0]["status"]')" != closed ]; then
         bad 'promotion reopened owned case'
@@ -38,8 +40,9 @@ cases_group() {
     capture "$T/case-users.json" "$S" soar users list --json || return
     USERNAME=$(json_value "$T/case-users.json" 'next(x["username"] for x in d if x.get("is_active", True) and x.get("type") != "automation")') || return
     OWNER_JSON=$("$PY" -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$USERNAME") || return
+    OWNER_ID=$(json_value "$T/case-users.json" "next(int(x['id']) for x in d if x['username'] == $OWNER_JSON)") || return
     expect_ok "$S" soar cases task update "$TASK" --owner "$USERNAME" --status complete --note "$N complete" --yes
-    check_json "any(int(t['id']) == $TASK and t['status'] == 2 and t.get('owner') == $OWNER_JSON for p in d for t in p.get('tasks', []))" soar cases workbook "$CASE"
+    check_json "any(int(t['id']) == $TASK and t['status'] == 2 and t.get('owner') in ($OWNER_JSON, $OWNER_ID) for p in d for t in p.get('tasks', []))" soar cases workbook "$CASE"
     expect_ok "$S" soar cases task update "$TASK" --status in_progress --note "$N reopen" --yes
     check_json "any(int(t['id']) == $TASK and t['status'] == 1 for p in d for t in p.get('tasks', []))" soar cases workbook "$CASE"
     check_json "any('$N reopen' in x.get('content', '') for x in d)" soar notes list --container "$CASE" --task "$TASK"

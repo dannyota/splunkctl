@@ -77,7 +77,7 @@ containers_group() {
     expect_ok "$S" soar evidence add "$C" --object artifact --id "$A" --yes
     defer cleanup_child evidence "$C" "$NOTE"
     expect_ok "$S" soar evidence add "$C" --object note --id "$NOTE" --yes
-    check_json "any(x.get('content_type') == 'artifact' and int(x['object_id']) == $A for x in d) and any(x.get('content_type') == 'note' and int(x['object_id']) == $NOTE for x in d)" soar evidence list --container "$C"
+    check_json "any(x.get('object_type') == 'artifact' and int(x['object_id']) == $A for x in d) and any(x.get('object_type') == 'note' and int(x['object_id']) == $NOTE for x in d)" soar evidence list --container "$C"
 }
 if soar_selected 20-containers; then
     step '20-containers'

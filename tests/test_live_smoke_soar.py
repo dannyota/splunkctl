@@ -2,12 +2,16 @@
 
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
+import click
 import pytest
+
+from splunkctl.main import cli
 
 BASH = shutil.which("bash")
 if BASH is None:
@@ -16,6 +20,55 @@ if BASH is None:
 ROOT = Path(__file__).parents[1]
 RUNNER = ROOT / "scripts/live-smoke-soar.sh"
 LIBRARY = ROOT / "scripts/live-smoke-lib.sh"
+
+
+@pytest.mark.parametrize(
+    "script",
+    sorted((ROOT / "scripts/live-smoke-soar.d").glob("*.sh")),
+    ids=lambda p: p.name,
+)
+def test_smoke_cli_options(script: Path) -> None:
+    """Check static command paths and options without executing live mutations."""
+    for line in script.read_text().replace("\\\n", " ").splitlines():
+        if '"$S" soar ' not in line:
+            continue
+        invocation = line.split('"$S" ', 1)[1]
+        lexer = shlex.shlex(invocation, posix=True, punctuation_chars=";&|<>")
+        lexer.whitespace_split = True
+        tokens = []
+        for token in lexer:
+            if token and token[0] in ";&|<>":
+                break
+            tokens.append(token)
+        command = cli
+        while isinstance(command, click.Group):
+            name = tokens.pop(0)
+            if "$" in name:
+                break  # Dynamic command names cannot be resolved statically.
+            child = command.get_command(click.Context(command), name)
+            assert child is not None, f"{script.name}: unknown command {name}"
+            command = child
+        else:
+            options = {
+                opt: param
+                for owner in (cli, command)
+                for param in owner.params
+                if isinstance(param, click.Option)
+                for opt in (*param.opts, *param.secondary_opts)
+            }
+            while tokens:
+                token = tokens.pop(0)
+                if not token.startswith("--") or "$" in token:
+                    continue
+                option = token.split("=", 1)[0]
+                assert option in options, (
+                    f"{script.name}: {invocation}: unknown {option}"
+                )
+                param = options[option]
+                if not param.is_flag and "=" not in token:
+                    del tokens[: param.nargs]
+
+
 STUB = r"""
 import json, os, sys
 from pathlib import Path
@@ -74,6 +127,54 @@ def stub_environment(tmp_path: Path) -> tuple[dict[str, str], Path]:
 
 def recorded_calls(path: Path) -> list[list[str]]:
     return [json.loads(line) for line in path.read_text().splitlines()]
+
+
+def test_playbook_collision_blocks_import_and_cleanup(tmp_path: Path) -> None:
+    env, calls = stub_environment(tmp_path)
+    binary = Path(env["SPLUNKCTL"])
+    binary.write_text(
+        f"#!{sys.executable}\n"
+        "import json, os, sys\n"
+        "from pathlib import Path\n"
+        "args = sys.argv[1:]\n"
+        "with Path(os.environ['SMOKE_CALLS']).open('a') as f:\n"
+        "    f.write(json.dumps(args) + '\\n')\n"
+        "rows = [{'id': 7, 'name': 'fixture/fixture', 'labels': ['events']}]\n"
+        "print(json.dumps(rows\n"
+        "      if '--name' in args else []))\n"
+    )
+    env.update(
+        SMOKE_SCRIPT=str(ROOT / "scripts/live-smoke-soar.d/80-playbooks-functions.sh"),
+        SMOKE_TMP=str(tmp_path),
+    )
+    harness = r"""
+S=$SPLUNKCTL PY=$LIVE_PYTHON T=$SMOKE_TMP N=fixture
+soar_selected() { return 1; }
+ensure_event() { return 0; }
+expect_ok() { "$@"; }
+capture() { local out=$1; shift; "$@" > "$out"; }
+bad() { echo "FAIL $*"; }
+defer() { echo "UNEXPECTED cleanup registration"; }
+. "$SMOKE_SCRIPT"
+soar_playbooks_functions
+"""
+    result = subprocess.run(  # noqa: S603
+        [BASH, "-c", harness], env=env, capture_output=True, text=True, check=False
+    )
+    assert "automation fixture name already exists" in result.stdout
+    assert "UNEXPECTED" not in result.stdout
+    actual = recorded_calls(calls)
+    assert [
+        "soar",
+        "playbooks",
+        "list",
+        "--repo",
+        "local",
+        "--name",
+        "fixture/fixture",
+        "--json",
+    ] in actual
+    assert not any("import" in call for call in actual)
 
 
 @pytest.mark.parametrize("skip", ["", "90-users-roles"])
@@ -229,3 +330,143 @@ def test_active_playbooks_override(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stdout + result.stderr
     assert ["soar", "actions", "list"] in recorded_calls(calls)
     assert "SKIPPED 70-assets-actions: active playbooks" not in result.stdout
+
+
+@pytest.mark.parametrize(
+    "mode,listed,expected",
+    [
+        ("disabled", False, 0),
+        ("missing", False, 0),
+        ("active", False, 1),
+        ("disabled", True, 1),
+        ("error", False, 1),
+    ],
+)
+@pytest.mark.parametrize("warning", [False, True])
+def test_asset_absence(
+    tmp_path: Path, mode: str, listed: bool, expected: int, warning: bool
+) -> None:
+    env, _ = stub_environment(tmp_path)
+    binary = Path(env["SPLUNKCTL"])
+    binary.write_text(
+        f"#!{sys.executable}\n"
+        "import json, sys\n"
+        + (
+            "print('Warning: TLS certificate verification is disabled...', "
+            "file=sys.stderr)\n"
+            if warning
+            else ""
+        )
+        + "if 'get' in sys.argv:\n"
+        + (
+            "    print(json.dumps({'error': {'kind': 'not_found'}}), "
+            "file=sys.stderr); sys.exit(1)\n"
+            if mode == "missing"
+            else "    print(json.dumps({'error': {'kind': 'auth'}}), "
+            "file=sys.stderr); sys.exit(1)\n"
+            if mode == "error"
+            else "    print(json.dumps("
+            + repr({"id": 7, "disabled": mode == "disabled"})
+            + "))\n"
+        )
+        + f"else: print(json.dumps({[{'id': 7}] if listed else []}))\n"
+    )
+    # Load helper definitions without starting the runner or its EXIT trap.
+    prefix = RUNNER.read_text().split('command -v "$S"')[0]
+    harness = tmp_path / "asset-helper.sh"
+    prefix = prefix.replace(
+        'HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"',
+        f'HERE="{ROOT / "scripts"}"',
+    ).replace("trap soar_finish EXIT", "")
+    harness.write_text(prefix + "\nasset_absent 7\n")
+    result = subprocess.run(  # noqa: S603
+        [BASH, str(harness)], env=env, capture_output=True, text=True, check=False
+    )
+    assert result.returncode == expected, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize(
+    "owner,missing_phase,missing_template_phase,expected",
+    [
+        ("analyst", "", "", 0),
+        (73, "", "", 0),
+        (99, "", "", 1),
+        ("analyst", "fixture", "", 1),
+        ("analyst", "fixture_second", "", 1),
+        ("analyst", "", "fixture", 1),
+        ("analyst", "", "fixture_second", 1),
+    ],
+)
+def test_cases_template_phases_and_owner(
+    tmp_path: Path,
+    owner: str | int,
+    missing_phase: str,
+    missing_template_phase: str,
+    expected: int,
+) -> None:
+    env, _ = stub_environment(tmp_path)
+    binary = Path(env["SPLUNKCTL"])
+    binary.write_text(
+        f"#!{sys.executable}\n"
+        + r"""
+import json, os, sys
+from pathlib import Path
+args = [a for a in sys.argv[1:] if a not in ('--json', '--yes')]
+state = Path(os.environ['TMPDIR']) / 'task-status'
+status = int(state.read_text()) if state.exists() else 0
+rows = []
+if args[:3] == ['soar', 'containers', 'create']:
+    rows = [{'id': 42}]
+elif args[:3] == ['soar', 'containers', 'get']:
+    rows = [{'id': 42, 'status': 'closed', 'container_type': 'case'}]
+elif args[:3] == ['soar', 'workbook-templates', 'get']:
+    rows = [{'id': 1, 'name': 'fixture', 'phases': [
+        {'name': name, 'tasks': []} for name in ('fixture', 'fixture_second')
+        if name != os.environ['SMOKE_MISSING_TEMPLATE_PHASE']]}]
+elif args[:3] == ['soar', 'cases', 'workbook']:
+    rows = [{'name': name, 'tasks': []} for name in ('fixture', 'fixture_second')
+            if name != os.environ['SMOKE_MISSING_PHASE']]
+    rows.append({'name': 'manual', 'tasks': [
+        {'id': 51, 'status': status, 'owner': json.loads(os.environ['SMOKE_OWNER'])}]})
+elif args[:4] in (['soar', 'cases', 'phase', 'add'], ['soar', 'cases', 'task', 'add']):
+    rows = [{'id': 51}]
+elif args[:4] == ['soar', 'cases', 'task', 'update']:
+    state.write_text('2' if 'complete' in args else '1')
+elif args[:3] == ['soar', 'users', 'list']:
+    rows = [{'id': 99, 'username': 'inactive', 'is_active': False},
+            {'id': 73, 'username': 'analyst', 'is_active': True}]
+elif args[:3] == ['soar', 'notes', 'list']:
+    rows = [{'content': 'fixture reopen'}]
+print(json.dumps(rows))
+"""
+    )
+    env.update(
+        SMOKE_LIBRARY=str(LIBRARY),
+        SMOKE_SCRIPT=str(ROOT / "scripts/live-smoke-soar.d/60-cases.sh"),
+        SMOKE_OWNER=json.dumps(owner),
+        SMOKE_MISSING_PHASE=missing_phase,
+        SMOKE_MISSING_TEMPLATE_PHASE=missing_template_phase,
+    )
+    json_helper = (
+        RUNNER.read_text().split("json_value() {", 1)[1].split("# Asset DELETE", 1)[0]
+    )
+    harness = (
+        "json_value() {"
+        + json_helper
+        + r"""
+set -uo pipefail
+S=$SPLUNKCTL PY=$LIVE_PYTHON T=$TMPDIR N=fixture fail=0
+. "$SMOKE_LIBRARY"
+trap - EXIT
+soar_selected() { return 1; }
+absent() { return 0; }
+defer() { return 0; }
+. "$SMOKE_SCRIPT"
+cases_group
+[ "$fail" -eq 0 ]
+"""
+    )
+    result = subprocess.run(  # noqa: S603
+        [BASH, "-c", harness], env=env, capture_output=True, text=True, check=False
+    )
+    assert result.returncode == expected, result.stdout + result.stderr

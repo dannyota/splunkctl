@@ -224,6 +224,33 @@ def evidence_list_cmd(ctx: click.Context, *, container_id: int) -> None:
         return
 
     data = result.get("data", []) if isinstance(result, dict) else []
+    types: dict[int, str] = {}
+    warned = False
+    for model, object_type in (
+        ("artifact", "artifact"),
+        ("note", "note"),
+        ("actionrun", "action_run"),
+    ):
+        try:
+            matches = client.get(
+                "evidence",
+                params={
+                    "_filter_container": container_id,
+                    "_filter_content_type__model": json.dumps(model),
+                    "page_size": 0,
+                },
+            )
+            for row in matches.get("data", []):
+                types[row["id"]] = object_type
+        except SOARError as exc:
+            if not warned:
+                output.warning(
+                    f"Could not resolve evidence object types: {exc.message}"
+                )
+                warned = True
+    for row in data:
+        if row.get("id") in types:
+            row["object_type"] = types[row["id"]]
     output.render(ctx, data, empty=f"No evidence found for container {container_id}.")
 
 

@@ -29,6 +29,8 @@ def playbooks_group() -> None:
 @click.option("--active", is_flag=True, default=False, help="Only active playbooks.")
 @click.option("--label", default=None, help="Filter by label.")
 @click.option("--repo", default=None, help="Filter by SCM repo name.")
+@click.option("--name", default=None, help="Exact scoped name (dir/module).")
+@click.option("--limit", default=None, type=click.IntRange(min=1), help="Max results.")
 @click.pass_context
 def list_cmd(
     ctx: click.Context,
@@ -36,6 +38,8 @@ def list_cmd(
     active: bool,
     label: str | None,
     repo: str | None,
+    name: str | None,
+    limit: int | None,
 ) -> None:
     """List playbooks with optional filters."""
     client = get_soar_client(ctx)
@@ -45,6 +49,10 @@ def list_cmd(
         params["_filter_active"] = "True"
     if label is not None:
         params["_filter_labels__contains"] = json.dumps(label)
+    if name is not None:
+        params["_filter_name"] = json.dumps(name)
+    if limit is not None:
+        params["page_size"] = limit
 
     try:
         if repo is not None:
@@ -104,114 +112,6 @@ def get_cmd(ctx: click.Context, *, playbook_id: int) -> None:
         return
 
     output.render(ctx, result, empty=f"Playbook {playbook_id} not found.")
-
-
-# ─── enable / disable ────────────────────────────────────────────────
-
-
-@playbooks_group.command("enable")
-@guard.guarded
-@click.argument("playbook_id", type=int)
-@click.pass_context
-def enable_cmd(ctx: click.Context, *, playbook_id: int) -> None:
-    """Activate a playbook. draft_mode playbooks cannot be activated."""
-    body: dict[str, Any] = {"active": True}
-    if not guard.soar_check(ctx, f"Enable playbook {playbook_id}"):
-        return
-
-    client = get_soar_client(ctx)
-    try:
-        client.post(f"playbook/{playbook_id}", body=body)
-    except SOARError as exc:
-        msg = exc.message
-        if "draft" in msg.lower():
-            msg += (
-                " (hint: playbooks in draft_mode cannot be activated; "
-                "re-import without draft_mode or edit in the VPE)"
-            )
-        output.error(msg, kind=exc.kind, http_status=exc.http_status)
-        ctx.exit(1)
-        return
-
-    output.info(f"Playbook {playbook_id} enabled.")
-
-
-@playbooks_group.command("disable")
-@guard.guarded
-@click.argument("playbook_id", type=int)
-@click.option(
-    "--cancel-runs",
-    is_flag=True,
-    default=False,
-    help="Cancel running instances.",
-)
-@click.pass_context
-def disable_cmd(
-    ctx: click.Context,
-    *,
-    playbook_id: int,
-    cancel_runs: bool,
-) -> None:
-    """Deactivate a playbook. --cancel-runs stops running instances."""
-    body: dict[str, Any] = {"active": False}
-    action = f"Disable playbook {playbook_id}"
-    if cancel_runs:
-        # The destructive side effect must be visible in the preview.
-        body["cancel_runs"] = True
-        action += " (cancel in-flight runs)"
-    if not guard.soar_check(ctx, action):
-        return
-
-    client = get_soar_client(ctx)
-    try:
-        client.post(f"playbook/{playbook_id}", body=body)
-    except SOARError as exc:
-        output.error(exc.message, kind=exc.kind, http_status=exc.http_status)
-        ctx.exit(1)
-        return
-
-    output.info(f"Playbook {playbook_id} disabled.")
-
-
-# ─── trigger ──────────────────────────────────────────────────────────
-
-
-@playbooks_group.command("trigger")
-@guard.guarded
-@click.argument("playbook_id", type=int)
-@click.option(
-    "--on",
-    "trigger_type",
-    required=True,
-    type=click.Choice(["artifact_created", "container_resolved"]),
-    help=(
-        "Trigger type. ('label' is import-metadata only — the REST "
-        "endpoint rejects setting it.)"
-    ),
-)
-@click.pass_context
-def trigger_cmd(
-    ctx: click.Context,
-    *,
-    playbook_id: int,
-    trigger_type: str,
-) -> None:
-    """Set the automation trigger for a playbook."""
-    body: dict[str, Any] = {"playbook_trigger": trigger_type}
-    if not guard.soar_check(
-        ctx, f"Set trigger '{trigger_type}' for playbook {playbook_id}"
-    ):
-        return
-
-    client = get_soar_client(ctx)
-    try:
-        client.post(f"playbook/{playbook_id}", body=body)
-    except SOARError as exc:
-        output.error(exc.message, kind=exc.kind, http_status=exc.http_status)
-        ctx.exit(1)
-        return
-
-    output.info(f"Playbook {playbook_id} trigger set to '{trigger_type}'.")
 
 
 # ─── export ───────────────────────────────────────────────────────────

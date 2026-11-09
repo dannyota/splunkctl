@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+- Fix `soar workbook-templates update --add-phase` deleting existing phases; `get` now shows phases.
+
+- Fix `soar cases promote --template` to apply the selected workbook using `template_id`.
+
+- Add exact scoped name and result limit filters to `soar playbooks list --name/--limit`.
+
+- Resolve workbook template names and defaults with server filters on SOAR 8.8.
+- Paginate JSON and CSV audit queries with guards for older SOAR servers.
+- Enrich evidence with object types while preserving numeric content types.
+- Resolve vault attachment hashes for vault list output.
+- Allow custom function Python version overrides and warn on draft imports.
+- Explain stale playbook ids after forced imports in mutation errors.
+- Update SOAR smoke fixtures for soft deletes, Python 3.13 and safe manual playbook runs.
+
 ## 0.17.0
 
 A reusable single-host lab for Splunk Enterprise 10.6.1.1 and SOAR 8.8, Splunk

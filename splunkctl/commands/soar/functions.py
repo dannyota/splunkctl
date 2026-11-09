@@ -137,6 +137,12 @@ def import_cmd(ctx: click.Context, *, path: str) -> None:
         return
 
     if isinstance(result, dict):
+        message = str(result.get("message", ""))
+        if (
+            "failed validation" in message.lower()
+            or "saved as draft" in message.lower()
+        ):
+            output.warning(message)
         cf_id = result.get("id", "?")
         output.info(f"Custom function imported: id={cf_id}")
         output.render(ctx, result)
@@ -186,6 +192,9 @@ def export_cmd(ctx: click.Context, *, function_id: int, out: str | None) -> None
     required=True,
     help="Commit message (required by SOAR SCM).",
 )
+@click.option(
+    "--python-version", default=None, help="Override the stored Python version."
+)
 @click.pass_context
 def update_cmd(
     ctx: click.Context,
@@ -193,6 +202,7 @@ def update_cmd(
     function_id: int,
     python_file: str,
     message: str,
+    python_version: str | None,
 ) -> None:
     """Update a custom function's Python source.
 
@@ -245,8 +255,7 @@ def update_cmd(
         for key in _MERGE_KEYS:
             if key in existing:
                 body[key] = existing[key]
-        # SOAR 8.x runs Python 3.13; legacy 2.7 records must be
-        # upgraded or the server rejects the update.
+        # Legacy 2.7 records must be upgraded before editing.
         if body.get("python_version") in ("2", "2.7"):
             body["python_version"] = "3"
             output.warning(
@@ -254,6 +263,8 @@ def update_cmd(
                 " (SOAR 8.x rejects editing py2 functions)"
             )
 
+    if python_version is not None:
+        body["python_version"] = python_version
     body["python"] = new_python
     body["commit_message"] = message
     body["scm_id"] = scm_id
@@ -261,7 +272,13 @@ def update_cmd(
     try:
         result = client.post(f"custom_function/{function_id}", body=body)
     except SOARError as exc:
-        output.error(exc.message, kind=exc.kind, http_status=exc.http_status)
+        message = exc.message
+        if "python" in message.lower() and "not supported" in message.lower():
+            message += (
+                " (hint: re-run with --python-version 3.13, "
+                "or the version your server supports)"
+            )
+        output.error(message, kind=exc.kind, http_status=exc.http_status)
         ctx.exit(1)
         return
 

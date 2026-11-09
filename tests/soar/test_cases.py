@@ -84,7 +84,7 @@ class TestPromote:
         assert result.exit_code == 0
         client.post.assert_called_once_with(
             "container/42",
-            body={"container_type": "case", "template": 1},
+            body={"container_type": "case", "template_id": 1},
         )
 
     @patch(PATCH_SOAR_RESOLVE)
@@ -120,7 +120,7 @@ class TestPromote:
         )
         assert result.exit_code == 0
         body = client.post.call_args[1]["body"]
-        assert body["template"] == 2
+        assert body == {"container_type": "case", "template_id": 2}
 
     @patch(PATCH_SOAR_RESOLVE)
     @patch(PATCH_CLIENT)
@@ -145,7 +145,7 @@ class TestPromote:
         )
         assert result.exit_code == 0
         body = client.post.call_args[1]["body"]
-        assert body["template"] == 2
+        assert body == {"container_type": "case", "template_id": 2}
 
     @patch(PATCH_SOAR_RESOLVE)
     @patch(PATCH_CLIENT)

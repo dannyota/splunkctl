@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 from click.testing import CliRunner
 
@@ -20,18 +20,57 @@ _TEMPLATES: dict[str, Any] = {
             "id": 1,
             "name": "NIST 800-61",
             "is_default": True,
-            "phases": [
-                {"id": 10, "name": "Detection", "order": 1},
-                {"id": 11, "name": "Analysis", "order": 2},
-            ],
         },
         {
             "id": 2,
             "name": "Custom Investigation",
             "is_default": False,
-            "phases": [
-                {"id": 20, "name": "Triage", "order": 1},
+        },
+    ],
+}
+
+
+_PHASES: dict[str, Any] = {
+    "count": 2,
+    "num_pages": 1,
+    "data": [
+        {
+            "create_time": "2026-11-09T00:00:00Z",
+            "id": 10,
+            "modified_time": "2026-11-09T00:00:00Z",
+            "name": "Detection",
+            "order": 7,
+            "sla": 0,
+            "sla_type": "minutes",
+            "template": 1,
+            "tasks": [
+                {
+                    "create_time": "2026-11-09T00:00:00Z",
+                    "description": "Keep this task",
+                    "id": 100,
+                    "is_note_required": True,
+                    "modified_time": "2026-11-09T00:00:00Z",
+                    "name": "Investigate",
+                    "order": 1,
+                    "owner": None,
+                    "phase": 10,
+                    "role": None,
+                    "sla": 0,
+                    "sla_type": "minutes",
+                    "suggestions": [],
+                }
             ],
+        },
+        {
+            "create_time": "2026-11-09T00:00:00Z",
+            "id": 11,
+            "modified_time": "2026-11-09T00:00:00Z",
+            "name": "Analysis",
+            "order": 2,
+            "sla": 0,
+            "sla_type": "minutes",
+            "tasks": [],
+            "template": 1,
         },
     ],
 }
@@ -109,7 +148,7 @@ class TestWorkbookTemplatesGet:
     def test_get_by_id(self, mock_res: MagicMock, mock_cls: MagicMock) -> None:
         mock_res.return_value = soar_cfg()
         client = MagicMock()
-        client.get.return_value = _TEMPLATES["data"][0]
+        client.get.side_effect = [_TEMPLATES["data"][0], _PHASES]
         mock_cls.return_value = client
         result = CliRunner().invoke(
             cli, ["--json", "soar", "workbook-templates", "get", "1"]
@@ -117,6 +156,16 @@ class TestWorkbookTemplatesGet:
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert data[0]["name"] == "NIST 800-61"
+        assert data[0]["phases"] == _PHASES["data"]
+        client.get.assert_has_calls(
+            [
+                call("workbook_template/1", params={}),
+                call(
+                    "workbook_phase_template",
+                    params={"_filter_template": 1, "page_size": 0},
+                ),
+            ]
+        )
 
     @patch(PATCH_CLIENT)
     @patch(PATCH_RESOLVE)
@@ -127,6 +176,7 @@ class TestWorkbookTemplatesGet:
         client.get.side_effect = [
             _TEMPLATES,  # name resolution
             _TEMPLATES["data"][0],  # detail fetch
+            _PHASES,
         ]
         mock_cls.return_value = client
         result = CliRunner().invoke(
@@ -160,3 +210,21 @@ class TestWorkbookTemplatesGet:
             cli, ["--json", "soar", "workbook-templates", "get", "1"]
         )
         assert result.exit_code != 0
+
+    @patch(PATCH_CLIENT)
+    @patch(PATCH_RESOLVE)
+    def test_get_phase_read_failure_warns(
+        self, mock_res: MagicMock, mock_cls: MagicMock
+    ) -> None:
+        mock_res.return_value = soar_cfg()
+        client = mock_cls.return_value
+        client.get.side_effect = [
+            _TEMPLATES["data"][0],
+            SOARError("cannot read phases", kind="error", http_status=500),
+        ]
+        result = CliRunner().invoke(
+            cli, ["--json", "soar", "workbook-templates", "get", "1"]
+        )
+        assert result.exit_code == 0
+        assert json.loads(result.stdout) == [_TEMPLATES["data"][0]]
+        assert "cannot read phases" in result.stderr

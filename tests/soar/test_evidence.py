@@ -27,13 +27,18 @@ class TestEvidenceList:
                 {
                     "id": 5,
                     "container_id": 100,
-                    "object_type": "artifact",
+                    "content_type": 22,
                     "object_id": 42,
                 }
             ],
         }
         client = MagicMock()
-        client.get.return_value = evidence_resp
+        client.get.side_effect = [
+            evidence_resp,
+            evidence_resp,
+            {"data": []},
+            {"data": []},
+        ]
         mock_cls.return_value = client
 
         result = CliRunner().invoke(

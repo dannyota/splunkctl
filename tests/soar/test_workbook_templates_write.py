@@ -1,4 +1,4 @@
-"""Tests for soar workbook-templates — writes: create, update, delete."""
+"""Tests for soar workbook-templates — writes: create, delete."""
 
 from __future__ import annotations
 
@@ -22,18 +22,11 @@ _TEMPLATES: dict[str, Any] = {
             "id": 1,
             "name": "NIST 800-61",
             "is_default": True,
-            "phases": [
-                {"id": 10, "name": "Detection", "order": 1},
-                {"id": 11, "name": "Analysis", "order": 2},
-            ],
         },
         {
             "id": 2,
             "name": "Custom Investigation",
             "is_default": False,
-            "phases": [
-                {"id": 20, "name": "Triage", "order": 1},
-            ],
         },
     ],
 }
@@ -176,136 +169,6 @@ class TestWorkbookTemplatesCreate:
         )
         assert result.exit_code == 1
         assert "duplicate name" in result.stderr
-
-
-# ---------------------------------------------------------------------------
-# update
-# ---------------------------------------------------------------------------
-class TestWorkbookTemplatesUpdate:
-    @patch(PATCH_SOAR_RESOLVE)
-    @patch(PATCH_CLIENT)
-    @patch(PATCH_RESOLVE)
-    def test_update_add_phase(
-        self,
-        mock_resolve: MagicMock,
-        mock_cls: MagicMock,
-        mock_guard: MagicMock,
-    ) -> None:
-        mock_resolve.return_value = _WRITE_CFG
-        mock_guard.return_value = _soar_guard_cfg()
-        client = MagicMock()
-        # First get: name resolution returns templates list
-        # Second get: fetch current template detail
-        client.get.side_effect = [
-            _TEMPLATES,  # name resolution
-            _TEMPLATES["data"][0],  # detail (phases order 1, 2)
-        ]
-        client.post.return_value = {"success": True}
-        mock_cls.return_value = client
-
-        result = CliRunner().invoke(
-            cli,
-            [
-                "--yes",
-                "soar",
-                "workbook-templates",
-                "update",
-                "NIST 800-61",
-                "--add-phase",
-                "Recovery",
-            ],
-        )
-        assert result.exit_code == 0
-        body = client.post.call_args[1]["body"]
-        # Existing 2 phases + 1 new
-        assert len(body["phases"]) == 3
-        new_phase = body["phases"][-1]
-        assert new_phase["name"] == "Recovery"
-        assert new_phase["order"] == 3  # max(1,2) + 1
-
-    @patch(PATCH_SOAR_RESOLVE)
-    @patch(PATCH_CLIENT)
-    @patch(PATCH_RESOLVE)
-    def test_update_by_id(
-        self,
-        mock_resolve: MagicMock,
-        mock_cls: MagicMock,
-        mock_guard: MagicMock,
-    ) -> None:
-        mock_resolve.return_value = _WRITE_CFG
-        mock_guard.return_value = _soar_guard_cfg()
-        client = MagicMock()
-        client.get.return_value = _TEMPLATES["data"][1]  # id=2
-        client.post.return_value = {"success": True}
-        mock_cls.return_value = client
-
-        result = CliRunner().invoke(
-            cli,
-            [
-                "--yes",
-                "soar",
-                "workbook-templates",
-                "update",
-                "2",
-                "--add-phase",
-                "Eradicate",
-                "--add-phase",
-                "Lessons Learned",
-            ],
-        )
-        assert result.exit_code == 0
-        body = client.post.call_args[1]["body"]
-        new_names = [p["name"] for p in body["phases"][-2:]]
-        assert new_names == ["Eradicate", "Lessons Learned"]
-
-    @patch(PATCH_SOAR_RESOLVE)
-    @patch(PATCH_CLIENT)
-    @patch(PATCH_RESOLVE)
-    def test_update_dry_run(
-        self,
-        mock_resolve: MagicMock,
-        mock_cls: MagicMock,
-        mock_guard: MagicMock,
-    ) -> None:
-        mock_resolve.return_value = _WRITE_CFG
-        mock_guard.return_value = _soar_guard_cfg()
-        client = MagicMock()
-        mock_cls.return_value = client
-
-        result = CliRunner().invoke(
-            cli,
-            [
-                "soar",
-                "workbook-templates",
-                "update",
-                "1",
-                "--add-phase",
-                "X",
-            ],
-        )
-        assert result.exit_code == 0
-        assert "[DRY RUN]" in result.stderr
-        client.post.assert_not_called()
-
-    @patch(PATCH_SOAR_RESOLVE)
-    @patch(PATCH_CLIENT)
-    @patch(PATCH_RESOLVE)
-    def test_update_no_flags(
-        self,
-        mock_resolve: MagicMock,
-        mock_cls: MagicMock,
-        mock_guard: MagicMock,
-    ) -> None:
-        mock_resolve.return_value = _WRITE_CFG
-        mock_guard.return_value = _soar_guard_cfg()
-        client = MagicMock()
-        mock_cls.return_value = client
-
-        result = CliRunner().invoke(
-            cli,
-            ["--yes", "soar", "workbook-templates", "update", "1"],
-        )
-        assert result.exit_code != 0
 
 
 # ---------------------------------------------------------------------------

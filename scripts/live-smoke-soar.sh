@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck source-path=SCRIPTDIR
 # Manual test ONLY for a throwaway SOAR profile with Basic authentication.
 set -uo pipefail
 S="${SPLUNKCTL:-splunkctl}"
@@ -23,6 +24,26 @@ json_value() {
         printf '%s\n' "$2" >> "$T/json-failures"
         return 1
     }
+}
+# Asset DELETE disables the record; the default list must also hide it.
+asset_absent() {
+    local id=$1 status
+    "$S" --json soar assets get "$id" > "$T/asset-absent.json" 2> "$T/asset-absent.err"
+    status=$?
+    if ! is_not_found "$status" "$T/asset-absent.err"; then
+        [ "$status" -eq 0 ] || { cat "$T/asset-absent.json" "$T/asset-absent.err"; return 1; }
+        "$PY" - "$T/asset-absent.json" <<'PY_ASSET' || return 1
+import json, sys
+data = json.load(open(sys.argv[1]))
+rows = data if isinstance(data, list) else [data]
+assert rows and all(row.get('disabled') is True for row in rows)
+PY_ASSET
+    fi
+    "$S" --json soar assets list --limit 100000 > "$T/asset-absent-list.json" || return 1
+    "$PY" - "$T/asset-absent-list.json" "$id" <<'PY_ASSET'
+import json, sys
+assert not any(str(row['id']) == sys.argv[2] for row in json.load(open(sys.argv[1])))
+PY_ASSET
 }
 # Resolve names exactly, including after a lost create response. Never sweep prefixes.
 soar_cleanup() {
@@ -76,6 +97,7 @@ PY
     fi
     case "$group" in
         evidence|vault|notes) return 0;;
+        assets) asset_absent "$id";;
         *) absent soar "$group" get "$id";;
     esac
 }

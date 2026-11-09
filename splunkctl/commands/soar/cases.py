@@ -9,6 +9,7 @@ import click
 
 from splunkctl import guard, output
 from splunkctl.commands.soar._client import get_soar_client
+from splunkctl.commands.soar.workbook_templates import resolve_template
 from splunkctl.soar.client import SOARError
 
 # Task status: the SOAR API uses integers internally.
@@ -34,69 +35,8 @@ def cases_group() -> None:
 # -- promote ----------------------------------------------------------------
 
 
-def _resolve_template(
-    client: Any,
-    template_arg: str | None,
-) -> int | None:
-    """Resolve a workbook template name or id to an integer id.
-
-    When *template_arg* is ``None``, returns the ``is_default`` template.
-    Returns ``None`` on failure (error emitted via ``output.error``).
-    """
-    try:
-        result = client.get("workbook_template", params={})
-    except SOARError as exc:
-        output.error(
-            f"Could not fetch workbook templates: {exc.message}",
-            kind=exc.kind,
-            http_status=exc.http_status,
-        )
-        return None
-
-    data: list[dict[str, Any]] = []
-    if isinstance(result, dict):
-        data = result.get("data", [])
-
-    if not data:
-        output.error(
-            "No workbook templates available on this instance.", kind="not_found"
-        )
-        return None
-
-    # Numeric id?
-    if template_arg is not None and template_arg.isascii() and template_arg.isdigit():
-        tid = int(template_arg)
-        if any(t.get("id") == tid for t in data):
-            return tid
-        names = ", ".join(t.get("name", "?") for t in data)
-        output.error(
-            f"Template id {tid} not found. Available: {names}", kind="not_found"
-        )
-        return None
-
-    # Name match (case-sensitive)?
-    if template_arg is not None:
-        for t in data:
-            if t.get("name") == template_arg:
-                return int(t["id"])
-        names = ", ".join(t.get("name", "?") for t in data)
-        output.error(
-            f"Template '{template_arg}' not found. Available: {names}",
-            kind="not_found",
-        )
-        return None
-
-    # Default template.
-    for t in data:
-        if t.get("is_default"):
-            return int(t["id"])
-
-    names = ", ".join(t.get("name", "?") for t in data)
-    output.error(
-        f"No default workbook template found. Specify --template. Available: {names}",
-        kind="not_found",
-    )
-    return None
+def _resolve_template(client: Any, template_arg: str | None) -> int | None:
+    return resolve_template(client, template_arg)
 
 
 @cases_group.command("promote")
@@ -132,7 +72,7 @@ def promote_cmd(
 
     body: dict[str, Any] = {
         "container_type": "case",
-        "template": template_id,
+        "template_id": template_id,
     }
 
     try:
