@@ -26,6 +26,7 @@ mypy splunkctl/
 pytest
 bash scripts/check-lengths.sh
 splunkctl docs generate --check
+bash scripts/gen-seo.sh --check
 ```
 
 - Keep every Python file at or under 500 lines and every Markdown guide at
@@ -75,8 +76,8 @@ Community edition allows 100 licensed actions per day and five New/Open
 cases. Licensed probes require `LIVE_SOAR_ACTIONS=1`, `LIVE_SOAR_ACTION_ASSET`,
 and `LIVE_SOAR_ACTION`; optional `LIVE_SOAR_ACTION_PARAMS` is a JSON object.
 The runner uses at most one action run, closes its case before promotion,
-and retains failed cleanup commands for recovery. It has not yet been run
-against the rebuilt SOAR 8.8 lab.
+and retains failed cleanup commands for recovery. It passes with 0 failures
+on SOAR 8.8.0.282 (licensed actions and indicators skipped).
 
 ## Cutting a release
 

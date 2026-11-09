@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -220,6 +221,7 @@ def test_provision_guard_ignores_local_env_overrides(tmp_path: Path) -> None:
 
 
 def test_reusable_lab_files_have_no_maintainer_defaults() -> None:
+    password_pattern = re.compile(r"Splunk@\d{4}")
     for name in (
         "installers/vmlab/README.md",
         "lab/keycloak/README.md",
@@ -227,11 +229,13 @@ def test_reusable_lab_files_have_no_maintainer_defaults() -> None:
         "installers/vmlab/config.env",
         "docs/guides/keycloak-lab.md",
     ):
+        content = (ROOT / name).read_text()
+        password_found = password_pattern.search(content) is not None
+        assert not password_found, (name, "Splunk@<year> password")
         for forbidden in (
             "/home/danny",
             "/Users/danny",
             "Documents/ISOs",
-            "Splunk@2026",
             "Asia/Ho_Chi_Minh",
         ):
-            assert forbidden not in (ROOT / name).read_text(), (name, forbidden)
+            assert forbidden not in content, (name, forbidden)
