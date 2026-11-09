@@ -146,10 +146,7 @@ def resolve_target(
 
 def sessions_dir() -> Path:
     """Return the session directory (derived from config so tests isolate it)."""
-    path = cfg_mod.DEFAULT_DIR / "sessions"
-    path.mkdir(mode=0o700, parents=True, exist_ok=True)
-    path.chmod(stat.S_IRWXU)
-    return path
+    return cfg_mod.DEFAULT_DIR / "sessions"
 
 
 def session_path(profile: str, target: Target) -> Path:
@@ -159,8 +156,11 @@ def session_path(profile: str, target: Target) -> Path:
 
 def save(profile: str, record: SessionRecord) -> None:
     """Write ``record`` atomically with 0600 perms in a 0700 directory."""
+    root = sessions_dir()
+    root.mkdir(mode=0o700, parents=True, exist_ok=True)
+    root.chmod(stat.S_IRWXU)
     path = session_path(profile, record.target)
-    path.parent.mkdir(parents=True, exist_ok=True)
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     os.chmod(path.parent, stat.S_IRWXU)
     tmp = path.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(record.to_dict(), indent=2), encoding="utf-8")

@@ -1,13 +1,17 @@
 """Tests for the browser session store and target resolver."""
 
 import json
+import os
 import time
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
+from click.testing import CliRunner
 
 from splunkctl import config as cfg_mod
 from splunkctl.auth import session as sess
+from splunkctl.main import cli
 
 
 def _record(*, origin: str = "https://siem:8000") -> sess.SessionRecord:
@@ -47,6 +51,7 @@ def test_load_rejects_origin_mismatch(tmp_path: Path, monkeypatch) -> None:
 def test_load_returns_none_when_missing(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(cfg_mod, "DEFAULT_DIR", tmp_path / ".splunkctl")
     assert sess.load("default", "siem", expected_origin="x") is None
+    assert not cfg_mod.DEFAULT_DIR.exists()
 
 
 def test_delete_removes_file(tmp_path: Path, monkeypatch) -> None:
@@ -142,19 +147,49 @@ def test_resolve_target_siem_requires_web_url(tmp_path: Path, monkeypatch) -> No
 
 @pytest.mark.parametrize("existing", [False, True])
 def test_sessions_root_is_private_under_shared_umask(tmp_path, monkeypatch, existing):
-    import os
-
     root = tmp_path / ".splunkctl"
     root.mkdir(mode=0o775)
     root.chmod(0o775)
     monkeypatch.setattr(cfg_mod, "DEFAULT_DIR", root)
     if existing:
-        (root / "sessions").mkdir(mode=0o775)
-        (root / "sessions").chmod(0o775)
+        (root / "sessions" / "default").mkdir(parents=True)
+        for directory in (root / "sessions", root / "sessions" / "default"):
+            directory.chmod(0o775)
     previous = os.umask(0o002)
     try:
         sess.save("default", _record())
-        assert sess.sessions_dir().stat().st_mode & 0o777 == 0o700
+        assert (cfg_mod.DEFAULT_DIR / "sessions").stat().st_mode & 0o777 == 0o700
+        assert (root / "sessions" / "default").stat().st_mode & 0o777 == 0o700
         assert root.stat().st_mode & 0o777 == 0o775
     finally:
         os.umask(previous)
+
+
+@pytest.mark.parametrize("reader", ["load", "status"])
+def test_reads_preserve_read_only_session_dirs(tmp_path, monkeypatch, reader):
+    monkeypatch.setattr(cfg_mod, "DEFAULT_DIR", tmp_path / ".splunkctl")
+    cfg_mod.save({"host": "siem", "web_url": "https://siem:8000"})
+    record = _record()
+    sess.save("default", record)
+    directories = (
+        cfg_mod.DEFAULT_DIR / "sessions",
+        cfg_mod.DEFAULT_DIR / "sessions" / "default",
+    )
+    for directory in directories:
+        directory.chmod(0o500)
+    try:
+        if reader == "load":
+            assert sess.load("default", "siem", expected_origin=record.origin) == record
+        else:
+            with patch("splunkctl.commands.auth.get_adapter") as adapter:
+                adapter.return_value.validate.return_value = "valid"
+                result = CliRunner().invoke(
+                    cli, ["--json", "auth", "status", "--target", "siem"]
+                )
+            assert result.exit_code == 0, result.output
+            assert json.loads(result.output) == [{"target": "siem", "status": "valid"}]
+        for directory in directories:
+            assert directory.stat().st_mode & 0o777 == 0o500
+    finally:
+        for directory in directories:
+            directory.chmod(0o700)
