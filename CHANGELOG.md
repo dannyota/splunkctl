@@ -4,19 +4,23 @@
 
 ### Added
 
-- Global `--read-only` and `SPLUNKCTL_READ_ONLY` enforce server mutation
-  policy across CLI, transports and MCP, with classified read-only SPL.
-- `api get`, `api post` and `api delete` expose Splunk REST endpoints,
-  guarded writes and field discovery with `--describe`.
-- Request User-Agent includes the canonical command and an invocation UUID.
-
+- `--read-only` (or `SPLUNKCTL_READ_ONLY=1`) refuses data, configuration
+  and authentication changes on Splunk, Splunk Web and SOAR, even with
+  `--yes`, at the final HTTP dispatch. Searches still run when every
+  command is a known read, after macro expansion through `search/parser`.
+  `mcp serve --read-only` hides mutating tools and passes the flag to every
+  command it runs. See [Read-only mode](docs/guides/read-only.md).
+- `api get|post|delete PATH` calls any Splunk REST endpoint. `post` and
+  `delete` are guarded like other writes; `api get PATH --describe` lists
+  the endpoint's fields from `PATH/_new`. See [Raw REST API](docs/guides/api.md).
+- Every request sends `User-Agent: splunkctl/<version> (cmd=<command>;
+  requestID=<uuid>)`, so one invocation's requests can be grouped in
+  `splunkd_access.log`.
 
 Live smoke coverage closed the remaining SIEM and SOAR gaps it can own, and
 found the fixes below on Splunk Enterprise 10.6.1.1 and SOAR 8.8.0.282.
 
 ### Fixed
-
-- Exit-code documentation correctly places JSON error envelopes on stderr.
 
 - `server tokens revoke` reported success without deleting anything:
   `DELETE authorization/tokens/<id>` returns 200 and leaves the token. It
@@ -43,6 +47,8 @@ found the fixes below on Splunk Enterprise 10.6.1.1 and SOAR 8.8.0.282.
   auto-filled Keycloak form): the browser broker sampled the page URL every
   500 ms and missed the round trip. It now records every main-frame
   navigation.
+- `docs/guides/exit-codes.md` said `--json` error envelopes go to
+  stdout; they go to stderr.
 
 ### Tests
 
