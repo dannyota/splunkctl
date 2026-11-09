@@ -96,17 +96,30 @@ install -d -o splunk -g splunk "$splunk_home/etc/system/local"
 install -o splunk -g splunk -m 600 "${staging}.conf" "$conf"
 rm -f "${staging}.conf" "${staging}.pem"
 sudo -n -u splunk "$splunk_home/bin/splunk" btool check
-sudo -n -u splunk "$splunk_home/bin/splunk" restart --answer-yes --no-prompt
+if systemctl cat Splunkd >/dev/null 2>&1; then
+    systemctl restart Splunkd
+else
+    sudo -n -u splunk "$splunk_home/bin/splunk" restart --answer-yes --no-prompt
+fi
 EOF
 
 ready=false
+web_up=false
+saml_form_re="<form[[:space:]]([^>]*[[:space:]])?action=[\"']"
 for ((attempt=0; attempt<120; attempt++)); do
-    if curl -fksS --max-time 5 \
-        "${SIEM_WEB_SCHEME}://${SIEM_HOST}:${SIEM_WEB_PORT}/en-US/account/login" >/dev/null 2>&1; then
-        ready=true
-        break
+    if login_page=$(curl -fksS --max-time 5 \
+        "${SIEM_WEB_SCHEME}://${SIEM_HOST}:${SIEM_WEB_PORT}/en-US/account/login" 2>/dev/null); then
+        web_up=true
+        if [[ "$login_page" == *SAMLRequest* ||
+            "$login_page" =~ $saml_form_re"${IDP_ENTITY_ID}/protocol/saml" ]]; then
+            ready=true
+            break
+        fi
     fi
     sleep 2
 done
+if ! "$ready" && "$web_up"; then
+    die "Splunk Web is up but SAML is not active (restart failed?)"
+fi
 "$ready" || die "Splunk Web did not become ready"
 log "SIEM SAML is configured (entity id splunk-siem)"
