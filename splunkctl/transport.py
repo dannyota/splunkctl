@@ -15,8 +15,16 @@ from splunkctl.request_policy import (
     canonical_path,
     check_request,
     endpoint,
-    origin,
 )
+
+
+def _parser_url(url: str) -> str:
+    """Keep the namespace and replace only the dispatch route."""
+    parsed = urlsplit(url)
+    parts = parsed.path.strip("/").split("/")
+    namespace_size = 3 if parts[0] == "servicesNS" else 1
+    path = "/" + "/".join([*parts[:namespace_size], "search", "parser"])
+    return parsed._replace(path=path, query="", fragment="").geturl()
 
 
 def _remember_sid(url: str, body: bytes) -> None:
@@ -55,9 +63,7 @@ class PolicySession(requests.Session):
         url = request.url or ""
 
         def parser(spl: str) -> Any:
-            parsed = urlsplit(url)
-            prefix = parsed.path.split("/search/", 1)[0]
-            target = f"{parsed.scheme}://{parsed.netloc}{prefix}/search/parser"
+            target = _parser_url(url)
             response = self.get(
                 target,
                 params={
@@ -86,13 +92,6 @@ class PolicySession(requests.Session):
             parser=parser,
         )
         response = super().send(request, **kwargs)
-        if 300 <= response.status_code < 400:
-            location = response.headers.get("Location")
-            if location:
-                from urllib.parse import urljoin
-
-                if origin(urljoin(url, location)) != origin(self.configured_origin):
-                    raise ReadOnlyError("redirect leaves the configured origin")
         if request.method == "POST" and response.ok and readonly():
             # Only search creation needs response buffering; exports remain streaming.
             if endpoint(canonical_path(url)) in {"search/jobs", "search/v2/jobs"}:
@@ -112,9 +111,7 @@ def sdk_handler(
         ] + [("User-Agent", user_agent())]
 
         def parser(spl: str) -> Any:
-            parsed = urlsplit(url)
-            prefix = parsed.path.split("/search/", 1)[0]
-            target = f"{parsed.scheme}://{parsed.netloc}{prefix}/search/parser?"
+            target = _parser_url(url) + "?"
             target += urlencode(
                 {
                     "q": spl,
@@ -135,14 +132,6 @@ def sdk_handler(
             method, url, configured_origin, body=message.get("body"), parser=parser
         )
         response = handler(url, message, **kwargs)
-        if 300 <= int(response["status"]) < 400:
-            from urllib.parse import urljoin
-
-            for key, value in response.get("headers", []):
-                if key.lower() == "location" and origin(urljoin(url, value)) != origin(
-                    configured_origin
-                ):
-                    raise ReadOnlyError("redirect leaves the configured origin")
         if readonly() and method == "POST" and int(response["status"]) < 300:
             if endpoint(canonical_path(url)) in {"search/jobs", "search/v2/jobs"}:
                 stream = response["body"]

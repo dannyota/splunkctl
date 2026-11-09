@@ -72,7 +72,8 @@ def test_sdk_parser_get_shape_and_safe_flags():
     assert parser_message["method"] == "GET"
 
 
-def test_sdk_redirect_origin():
+@pytest.mark.parametrize("readonly", [False, True])
+def test_sdk_unfollowed_redirect_allowed(readonly):
     handler = sdk_handler(
         Mock(
             return_value={
@@ -82,11 +83,12 @@ def test_sdk_redirect_origin():
         ),
         "https://example.test",
     )
-    with invocation("info", True), pytest.raises(ReadOnlyError, match="origin"):
-        handler(
+    with invocation("info", readonly):
+        response = handler(
             "https://example.test/services/server/info",
             {"method": "GET", "headers": []},
         )
+    assert response["status"] == 302
 
 
 def test_requests_checks_prepared_redirect_hop():

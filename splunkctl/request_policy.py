@@ -79,10 +79,10 @@ def check_request(
     parser: Callable[[str], Any] | None = None,
 ) -> None:
     """Refuse requests outside the invocation's explicit exceptions."""
-    if origin(url) != origin(configured_origin) or urlsplit(url).username is not None:
-        raise ReadOnlyError("request leaves the configured origin")
     if not readonly():
         return
+    if origin(url) != origin(configured_origin) or urlsplit(url).username is not None:
+        raise ReadOnlyError("request leaves the configured origin")
     method = method.upper()
     path = canonical_path(url)
     route = endpoint(path)
@@ -139,6 +139,12 @@ def check_request(
             "exec_mode",
             "output_mode",
             "count",
+            "max_count",
+            "rf",
+            "adhoc_search_level",
+            "segmentation",
+            "timeout",
+            "time_format",
             "earliest_time",
             "latest_time",
         }

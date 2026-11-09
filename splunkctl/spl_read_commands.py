@@ -14,7 +14,7 @@ convert correlate dbinspect dedup delta diff erex eval eventcount eventstats
 extract kv fieldformat fields fieldsummary filldown fillnull findtypes folderize
 format gauge gentimes geom geomfilter geostats head highlight history iconify
 inputcsv inputlookup iplocation join kmeans kvform loadjob localize localop
-makecontinuous makemv makeresults metadata metasearch mpreview msearch
+makecontinuous makemv makeresults mcatalog metadata metasearch mpreview msearch
 mstats multikv mvcombine mvexpand nomv outlier overlap predict rangemap rare
 redistribute regex reltime rename replace require return reverse rex rtorder
 scrub search selfjoin set setfields sichart sirare sistats sitimechart sitop

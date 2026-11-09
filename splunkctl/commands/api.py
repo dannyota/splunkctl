@@ -66,9 +66,13 @@ def _request(
     target = UrlEncoded(
         path + "?" + urlencode([*query, ("output_mode", "json")]), skip_encode=True
     )
-    response = get_client(ctx).service.request(
-        target, method=method, headers=headers, body=body or {}
-    )
+    service = get_client(ctx).service
+    if method == "POST":
+        response = service.post(
+            target, headers=headers, body=(body or "").encode("utf-8")
+        )
+    else:
+        response = service.request(target, method=method, headers=headers)
     raw = response.body.read()
     try:
         return json.loads(raw) if raw else None

@@ -60,7 +60,7 @@ def test_paths(path: str, expected: str) -> None:
 
 def invoke(args: list[str], data: object = None, obj: dict | None = None):
     svc = MagicMock()
-    svc.request.return_value.body = io.BytesIO(
+    svc.post.return_value.body = svc.request.return_value.body = io.BytesIO(
         json.dumps(data).encode() if data is not None else b""
     )
     with patch("splunkctl.commands.api.get_client") as client:
@@ -105,7 +105,7 @@ def test_form_and_raw_body() -> None:
         obj={"dry_run": False},
     )
     assert result.exit_code == 0, result.output
-    assert svc.request.call_args.kwargs["body"] == "name=a&f=a&f=b"
+    assert svc.post.call_args.kwargs["body"] == b"name=a&f=a&f=b"
     result, svc = invoke(
         [
             "post",
@@ -120,8 +120,8 @@ def test_form_and_raw_body() -> None:
         obj={"dry_run": False},
     )
     assert result.exit_code == 0, result.output
-    assert svc.request.call_args.kwargs["body"] == '{"a":1}'
-    assert str(svc.request.call_args.args[0]).endswith("?x=y&output_mode=json")
+    assert svc.post.call_args.kwargs["body"] == b'{"a":1}'
+    assert str(svc.post.call_args.args[0]).endswith("?x=y&output_mode=json")
 
 
 def test_delete_empty() -> None:
@@ -189,7 +189,7 @@ def test_body_file_and_projection(tmp_path) -> None:
     )
     assert result.exit_code == 0, result.output
     assert json.loads((tmp_path / "out.json").read_text()) == [{"a": 1}]
-    assert svc.request.call_args.kwargs["body"] == '{"record":2}'
+    assert svc.post.call_args.kwargs["body"] == b'{"record":2}'
 
 
 def test_actual_sdk_wire_encoding() -> None:
@@ -224,4 +224,4 @@ def test_actual_sdk_wire_encoding() -> None:
         seen[0][0]
         == "https://example.test:8089/services/saved/searches?output_mode=json"
     )
-    assert seen[0][1]["body"] == "name=a+b&f=a&f=b"
+    assert seen[0][1]["body"] == b"name=a+b&f=a&f=b"

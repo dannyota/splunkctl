@@ -115,10 +115,10 @@ class SplunkClient:
             if self._timeout:
                 connect_args["timeout"] = self._timeout
 
-            origin = (
-                f"{connect_args['scheme']}://{connect_args['host']}:"
-                f"{connect_args['port']}"
-            )
+            host = str(connect_args["host"])
+            if ":" in host and not host.startswith("["):
+                host = f"[{host}]"
+            origin = f"{connect_args['scheme']}://{host}:{connect_args['port']}"
             connect_args["handler"] = sdk_handler(
                 handler(timeout=self._timeout or None, verify=connect_args["verify"]),
                 origin,
