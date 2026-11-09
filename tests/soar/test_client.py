@@ -136,7 +136,7 @@ class TestAuthHeaders:
 
 class TestLazy:
     def test_no_io_on_init(self) -> None:
-        with patch("requests.Session") as mock_cls:
+        with patch("splunkctl.soar.client.PolicySession") as mock_cls:
             _client()
             mock_cls.return_value.request.assert_not_called()
 

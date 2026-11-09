@@ -16,6 +16,8 @@ from urllib.parse import urlsplit
 
 import requests
 
+from splunkctl.transport import PolicySession
+
 type AuthMode = Literal["password", "browser", "unknown"]
 
 _REDIRECT = (301, 302, 303, 307, 308)
@@ -68,7 +70,7 @@ def classify(
 def probe(login_url: str, *, verify: bool, timeout: int) -> AuthMode:
     """GET the login route without following redirects and classify it."""
     try:
-        resp = requests.get(
+        resp = PolicySession(login_url, kind="web").get(
             login_url, allow_redirects=False, verify=verify, timeout=timeout
         )
     except requests.RequestException:
@@ -105,7 +107,7 @@ def siem_idp_issuer(web_url: str, *, verify: bool, timeout: int) -> str | None:
     """
     login_url = siem_login_url(web_url)
     try:
-        resp = requests.get(
+        resp = PolicySession(login_url, kind="web").get(
             login_url, allow_redirects=False, verify=verify, timeout=timeout
         )
     except requests.RequestException:

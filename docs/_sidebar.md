@@ -33,6 +33,8 @@
   - [Ingest SIEM results into SOAR](guides/soar-ingest.md)
 
 - **Change safely**
+  - [Use read-only access](guides/read-only.md)
+  - [Call Splunk REST endpoints](guides/api.md)
   - [Manage configuration as code](guides/state.md)
   - [Edit any conf file](guides/conf.md)
 
@@ -61,6 +63,7 @@
 - **Command reference**
   - [Overview](commands/README.md)
   - [alerts](commands/alerts.md)
+  - [api](commands/api.md)
   - [apps](commands/apps.md)
   - [audit](commands/audit.md)
   - [auth](commands/auth.md)

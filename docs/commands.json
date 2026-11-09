@@ -54,6 +54,15 @@
       "help": "Write to file."
     },
     {
+      "name": "read_only",
+      "type": "flag",
+      "kind": "option",
+      "flags": [
+        "--read-only"
+      ],
+      "help": "Refuse server mutations, even with --yes. Local files may change."
+    },
+    {
       "name": "yes",
       "type": "flag",
       "kind": "option",
@@ -197,6 +206,110 @@
               "name": "name",
               "type": "text",
               "kind": "argument"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "api",
+      "help": "Call Splunk REST endpoints.",
+      "subcommands": [
+        {
+          "name": "delete",
+          "help": "Preview a REST DELETE; --yes executes.",
+          "guarded": true,
+          "params": [
+            {
+              "name": "path",
+              "type": "text",
+              "kind": "argument"
+            },
+            {
+              "name": "param",
+              "type": "text",
+              "kind": "option",
+              "flags": [
+                "--param"
+              ],
+              "help": "Add a request parameter."
+            }
+          ]
+        },
+        {
+          "name": "get",
+          "help": "Read a REST endpoint.",
+          "params": [
+            {
+              "name": "path",
+              "type": "text",
+              "kind": "argument"
+            },
+            {
+              "name": "param",
+              "type": "text",
+              "kind": "option",
+              "flags": [
+                "--param"
+              ],
+              "help": "Add a request parameter."
+            },
+            {
+              "name": "describe",
+              "type": "flag",
+              "kind": "option",
+              "flags": [
+                "--describe"
+              ],
+              "help": "List required and optional fields from PATH/_new."
+            }
+          ]
+        },
+        {
+          "name": "post",
+          "help": "Preview a REST POST; --yes executes.",
+          "guarded": true,
+          "params": [
+            {
+              "name": "path",
+              "type": "text",
+              "kind": "argument"
+            },
+            {
+              "name": "param",
+              "type": "text",
+              "kind": "option",
+              "flags": [
+                "--param"
+              ],
+              "help": "Add a request parameter."
+            },
+            {
+              "name": "body",
+              "type": "text",
+              "kind": "option",
+              "flags": [
+                "--body"
+              ],
+              "help": "Send a raw request body."
+            },
+            {
+              "name": "body_file",
+              "type": "file",
+              "kind": "option",
+              "flags": [
+                "--body-file"
+              ],
+              "help": "Read the request body from a file."
+            },
+            {
+              "name": "content_type",
+              "type": "text",
+              "kind": "option",
+              "flags": [
+                "--content-type"
+              ],
+              "help": "Set the request content type."
             }
           ]
         }
@@ -3202,6 +3315,15 @@
               ],
               "help": "Port for HTTP transport (ignored for stdio).",
               "default": 8765
+            },
+            {
+              "name": "read_only",
+              "type": "flag",
+              "kind": "option",
+              "flags": [
+                "--read-only"
+              ],
+              "help": "Refuse server mutations in every tool."
             }
           ]
         }

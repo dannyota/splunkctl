@@ -47,6 +47,8 @@
 
 ## Change safely
 
+- [Use read-only access](https://splunkctl.danny.vn/guides/read-only.md): Refuse server mutations across CLI and MCP while allowing classified searches and local file writes.
+- [Call Splunk REST endpoints](https://splunkctl.danny.vn/guides/api.md): Read Splunk REST endpoints, discover fields, and preview or execute raw POST and DELETE requests.
 - [Manage configuration as code](https://splunkctl.danny.vn/guides/state.md): Pull live Splunk and SOAR configuration, diff it against version control, and push approved changes with a change report.
 - [Edit any conf file](https://splunkctl.danny.vn/guides/conf.md): Read and edit any Splunk configuration file and stanza over the REST confs API when no dedicated command group covers it.
 
@@ -76,8 +78,9 @@
 
 ## Command reference
 
-- [Overview](https://splunkctl.danny.vn/commands/README.md): Index of the 26 splunkctl command groups, generated from the CLI.
+- [Overview](https://splunkctl.danny.vn/commands/README.md): Index of the 27 splunkctl command groups, generated from the CLI.
 - [alerts](https://splunkctl.danny.vn/commands/alerts.md): Reference for `splunkctl alerts`: Manage fired alerts and alert actions.
+- [api](https://splunkctl.danny.vn/commands/api.md): Reference for `splunkctl api`: Call Splunk REST endpoints.
 - [apps](https://splunkctl.danny.vn/commands/apps.md): Reference for `splunkctl apps`: Manage Splunk apps.
 - [audit](https://splunkctl.danny.vn/commands/audit.md): Reference for `splunkctl audit`: Change audit and RBAC attestation — regulator evidence, read-only.
 - [auth](https://splunkctl.danny.vn/commands/auth.md): Reference for `splunkctl auth`: Browser SAML login, session status, and logout for SIEM and SOAR.

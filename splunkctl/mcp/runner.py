@@ -36,9 +36,12 @@ def _decode_stream(data: bytes) -> str:
         return f"(binary output: {len(data)} bytes — pass --out FILE to save it)"
 
 
-def exec_cli(args: list[str]) -> str:
+def exec_cli(args: list[str], *, read_only: bool = False) -> str:
     """Run ``splunkctl <args>`` as a subprocess and return output."""
-    cmd = [sys.executable, "-m", "splunkctl", *_FORCE_FLAGS, *args]
+    from splunkctl.mcp.policy import enabled
+
+    flags = [*_FORCE_FLAGS, *(["--read-only"] if enabled(read_only) else [])]
+    cmd = [sys.executable, "-m", "splunkctl", *flags, *args]
     try:
         result = subprocess.run(  # noqa: S603
             cmd,

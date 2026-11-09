@@ -35,3 +35,16 @@ assert len(rows[0]) > 1, rows
 PY
     fi
 fi
+
+# This refusal needs no fixture and must happen before any server request.
+if selected 10-meta; then
+    "$S" --json --read-only --yes soar lists delete "${N}_blocked" \
+        > "$T/readonly.json" 2> "$T/readonly.err"
+    readonly_status=$?
+    "$PY" - "$readonly_status" "$T/readonly.err" <<'PYREADONLY' || bad 'SOAR read-only mutation must be refused'
+import json, sys
+assert sys.argv[1] == '1'
+errors = [json.loads(line)['error'] for line in open(sys.argv[2]) if line.startswith('{')]
+assert any(e['kind'] == 'permission' and e['http_status'] is None and e['message'].startswith('read-only:') for e in errors)
+PYREADONLY
+fi

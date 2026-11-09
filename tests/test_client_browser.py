@@ -40,7 +40,7 @@ def _record() -> sess_mod.SessionRecord:
 
 
 @patch("splunkctl.client.splunk_client.connect")
-@patch("splunkctl.auth.adapters.requests.get")
+@patch("splunkctl.auth.adapters.PolicySession.get")
 def test_browser_session_becomes_splunk_token(
     mock_get, mock_connect, tmp_path, monkeypatch
 ) -> None:
@@ -64,7 +64,7 @@ def test_expired_browser_session_is_deleted_and_raises(
     path = _write_browser_profile(tmp_path)
     sess_mod.save("default", _record())
     with (
-        patch("splunkctl.auth.adapters.requests.get") as mock_get,
+        patch("splunkctl.auth.adapters.PolicySession.get") as mock_get,
         patch("splunkctl.auth.detector.probe", return_value="browser"),
     ):
         mock_get.return_value.status_code = 401
@@ -95,7 +95,7 @@ def test_unreachable_browser_session_is_not_deleted(
     monkeypatch.setattr(cfg_mod, "DEFAULT_DIR", tmp_path / ".splunkctl")
     path = _write_browser_profile(tmp_path)
     sess_mod.save("default", _record())
-    with patch("splunkctl.auth.adapters.requests.get") as mock_get:
+    with patch("splunkctl.auth.adapters.PolicySession.get") as mock_get:
         mock_get.side_effect = ConnectionError("refused")
         with pytest.raises(WebSessionError):
             _ = SplunkClient(config_path=path).service

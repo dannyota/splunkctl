@@ -2,10 +2,21 @@
 
 ## Unreleased
 
+### Added
+
+- Global `--read-only` and `SPLUNKCTL_READ_ONLY` enforce server mutation
+  policy across CLI, transports and MCP, with classified read-only SPL.
+- `api get`, `api post` and `api delete` expose Splunk REST endpoints,
+  guarded writes and field discovery with `--describe`.
+- Request User-Agent includes the canonical command and an invocation UUID.
+
+
 Live smoke coverage closed the remaining SIEM and SOAR gaps it can own, and
 found the fixes below on Splunk Enterprise 10.6.1.1 and SOAR 8.8.0.282.
 
 ### Fixed
+
+- Exit-code documentation correctly places JSON error envelopes on stderr.
 
 - `server tokens revoke` reported success without deleting anything:
   `DELETE authorization/tokens/<id>` returns 200 and leaves the token. It

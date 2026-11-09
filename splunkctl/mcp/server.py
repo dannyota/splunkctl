@@ -41,13 +41,24 @@ focus at subgroup granularity: `focus "soar containers"`, not `focus soar`. \
 `help soar` lists available subgroups."""
 
 
-def create_server() -> SplunkMCPServer:
+def create_server(read_only: bool = False) -> SplunkMCPServer:
     """Build the MCP server with meta-tools and guide resources."""
-    from splunkctl.main import cli
+    from splunkctl.main import cli as full_cli
+    from splunkctl.mcp.policy import command_mutates, enabled, read_tree
+
+    read_only = enabled(read_only)
+    cli = read_tree(full_cli) if read_only else full_cli
+
+    def execute(args: list[str]) -> str:
+        return _exec_cli(args, read_only=True) if read_only else _exec_cli(args)
 
     mcp = SplunkMCPServer(
         name="splunkctl",
-        instructions=_INSTRUCTIONS,
+        instructions=(
+            _INSTRUCTIONS + " Read-only mode is active: server mutations are refused."
+            if read_only
+            else _INSTRUCTIONS
+        ),
         version=__version__,
     )
 
@@ -98,7 +109,13 @@ def create_server() -> SplunkMCPServer:
                     desc = (sub_cmd.help or "").split("\n")[0]
                     lines.append(f"  {grp} {c:16s} {desc}")
             return "\n".join(lines)
-        return _exec_cli([*parts, "--help"])
+        if read_only:
+            entries = group_tools(all_tools, " ".join(parts))
+            return (
+                "\n".join(f"{e.name}: {e.description}" for e in entries)
+                or "No read-only tools found."
+            )
+        return execute([*parts, "--help"])
 
     # --- Meta-tool: usage ---
 
@@ -119,7 +136,7 @@ def create_server() -> SplunkMCPServer:
             return f"Unknown command: {command}"
 
         if not mcp.has_cli_tool(tool_name):
-            mcp.add_cli_tool(entry, _exec_cli)
+            mcp.add_cli_tool(entry, execute)
             usage_tools = focused.setdefault("_usage", [])
             if tool_name not in usage_tools:
                 usage_tools.append(tool_name)
@@ -181,7 +198,7 @@ def create_server() -> SplunkMCPServer:
 
         names: list[str] = []
         for entry in entries:
-            mcp.add_cli_tool(entry, _exec_cli)
+            mcp.add_cli_tool(entry, execute)
             names.append(entry.name)
         focused[group] = names
         await ctx.notify_tools_changed()
@@ -248,7 +265,7 @@ def create_server() -> SplunkMCPServer:
             "Use shell-style quoting for values with spaces. "
             "Prefer focus + typed tools for complex commands."
         ),
-        annotations=ToolAnnotations(read_only_hint=False),
+        annotations=ToolAnnotations(read_only_hint=read_only),
     )
     async def run_tool(command: str, yes: bool = False) -> str:
         """Execute a raw splunkctl command string."""
@@ -261,9 +278,11 @@ def create_server() -> SplunkMCPServer:
                 "need the literal value '-y', use a focused typed tool "
                 "instead."
             )
+        if read_only and command_mutates(full_cli, tokens):
+            return "read-only: server mutation commands are refused."
         if yes:
             tokens.append("--yes")
-        result = _exec_cli(tokens)
+        result = execute(tokens)
 
         tool_name = "_".join(
             t.replace("-", "_") for t in tokens if not t.startswith("-")
@@ -316,6 +335,7 @@ def run_server(
     transport: str = "stdio",
     host: str = "127.0.0.1",
     port: int = 8765,
+    read_only: bool = False,
 ) -> None:
     """Create and run the MCP server.
 
@@ -323,10 +343,11 @@ def run_server(
         transport: Transport type — ``stdio`` (default) or ``streamable-http``.
         host: Bind address for HTTP transport (ignored for stdio).
         port: Port for HTTP transport (ignored for stdio).
+        read_only: Refuse server mutations in all tool subprocesses.
     """
     http_host = require_loopback_host(host) if transport == "streamable-http" else host
     sweep_spill_dir()
-    server = create_server()
+    server = create_server(read_only=True) if read_only else create_server()
     if transport == "streamable-http":
         server.run(
             transport="streamable-http",

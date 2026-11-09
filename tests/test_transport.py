@@ -1,0 +1,131 @@
+import io
+import json
+from unittest.mock import Mock
+
+import pytest
+import requests
+
+from splunkctl.request_context import invocation
+from splunkctl.request_policy import ReadOnlyError
+from splunkctl.transport import PolicySession, sdk_handler
+
+
+def test_sdk_replaces_all_competing_headers_and_tracks_sid():
+    underlying = Mock(
+        return_value={
+            "status": 201,
+            "headers": [],
+            "body": io.BytesIO(b"<response><sid>mine</sid></response>"),
+        }
+    )
+    handler = sdk_handler(underlying, "https://example.test")
+    with invocation("search run", True) as ctx:
+        response = handler(
+            "https://example.test/services/search/jobs",
+            {
+                "method": "POST",
+                "headers": [("user-agent", "bad"), ("User-Agent", "bad")],
+                "body": "search=%7C+makeresults&exec_mode=normal",
+            },
+        )
+        assert ctx.owned_sids == {"mine"}
+        assert response["body"].read() == b"<response><sid>mine</sid></response>"
+        headers = underlying.call_args.args[1]["headers"]
+        assert len([k for k, v in headers if k.lower() == "user-agent"]) == 1
+        assert ctx.request_id in headers[-1][1]
+
+
+def test_sdk_decoded_spl_checked_before_dispatch():
+    underlying = Mock()
+    handler = sdk_handler(underlying, "https://example.test")
+    with invocation("api post", True), pytest.raises(ReadOnlyError, match="delete"):
+        handler(
+            "https://example.test/services/search/jobs",
+            {
+                "method": "POST",
+                "headers": [],
+                "body": "search=search+index%3Dmain+%7C+delete",
+            },
+        )
+    underlying.assert_not_called()
+
+
+def test_sdk_parser_get_shape_and_safe_flags():
+    underlying = Mock(
+        return_value={
+            "status": 200,
+            "headers": [],
+            "body": io.BytesIO(
+                json.dumps({"commands": [{"command": "makeresults"}]}).encode()
+            ),
+        }
+    )
+    handler = sdk_handler(underlying, "https://example.test")
+    with invocation("search export", True):
+        handler(
+            "https://example.test/services/search/jobs/export",
+            {"method": "POST", "headers": [], "body": "search=%7C+%60macro%60"},
+        )
+    parser_url, parser_message = underlying.call_args_list[0].args
+    assert "/search/parser?" in parser_url
+    assert "parse_only=true" in parser_url and "reload_macros=false" in parser_url
+    assert parser_message["method"] == "GET"
+
+
+def test_sdk_redirect_origin():
+    handler = sdk_handler(
+        Mock(
+            return_value={
+                "status": 302,
+                "headers": [("Location", "https://evil.test/")],
+            }
+        ),
+        "https://example.test",
+    )
+    with invocation("info", True), pytest.raises(ReadOnlyError, match="origin"):
+        handler(
+            "https://example.test/services/server/info",
+            {"method": "GET", "headers": []},
+        )
+
+
+def test_requests_checks_prepared_redirect_hop():
+    session = PolicySession("https://example.test")
+    request = requests.Request("GET", "https://evil.test/").prepare()
+    with invocation("info", True), pytest.raises(ReadOnlyError, match="origin"):
+        session.send(request)
+
+
+def test_requests_refuses_logout_before_adapter_dispatch():
+    session = PolicySession("https://example.test", kind="web")
+    adapter = Mock()
+    session.mount("https://", adapter)
+    with invocation("info", True), pytest.raises(ReadOnlyError, match="logout"):
+        session.get("https://example.test/en-US/account/logout")
+    adapter.send.assert_not_called()
+
+
+def test_requests_redirect_chain_never_dispatches_off_origin():
+    class RedirectAdapter(requests.adapters.BaseAdapter):
+        def __init__(self):
+            self.urls = []
+
+        def send(self, request, **kwargs):
+            self.urls.append(request.url)
+            response = requests.Response()
+            response.status_code = 302
+            response.headers["Location"] = "https://evil.test/"
+            response._content = b""
+            response.request = request
+            response.url = request.url
+            return response
+
+        def close(self):
+            pass
+
+    session = PolicySession("https://example.test")
+    adapter = RedirectAdapter()
+    session.mount("https://", adapter)
+    with invocation("info", True), pytest.raises(ReadOnlyError, match="origin"):
+        session.get("https://example.test/services/server/info")
+    assert adapter.urls == ["https://example.test/services/server/info"]

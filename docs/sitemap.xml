@@ -25,6 +25,8 @@
   <url><loc>https://splunkctl.danny.vn/#/guides/soar-lists</loc><priority>0.8</priority></url>
   <url><loc>https://splunkctl.danny.vn/#/guides/soar-indicators</loc><priority>0.8</priority></url>
   <url><loc>https://splunkctl.danny.vn/#/guides/soar-ingest</loc><priority>0.8</priority></url>
+  <url><loc>https://splunkctl.danny.vn/#/guides/read-only</loc><priority>0.8</priority></url>
+  <url><loc>https://splunkctl.danny.vn/#/guides/api</loc><priority>0.8</priority></url>
   <url><loc>https://splunkctl.danny.vn/#/guides/state</loc><priority>0.8</priority></url>
   <url><loc>https://splunkctl.danny.vn/#/guides/conf</loc><priority>0.8</priority></url>
   <url><loc>https://splunkctl.danny.vn/#/guides/mcp</loc><priority>0.8</priority></url>
@@ -44,6 +46,7 @@
   <url><loc>https://splunkctl.danny.vn/#/guides/keycloak-lab</loc><priority>0.8</priority></url>
   <url><loc>https://splunkctl.danny.vn/#/commands/README</loc><priority>0.6</priority></url>
   <url><loc>https://splunkctl.danny.vn/#/commands/alerts</loc><priority>0.6</priority></url>
+  <url><loc>https://splunkctl.danny.vn/#/commands/api</loc><priority>0.6</priority></url>
   <url><loc>https://splunkctl.danny.vn/#/commands/apps</loc><priority>0.6</priority></url>
   <url><loc>https://splunkctl.danny.vn/#/commands/audit</loc><priority>0.6</priority></url>
   <url><loc>https://splunkctl.danny.vn/#/commands/auth</loc><priority>0.6</priority></url>

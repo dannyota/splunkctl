@@ -10,6 +10,7 @@ from splunkctl import errors as err_mod
 from splunkctl import output
 from splunkctl.auth import detector
 from splunkctl.client import SplunkClient
+from splunkctl.request_context import readonly
 
 
 @click.group("config")
@@ -127,6 +128,8 @@ def init(
     if verify is None:
         verify = click.confirm("Verify TLS certificates", default=True)
 
+    if readonly() and auth_mode == "auto":
+        auth_mode = None
     if auth_mode == "auto":
         auth_mode = (
             detector.probe(
@@ -208,7 +211,7 @@ def _init_soar(
 
     # Derive the SSO URL from the SIEM's IdP unless it was supplied; ask the
     # user when derivation fails and browser auth was requested.
-    if not sso_url:
+    if not sso_url and not readonly():
         soar_base_url = f"https://{soar_host}:{soar_port}"
         sso_url = _auto_detect_sso_url(
             config_path, name, soar_base_url, bool(soar_verify)
@@ -237,7 +240,7 @@ def _init_soar(
         soar_cfg["sso_url"] = sso_url
     if web_url:
         soar_cfg["web_url"] = web_url
-        if auth_mode == "auto":
+        if auth_mode == "auto" and not readonly():
             probe_url = sso_url if sso_url else detector.soar_login_url(web_url)
             auth_mode = detector.probe(probe_url, verify=soar_verify, timeout=30)
     elif auth_mode == "auto":

@@ -14,11 +14,21 @@ When to use: you want an AI agent (Claude Code, Claude Desktop, Cursor, Windsurf
 ## Synopsis
 
 ```text
-splunkctl mcp serve [--transport stdio|http] [--host 127.0.0.1|localhost|::1] [--port N]
+splunkctl mcp serve [--read-only] [--transport stdio|http] [--host 127.0.0.1|localhost|::1] [--port N]
 splunkctl mcp install [--transport stdio|http] [--host 127.0.0.1|localhost|::1] [--port N]
 ```
 
 `serve` starts the server (stdio by default). `install` writes a `splunkctl` entry into `.mcp.json` in the current directory for Claude Code. `--host` and `--port` apply only to `--transport http`; the default listener is `127.0.0.1:8765` and the MCP URL is `http://127.0.0.1:8765/mcp`.
+
+## Read-only agent access
+
+```bash
+splunkctl mcp serve --read-only
+```
+
+`SPLUNKCTL_READ_ONLY=1` also enables the policy (`true` and `yes` are accepted). Settings combine with OR and cannot be disabled by a tool call. Mutation tools are hidden from discovery and focus; generic `run` mutations are refused. Every CLI subprocess receives `--read-only` and creates a fresh request UUID.
+
+Read-only mode prevents application-data, configuration and authentication changes. Search jobs and server audit/access logs are documented exceptions. Local files can change. Searches must pass the built-in command allowlist; see [Use read-only access](read-only.md).
 
 ## Workflow
 

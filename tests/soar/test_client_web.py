@@ -16,7 +16,7 @@ import requests
 
 from splunkctl.soar.client import SOARClient, SOARError
 
-_SESSION_PATCH = "splunkctl.soar.web.requests.Session"
+_SESSION_PATCH = "splunkctl.soar.web.PolicySession"
 
 
 def _resp(status: int = 200, json_data: Any = None) -> MagicMock:
@@ -91,9 +91,8 @@ class TestWebLogin:
             c = _web_client()
             c.web_delete_playbooks([1])
             c.web_delete_playbooks([2])
-        # Patching requests.Session catches the REST session (init) too:
-        # exactly one MORE Session means one web login, reused after.
-        assert mock_session.call_count == 2
+        # One web session is created and reused across deletes.
+        assert mock_session.call_count == 1
         assert sess.post.call_count == 3  # login + two deletes
 
 

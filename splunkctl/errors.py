@@ -58,6 +58,11 @@ def classify(exc: Exception) -> Classified | None:
     callers should fall back to their own default handling (e.g. an
     unclassified ``error`` kind, or re-raising).
     """
+    from splunkctl.request_policy import ReadOnlyError
+
+    if isinstance(exc, ReadOnlyError):
+        return Classified(str(exc), "permission", None)
+
     from splunkctl.config import ForeignConfigError
 
     if isinstance(exc, ForeignConfigError):
