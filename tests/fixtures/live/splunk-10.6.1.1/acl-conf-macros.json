@@ -1,0 +1,64 @@
+{
+  "links": {
+    "create": "/servicesNS/admin/search/configs/conf-macros/_new",
+    "_reload": "/servicesNS/admin/search/configs/conf-macros/_reload",
+    "_acl": "/servicesNS/admin/search/configs/conf-macros/_acl"
+  },
+  "origin": "https://127.0.0.1:18089/servicesNS/admin/search/configs/conf-macros",
+  "updated": "2026-11-09T15:00:26+00:00",
+  "generator": {
+    "build": "b2ae2962645c",
+    "version": "10.6.1.1"
+  },
+  "entry": [
+    {
+      "name": "sc_live_acl_macro",
+      "id": "https://127.0.0.1:18089/servicesNS/admin/search/configs/conf-macros/sc_live_acl_macro",
+      "updated": "2026-11-09T15:00:11+00:00",
+      "links": {
+        "alternate": "/servicesNS/admin/search/configs/conf-macros/sc_live_acl_macro",
+        "list": "/servicesNS/admin/search/configs/conf-macros/sc_live_acl_macro",
+        "_reload": "/servicesNS/admin/search/configs/conf-macros/sc_live_acl_macro/_reload",
+        "edit": "/servicesNS/admin/search/configs/conf-macros/sc_live_acl_macro",
+        "remove": "/servicesNS/admin/search/configs/conf-macros/sc_live_acl_macro",
+        "move": "/servicesNS/admin/search/configs/conf-macros/sc_live_acl_macro/move",
+        "disable": "/servicesNS/admin/search/configs/conf-macros/sc_live_acl_macro/disable"
+      },
+      "author": "admin",
+      "acl": {
+        "app": "search",
+        "can_change_perms": true,
+        "can_list": true,
+        "can_share_app": true,
+        "can_share_global": true,
+        "can_share_user": true,
+        "can_write": true,
+        "modifiable": true,
+        "owner": "admin",
+        "perms": null,
+        "removable": true,
+        "sharing": "user"
+      },
+      "fields": {
+        "required": [],
+        "optional": [],
+        "wildcard": [
+          ".*"
+        ]
+      },
+      "content": {
+        "definition": "index=_internal",
+        "disabled": false,
+        "eai:acl": null,
+        "eai:appName": "search",
+        "eai:userName": "admin"
+      }
+    }
+  ],
+  "paging": {
+    "total": 1,
+    "perPage": 30,
+    "offset": 0
+  },
+  "messages": []
+}

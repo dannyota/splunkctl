@@ -1,0 +1,74 @@
+{
+  "links": {
+    "create": "/servicesNS/admin/search/saved/eventtypes/_new",
+    "_reload": "/servicesNS/admin/search/saved/eventtypes/_reload",
+    "_acl": "/servicesNS/admin/search/saved/eventtypes/_acl"
+  },
+  "origin": "https://127.0.0.1:18089/servicesNS/admin/search/saved/eventtypes",
+  "updated": "2026-11-09T15:00:26+00:00",
+  "generator": {
+    "build": "b2ae2962645c",
+    "version": "10.6.1.1"
+  },
+  "entry": [
+    {
+      "name": "sc_live_acl_eventtype",
+      "id": "https://127.0.0.1:18089/servicesNS/admin/search/saved/eventtypes/sc_live_acl_eventtype",
+      "updated": "2026-11-09T15:00:12+00:00",
+      "links": {
+        "alternate": "/servicesNS/admin/search/saved/eventtypes/sc_live_acl_eventtype",
+        "list": "/servicesNS/admin/search/saved/eventtypes/sc_live_acl_eventtype",
+        "_reload": "/servicesNS/admin/search/saved/eventtypes/sc_live_acl_eventtype/_reload",
+        "edit": "/servicesNS/admin/search/saved/eventtypes/sc_live_acl_eventtype",
+        "remove": "/servicesNS/admin/search/saved/eventtypes/sc_live_acl_eventtype",
+        "move": "/servicesNS/admin/search/saved/eventtypes/sc_live_acl_eventtype/move",
+        "disable": "/servicesNS/admin/search/saved/eventtypes/sc_live_acl_eventtype/disable"
+      },
+      "author": "admin",
+      "acl": {
+        "app": "search",
+        "can_change_perms": true,
+        "can_list": true,
+        "can_share_app": true,
+        "can_share_global": true,
+        "can_share_user": true,
+        "can_write": true,
+        "modifiable": true,
+        "owner": "admin",
+        "perms": null,
+        "removable": true,
+        "sharing": "user"
+      },
+      "fields": {
+        "required": [
+          "search"
+        ],
+        "optional": [
+          "color",
+          "description",
+          "disabled",
+          "priority",
+          "tags"
+        ],
+        "wildcard": []
+      },
+      "content": {
+        "color": "none",
+        "description": "",
+        "disabled": false,
+        "eai:acl": null,
+        "eai:appName": "search",
+        "eai:userName": "admin",
+        "priority": 1,
+        "search": "index=_internal sourcetype=splunkd",
+        "tags": []
+      }
+    }
+  ],
+  "paging": {
+    "total": 1,
+    "perPage": 30,
+    "offset": 0
+  },
+  "messages": []
+}

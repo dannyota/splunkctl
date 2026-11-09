@@ -1,0 +1,116 @@
+{
+  "links": {
+    "create": "/servicesNS/admin/search/datamodel/model/_new",
+    "_reload": "/servicesNS/admin/search/datamodel/model/_reload",
+    "_acl": "/servicesNS/admin/search/datamodel/model/_acl"
+  },
+  "origin": "https://127.0.0.1:18089/servicesNS/admin/search/datamodel/model",
+  "updated": "2026-11-09T15:00:27+00:00",
+  "generator": {
+    "build": "b2ae2962645c",
+    "version": "10.6.1.1"
+  },
+  "entry": [
+    {
+      "name": "sc_live_acl_dm",
+      "id": "https://127.0.0.1:18089/servicesNS/admin/search/datamodel/model/sc_live_acl_dm",
+      "updated": "2026-11-09T15:00:12+00:00",
+      "links": {
+        "alternate": "/servicesNS/admin/search/datamodel/model/sc_live_acl_dm",
+        "list": "/servicesNS/admin/search/datamodel/model/sc_live_acl_dm",
+        "_reload": "/servicesNS/admin/search/datamodel/model/sc_live_acl_dm/_reload",
+        "edit": "/servicesNS/admin/search/datamodel/model/sc_live_acl_dm",
+        "remove": "/servicesNS/admin/search/datamodel/model/sc_live_acl_dm",
+        "move": "/servicesNS/admin/search/datamodel/model/sc_live_acl_dm/move",
+        "disable": "/servicesNS/admin/search/datamodel/model/sc_live_acl_dm/disable"
+      },
+      "author": "admin",
+      "acl": {
+        "app": "search",
+        "can_change_perms": true,
+        "can_list": true,
+        "can_share_app": true,
+        "can_share_global": true,
+        "can_share_user": true,
+        "can_write": true,
+        "modifiable": true,
+        "owner": "admin",
+        "perms": null,
+        "removable": true,
+        "sharing": "user"
+      },
+      "fields": {
+        "required": [],
+        "optional": [
+          "acceleration",
+          "acceleration.allow_old_summaries",
+          "acceleration.allow_skew",
+          "acceleration.backfill_time",
+          "acceleration.cron_schedule",
+          "acceleration.earliest_time",
+          "acceleration.hunk.compression_codec",
+          "acceleration.hunk.dfs_block_size",
+          "acceleration.hunk.file_format",
+          "acceleration.manual_rebuilds",
+          "acceleration.max_concurrent",
+          "acceleration.max_time",
+          "acceleration.poll_buckets_until_maxtime",
+          "acceleration.schedule_priority",
+          "acceleration.source_guid",
+          "acceleration.workload_pool",
+          "concise",
+          "dataset.commands",
+          "dataset.description",
+          "dataset.display.currentCommand",
+          "dataset.display.datasummary.earliestTime",
+          "dataset.display.datasummary.latestTime",
+          "dataset.display.diversity",
+          "dataset.display.limiting",
+          "dataset.display.mode",
+          "dataset.display.sample_ratio",
+          "dataset.fields",
+          "dataset.type",
+          "description",
+          "digest",
+          "provisional",
+          "search",
+          "strict_fields",
+          "tags_whitelist"
+        ],
+        "wildcard": []
+      },
+      "content": {
+        "acceleration": "{\"enabled\":false,\"earliest_time\":\"\",\"cron_schedule\":\"*/5 * * * *\",\"max_time\":3600,\"backfill_time\":\"\",\"source_guid\":\"\",\"manual_rebuilds\":false,\"poll_buckets_until_maxtime\":false,\"max_concurrent\":3,\"allow_skew\":\"0\",\"schedule_priority\":\"default\",\"allow_old_summaries\":false,\"hunk.file_format\":\"\",\"hunk.dfs_block_size\":0,\"hunk.compression_codec\":\"\",\"workload_pool\":\"\"}",
+        "acceleration.allowed": false,
+        "acceleration.hunk.compression_codec": "",
+        "dataset.commands": "",
+        "dataset.description": "",
+        "dataset.display.currentCommand": "",
+        "dataset.display.datasummary.earliestTime": "",
+        "dataset.display.datasummary.latestTime": "",
+        "dataset.display.diversity": "latest",
+        "dataset.display.limiting": "100000",
+        "dataset.display.mode": "table",
+        "dataset.display.sample_ratio": "1",
+        "dataset.fields": "",
+        "dataset.type": "",
+        "description": "{\"modelName\":\"sc_live_acl_dm\",\"displayName\":\"sc_live_acl_dm\",\"description\":\"\",\"objectSummary\":{\"Event-Based\":0,\"Transaction-Based\":0,\"Search-Based\":0},\"objects\":[],\"objectNameList\":[]}",
+        "disabled": false,
+        "displayName": "sc_live_acl_dm",
+        "eai:acl": null,
+        "eai:appName": "search",
+        "eai:digest": "923959fbe13a5c7e1bd3627caf4475eb",
+        "eai:type": "datamodel",
+        "eai:userName": "admin",
+        "strict_fields": "true",
+        "tags_whitelist": null
+      }
+    }
+  ],
+  "paging": {
+    "total": 1,
+    "perPage": 30,
+    "offset": 0
+  },
+  "messages": []
+}

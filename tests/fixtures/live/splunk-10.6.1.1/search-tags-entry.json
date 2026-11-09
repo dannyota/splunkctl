@@ -1,0 +1,16 @@
+{
+  "links": {},
+  "origin": "/servicesNS/admin/search/search/tags/sc_live_acl_tag",
+  "updated": "2026-11-09T15:00:27+00:00",
+  "generator": {
+    "build": "b2ae2962645c",
+    "version": "10.6.1.1"
+  },
+  "entry": [
+    {
+      "name": "sourcetype::sc_live_acl_st",
+      "id": "/servicesNS/admin/search/search/tags/sc_live_acl_tag#sourcetype::sc_live_acl_st",
+      "updated": "2026-11-09T15:00:27+00:00"
+    }
+  ]
+}

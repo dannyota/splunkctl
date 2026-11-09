@@ -1,0 +1,82 @@
+{
+  "links": {},
+  "origin": "https://127.0.0.1:18089/services/server/status/partitions-space",
+  "updated": "2026-11-09T14:59:39+00:00",
+  "generator": {
+    "build": "b2ae2962645c",
+    "version": "10.6.1.1"
+  },
+  "entry": [
+    {
+      "name": "0",
+      "id": "https://127.0.0.1:18089/services/server/status/partitions-space/0",
+      "updated": "1970-01-01T00:00:00+00:00",
+      "links": {
+        "alternate": "/services/server/status/partitions-space/0",
+        "list": "/services/server/status/partitions-space/0"
+      },
+      "author": "system",
+      "acl": {
+        "app": "",
+        "can_list": true,
+        "can_write": true,
+        "modifiable": false,
+        "owner": "system",
+        "perms": {
+          "read": [
+            "*"
+          ],
+          "write": []
+        },
+        "removable": false,
+        "sharing": "system"
+      },
+      "content": {
+        "available": "124392.344",
+        "capacity": "301290.812",
+        "eai:acl": null,
+        "free": "139768.344",
+        "mount_point": "/"
+      }
+    },
+    {
+      "name": "1",
+      "id": "https://127.0.0.1:18089/services/server/status/partitions-space/1",
+      "updated": "1970-01-01T00:00:00+00:00",
+      "links": {
+        "alternate": "/services/server/status/partitions-space/1",
+        "list": "/services/server/status/partitions-space/1"
+      },
+      "author": "system",
+      "acl": {
+        "app": "",
+        "can_list": true,
+        "can_write": true,
+        "modifiable": false,
+        "owner": "system",
+        "perms": {
+          "read": [
+            "*"
+          ],
+          "write": []
+        },
+        "removable": false,
+        "sharing": "system"
+      },
+      "content": {
+        "available": "124392.344",
+        "capacity": "301290.812",
+        "eai:acl": null,
+        "free": "139768.344",
+        "fs_type": "ext4",
+        "mount_point": "/opt/splunk/var"
+      }
+    }
+  ],
+  "paging": {
+    "total": 2,
+    "perPage": 30,
+    "offset": 0
+  },
+  "messages": []
+}

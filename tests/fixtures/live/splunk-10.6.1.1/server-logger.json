@@ -1,0 +1,119 @@
+{
+  "links": {},
+  "origin": "https://127.0.0.1:18089/services/server/logger",
+  "updated": "2026-11-09T14:59:39+00:00",
+  "generator": {
+    "build": "b2ae2962645c",
+    "version": "10.6.1.1"
+  },
+  "entry": [
+    {
+      "name": "AdaptiveSearchConfiguration",
+      "id": "https://127.0.0.1:18089/services/server/logger/AdaptiveSearchConfiguration",
+      "updated": "1970-01-01T00:00:00+00:00",
+      "links": {
+        "alternate": "/services/server/logger/AdaptiveSearchConfiguration",
+        "list": "/services/server/logger/AdaptiveSearchConfiguration",
+        "edit": "/services/server/logger/AdaptiveSearchConfiguration"
+      },
+      "author": "system",
+      "acl": {
+        "app": "",
+        "can_list": true,
+        "can_write": true,
+        "modifiable": false,
+        "owner": "system",
+        "perms": {
+          "read": [
+            "*"
+          ],
+          "write": [
+            "admin",
+            "splunk-system-role"
+          ]
+        },
+        "removable": false,
+        "sharing": "system"
+      },
+      "content": {
+        "buffering": false,
+        "eai:acl": null,
+        "level": "WARN"
+      }
+    },
+    {
+      "name": "AdaptiveSearchEngineSelector",
+      "id": "https://127.0.0.1:18089/services/server/logger/AdaptiveSearchEngineSelector",
+      "updated": "1970-01-01T00:00:00+00:00",
+      "links": {
+        "alternate": "/services/server/logger/AdaptiveSearchEngineSelector",
+        "list": "/services/server/logger/AdaptiveSearchEngineSelector",
+        "edit": "/services/server/logger/AdaptiveSearchEngineSelector"
+      },
+      "author": "system",
+      "acl": {
+        "app": "",
+        "can_list": true,
+        "can_write": true,
+        "modifiable": false,
+        "owner": "system",
+        "perms": {
+          "read": [
+            "*"
+          ],
+          "write": [
+            "admin",
+            "splunk-system-role"
+          ]
+        },
+        "removable": false,
+        "sharing": "system"
+      },
+      "content": {
+        "buffering": false,
+        "eai:acl": null,
+        "level": "WARN"
+      }
+    },
+    {
+      "name": "AdminHandler:AuthenEvalContextAccess",
+      "id": "https://127.0.0.1:18089/services/server/logger/AdminHandler%3AAuthenEvalContextAccess",
+      "updated": "1970-01-01T00:00:00+00:00",
+      "links": {
+        "alternate": "/services/server/logger/AdminHandler%3AAuthenEvalContextAccess",
+        "list": "/services/server/logger/AdminHandler%3AAuthenEvalContextAccess",
+        "edit": "/services/server/logger/AdminHandler%3AAuthenEvalContextAccess"
+      },
+      "author": "system",
+      "acl": {
+        "app": "",
+        "can_list": true,
+        "can_write": true,
+        "modifiable": false,
+        "owner": "system",
+        "perms": {
+          "read": [
+            "*"
+          ],
+          "write": [
+            "admin",
+            "splunk-system-role"
+          ]
+        },
+        "removable": false,
+        "sharing": "system"
+      },
+      "content": {
+        "buffering": false,
+        "eai:acl": null,
+        "level": "WARN"
+      }
+    }
+  ],
+  "paging": {
+    "total": 1879,
+    "perPage": 30,
+    "offset": 0
+  },
+  "messages": []
+}

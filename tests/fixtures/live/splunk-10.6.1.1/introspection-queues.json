@@ -1,0 +1,161 @@
+{
+  "links": {},
+  "origin": "https://127.0.0.1:18089/services/server/introspection/queues",
+  "updated": "2026-11-09T14:59:39+00:00",
+  "generator": {
+    "build": "b2ae2962645c",
+    "version": "10.6.1.1"
+  },
+  "entry": [
+    {
+      "name": "indexQueue",
+      "id": "https://127.0.0.1:18089/services/server/introspection/queues/indexQueue",
+      "updated": "1970-01-01T00:00:00+00:00",
+      "links": {
+        "alternate": "/services/server/introspection/queues/indexQueue",
+        "list": "/services/server/introspection/queues/indexQueue",
+        "edit": "/services/server/introspection/queues/indexQueue"
+      },
+      "author": "system",
+      "acl": {
+        "app": "",
+        "can_list": true,
+        "can_write": true,
+        "modifiable": false,
+        "owner": "system",
+        "perms": {
+          "read": [
+            "admin",
+            "splunk-system-role"
+          ],
+          "write": [
+            "admin",
+            "splunk-system-role"
+          ]
+        },
+        "removable": false,
+        "sharing": "system"
+      },
+      "content": {
+        "cntr_1_lookback_time": 60,
+        "cntr_2_lookback_time": 600,
+        "cntr_3_lookback_time": 900,
+        "current_size": 0,
+        "current_size_bytes": 0,
+        "eai:acl": null,
+        "largest_size": 322,
+        "max_size_bytes": 512000,
+        "sampling_interval": 1,
+        "smallest_size": 0,
+        "value_cntr1_size_bytes_lookback": 0,
+        "value_cntr1_size_lookback": 0,
+        "value_cntr2_size_bytes_lookback": 0,
+        "value_cntr2_size_lookback": 0,
+        "value_cntr3_size_bytes_lookback": 0,
+        "value_cntr3_size_lookback": 0
+      }
+    },
+    {
+      "name": "parsingQueue",
+      "id": "https://127.0.0.1:18089/services/server/introspection/queues/parsingQueue",
+      "updated": "1970-01-01T00:00:00+00:00",
+      "links": {
+        "alternate": "/services/server/introspection/queues/parsingQueue",
+        "list": "/services/server/introspection/queues/parsingQueue",
+        "edit": "/services/server/introspection/queues/parsingQueue"
+      },
+      "author": "system",
+      "acl": {
+        "app": "",
+        "can_list": true,
+        "can_write": true,
+        "modifiable": false,
+        "owner": "system",
+        "perms": {
+          "read": [
+            "admin",
+            "splunk-system-role"
+          ],
+          "write": [
+            "admin",
+            "splunk-system-role"
+          ]
+        },
+        "removable": false,
+        "sharing": "system"
+      },
+      "content": {
+        "cntr_1_lookback_time": 60,
+        "cntr_2_lookback_time": 600,
+        "cntr_3_lookback_time": 900,
+        "current_size": 0,
+        "current_size_bytes": 0,
+        "eai:acl": null,
+        "largest_size": 2,
+        "max_size_bytes": 6291456,
+        "sampling_interval": 1,
+        "smallest_size": 0,
+        "value_cntr1_size_bytes_lookback": 0,
+        "value_cntr1_size_lookback": 0,
+        "value_cntr2_size_bytes_lookback": 0,
+        "value_cntr2_size_lookback": 0,
+        "value_cntr3_size_bytes_lookback": 0,
+        "value_cntr3_size_lookback": 0
+      }
+    },
+    {
+      "name": "typingQueue",
+      "id": "https://127.0.0.1:18089/services/server/introspection/queues/typingQueue",
+      "updated": "1970-01-01T00:00:00+00:00",
+      "links": {
+        "alternate": "/services/server/introspection/queues/typingQueue",
+        "list": "/services/server/introspection/queues/typingQueue",
+        "edit": "/services/server/introspection/queues/typingQueue"
+      },
+      "author": "system",
+      "acl": {
+        "app": "",
+        "can_list": true,
+        "can_write": true,
+        "modifiable": false,
+        "owner": "system",
+        "perms": {
+          "read": [
+            "admin",
+            "splunk-system-role"
+          ],
+          "write": [
+            "admin",
+            "splunk-system-role"
+          ]
+        },
+        "removable": false,
+        "sharing": "system"
+      },
+      "content": {
+        "cntr_1_lookback_time": 60,
+        "cntr_2_lookback_time": 600,
+        "cntr_3_lookback_time": 900,
+        "current_size": 0,
+        "current_size_bytes": 0,
+        "eai:acl": null,
+        "largest_size": 161,
+        "max_size_bytes": 512000,
+        "sampling_interval": 1,
+        "smallest_size": 0,
+        "value_cntr1_size_bytes_lookback": 0,
+        "value_cntr1_size_lookback": 0,
+        "value_cntr2_size_bytes_lookback": 0,
+        "value_cntr2_size_lookback": 0,
+        "value_cntr3_size_bytes_lookback": 0,
+        "value_cntr3_size_lookback": 0
+      }
+    }
+  ],
+  "paging": {
+    "total": 14,
+    "perPage": 30,
+    "offset": 0
+  },
+  "messages": []
+}
