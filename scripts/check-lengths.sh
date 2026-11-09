@@ -7,7 +7,7 @@
 #
 # docs/commands/*.md are EXEMPT: generated verbatim from the command tree
 # (`splunkctl docs generate`), so page size follows the CLI, not authored
-# prose. docs/plans/*.md are EXEMPT because they are local implementation
+# prose. docs/plans/ and docs/superpowers/ are EXEMPT because they are local implementation
 # notes, not user documentation.
 #
 # Exit 1 on any violation.
@@ -28,7 +28,7 @@ while IFS= read -r f; do
     echo "DOC TOO LONG  $f: $n lines (max $MD_MAX): split or trim"
     violations=$((violations + 1))
   fi
-done < <(find . -name '*.md' -not -path './.git/*' -not -path './.claude/*' -not -path './.worktrees/*' -not -path './docs/commands/*' -not -path './docs/plans/*' | sed 's#^\./##' | sort)
+done < <(find . -name '*.md' -not -path './.git/*' -not -path './.claude/*' -not -path './.worktrees/*' -not -path './.venv/*' -not -path './docs/commands/*' -not -path './docs/plans/*' -not -path './docs/superpowers/*' | sed 's#^\./##' | sort)
 
 # --- Python source ---
 while IFS= read -r f; do
@@ -37,7 +37,7 @@ while IFS= read -r f; do
     echo "PY FILE TOO LONG  $f: $n lines (max $PY_MAX): split by topic"
     violations=$((violations + 1))
   fi
-done < <(find . -name '*.py' -not -path './.git/*' -not -path './.claude/*' -not -path './.worktrees/*' | sed 's#^\./##' | sort)
+done < <(find . -name '*.py' -not -path './.git/*' -not -path './.claude/*' -not -path './.worktrees/*' -not -path './.venv/*' | sed 's#^\./##' | sort)
 
 if (( violations > 0 )); then
   echo "FAIL: $violations file(s) over the length budget."

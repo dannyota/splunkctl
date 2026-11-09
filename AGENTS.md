@@ -1,7 +1,8 @@
 # AGENTS.md
 
-Instructions for coding agents working in this repository. Human contributors
-start with [CONTRIBUTING.md](CONTRIBUTING.md), which has the full detail.
+Instructions for coding agents working in this repository. The full
+contributor guide, including every live smoke option, is
+[CONTRIBUTING.md](CONTRIBUTING.md); this file adds the agent-specific rules.
 
 ## Setup
 
@@ -14,7 +15,8 @@ start with [CONTRIBUTING.md](CONTRIBUTING.md), which has the full detail.
 
 ## Verify before committing
 
-All of these must pass. CI runs the same set.
+All of these must pass locally. CI runs them too, plus a wheel install with an
+MCP guide check, `pip-audit` and gitleaks (see `.github/workflows/ci.yml`).
 
 ```bash
 uv run pytest
@@ -28,17 +30,23 @@ bash scripts/gen-seo.sh --check
 
 ## Rules
 
-- Every mutation is a dry run by default and goes through
-  `splunkctl/guard.py`. Only `--yes` (or `yes=true` over MCP) executes it.
+- Commands that change a Splunk or SOAR instance are decorated with
+  `@guarded` and call `guard.check` (SIEM) or `guard.soar_check` (SOAR)
+  before any write. Without `--yes` (or `yes=true` over MCP) they only
+  preview. Never add a write path that skips the guard.
 - Unit tests never need a live Splunk or SOAR. Mock the client, but model the
   real response: check a new endpoint's shape against the lab or the
   first-party REST reference before writing the mock. SOAR 8.8 broke several
   mocks that assumed fields the server does not return.
-- Python files stay at or under 500 lines and Markdown at or under 450.
-  Split by topic. Move old CHANGELOG sections to `docs/changelog-archive.md`.
+- Python files stay at or under 500 lines and Markdown at or under 450, as
+  `scripts/check-lengths.sh` enforces (it skips generated `docs/commands/`
+  and local plans). Split by topic. Move old CHANGELOG sections to
+  `docs/changelog-archive.md`.
 - After changing commands, options or help text, run
-  `uv run splunkctl docs generate` and `bash scripts/gen-seo.sh`, and commit
-  the generated files.
+  `uv run splunkctl docs generate`. After any change under `docs/`, run
+  `bash scripts/gen-seo.sh`; a new sidebar page needs the
+  `<!-- summary: ... -->` comment that script requires. Commit the
+  generated files.
 - Prose is English, plain and direct, with no em dashes. Commit messages use
   conventional prefixes (`fix(soar): ...`) and no `Co-Authored-By` or
   "Generated with" trailers.
@@ -48,13 +56,20 @@ bash scripts/gen-seo.sh --check
 
 ## Live smoke tests
 
-- SIEM: `bash scripts/live-smoke.sh`. SOAR: `bash scripts/live-smoke-soar.sh`.
-  Options are in CONTRIBUTING.md.
-- Point them at a throwaway profile or env-only config (`SPLUNK_*`,
-  `SPLUNK_WEB_URL`, `SOAR_*`). They create only `sc_live_*` fixtures and
-  clean them up; report any leftovers.
-- Licensed SOAR actions run only with `LIVE_SOAR_ACTIONS=1` (Community
-  edition allows 100 per day).
+- Run them inside the dev environment so they use this checkout:
+  `uv run bash scripts/live-smoke.sh` (SIEM) and
+  `uv run bash scripts/live-smoke-soar.sh` (SOAR). Options and caveats are
+  in CONTRIBUTING.md.
+- Use a disposable instance, such as the lab or a throwaway container.
+  Most fixtures are `sc_live_*` objects that the runners clean up, but the
+  SIEM smoke also changes server state: it turns HEC on if it is off
+  (restored at exit), adds a monitor input (`LIVE_MONITOR_PATH`, default
+  `/tmp`) and, with `CIM_TGZ`, installs `Splunk_SA_CIM`. Report any
+  leftovers.
+- The SOAR smoke can consume licensed actions (Community edition allows 100
+  per day). Read the licensed-action and active-playbook paragraph in
+  CONTRIBUTING.md before setting `LIVE_SOAR_ACTIONS=1` or
+  `LIVE_SOAR_ALLOW_ACTIVE_PLAYBOOKS=1`.
 
 ## Lab
 

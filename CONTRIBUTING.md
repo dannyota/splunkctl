@@ -26,6 +26,7 @@ mypy splunkctl/
 pytest
 bash scripts/check-lengths.sh
 splunkctl docs generate --check
+bash scripts/gen-seo.sh --check
 ```
 
 - Keep every Python file at or under 500 lines and every Markdown guide at
