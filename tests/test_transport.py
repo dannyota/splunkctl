@@ -50,7 +50,7 @@ def test_sdk_decoded_spl_checked_before_dispatch():
     underlying.assert_not_called()
 
 
-def test_sdk_parser_get_shape_and_safe_flags():
+def test_sdk_parser_post_shape_and_safe_flags():
     underlying = Mock(
         return_value={
             "status": 200,
@@ -67,9 +67,14 @@ def test_sdk_parser_get_shape_and_safe_flags():
             {"method": "POST", "headers": [], "body": "search=%7C+%60macro%60"},
         )
     parser_url, parser_message = underlying.call_args_list[0].args
-    assert "/search/parser?" in parser_url
-    assert "parse_only=true" in parser_url and "reload_macros=false" in parser_url
-    assert parser_message["method"] == "GET"
+    assert parser_url.endswith("/search/parser")
+    assert "parse_only=true" in parser_message["body"]
+    assert "reload_macros=false" in parser_message["body"]
+    assert parser_message["method"] == "POST"
+    assert (
+        dict(parser_message["headers"])["Content-Type"]
+        == "application/x-www-form-urlencoded"
+    )
 
 
 @pytest.mark.parametrize("readonly", [False, True])
@@ -131,3 +136,44 @@ def test_requests_redirect_chain_never_dispatches_off_origin():
     with invocation("info", True), pytest.raises(ReadOnlyError, match="origin"):
         session.get("https://example.test/services/server/info")
     assert adapter.urls == ["https://example.test/services/server/info"]
+
+
+@pytest.mark.parametrize("namespace", ["services", "servicesNS/nobody/search"])
+def test_requests_parser_posts_safe_form(namespace):
+    class ParserAdapter(requests.adapters.BaseAdapter):
+        def __init__(self):
+            self.calls = []
+
+        def send(self, request, **kwargs):
+            from urllib.parse import parse_qs
+
+            self.calls.append(request)
+            response = requests.Response()
+            response.status_code = 200
+            response.request = request
+            response.url = request.url
+            if request.url.endswith("/parser"):
+                assert request.method == "POST"
+                assert parse_qs(request.body) == {
+                    "q": ["`safe`"],
+                    "output_mode": ["json"],
+                    "parse_only": ["true"],
+                    "reload_macros": ["false"],
+                }
+                response._content = b'{"commands":[{"command":"makeresults"}]}'
+            else:
+                response._content = b'{"sid":"mine"}'
+            return response
+
+        def close(self):
+            pass
+
+    session = PolicySession("https://example.test")
+    adapter = ParserAdapter()
+    session.mount("https://", adapter)
+    with invocation("search run", True) as ctx:
+        session.post(
+            f"https://example.test/{namespace}/search/jobs", data={"search": "`safe`"}
+        )
+        assert ctx.owned_sids == {"mine"}
+    assert len(adapter.calls) == 2

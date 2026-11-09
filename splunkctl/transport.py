@@ -64,9 +64,9 @@ class PolicySession(requests.Session):
 
         def parser(spl: str) -> Any:
             target = _parser_url(url)
-            response = self.get(
+            response = self.post(
                 target,
-                params={
+                data={
                     "q": spl,
                     "output_mode": "json",
                     "parse_only": "true",
@@ -111,8 +111,8 @@ def sdk_handler(
         ] + [("User-Agent", user_agent())]
 
         def parser(spl: str) -> Any:
-            target = _parser_url(url) + "?"
-            target += urlencode(
+            target = _parser_url(url)
+            body = urlencode(
                 {
                     "q": spl,
                     "output_mode": "json",
@@ -120,8 +120,15 @@ def sdk_handler(
                     "reload_macros": "false",
                 }
             )
+            parser_headers = [
+                (k, v)
+                for k, v in message["headers"]
+                if k.lower() in {"authorization", "cookie", "user-agent"}
+            ] + [("Content-Type", "application/x-www-form-urlencoded")]
             response = dispatch(
-                target, {"method": "GET", "headers": message["headers"]}, **kwargs
+                target,
+                {"method": "POST", "headers": parser_headers, "body": body},
+                **kwargs,
             )
             if int(response["status"]) >= 300:
                 raise ReadOnlyError("search/parser request failed")

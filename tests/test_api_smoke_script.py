@@ -92,3 +92,136 @@ exit "$fail"
     )
     assert (result.returncode == 0) is not allows_write, result.stdout + result.stderr
     assert "sensitive-response-marker" not in result.stdout + result.stderr
+
+
+@pytest.mark.skipif(BASH is None, reason="bash required")
+@pytest.mark.parametrize("malformed", [False, True])
+@pytest.mark.parametrize(
+    "credential",
+    [
+        "Splunk fake-token",
+        "Bearer fake-bearer",
+        "token=fake-token",
+        '"password": "fake-password"',
+    ],
+)
+def test_api_capture_failure_diagnostics(tmp_path, malformed, credential):
+    stub = tmp_path / "stub"
+    stub.write_text(
+        f"#!{sys.executable}\nimport json, sys\n"
+        "print('private-response-body')\n"
+        + (
+            "print('not-json-private-error', file=sys.stderr)\n"
+            if malformed
+            else "print('Warning: TLS', file=sys.stderr)\n"
+            "print(json.dumps({'error': {'kind': 'connection', 'message': "
+            f"{('failure ' + credential)!r}"
+            " + 'x'*250 + 'tail-marker'}}), file=sys.stderr)\n"
+        )
+        + "sys.exit(1)\n"
+    )
+    stub.chmod(0o755)
+    harness = r"""
+T=$1 PY=$2
+selected() { return 1; }
+bad() { printf '%s\n' "$*"; }
+. "$3"
+api_capture "$T/out" "$4" --json api get server/info --param password=argument-secret
+"""
+    result = subprocess.run(  # noqa: S603
+        [
+            BASH,
+            "-c",
+            harness,
+            "bash",
+            str(tmp_path),
+            sys.executable,
+            str(ROOT / "scripts/live-smoke.d/40-api.sh"),
+            str(stub),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    log = result.stdout + result.stderr
+    assert result.returncode == 1
+    assert "api get" in log
+    assert "--param" in log
+    assert "server/info" not in log
+    for secret in (
+        "fake-token",
+        "fake-bearer",
+        "fake-password",
+        "argument-secret",
+        "private-response-body",
+        "not-json-private-error",
+        "tail-marker",
+    ):
+        assert secret not in log
+    if not malformed:
+        assert "connection" in log
+        assert "failure" in log
+        assert len(log.split("message=", 1)[1].strip()) <= 200
+
+
+@pytest.mark.skipif(BASH is None, reason="bash required")
+def test_api_assert_names_call(tmp_path):
+    (tmp_path / "out").write_text("[]")
+    harness = r"""
+T=$1 PY=$2
+selected() { return 1; }
+bad() { printf '%s\n' "$*"; }
+. "$3"
+API_CALL='api get --describe'
+api_assert "$T/out" 'bool(d)'
+"""
+    result = subprocess.run(  # noqa: S603
+        [
+            BASH,
+            "-c",
+            harness,
+            "bash",
+            str(tmp_path),
+            sys.executable,
+            str(ROOT / "scripts/live-smoke.d/40-api.sh"),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert "JSON assertion: api get --describe" in result.stdout
+
+
+@pytest.mark.skipif(BASH is None, reason="bash required")
+def test_api_capture_truncates_message(tmp_path):
+    stub = tmp_path / "stub"
+    stub.write_text(
+        f"#!{sys.executable}\nimport json, sys\n"
+        "print(json.dumps({'error': {'kind': 'http', 'message': 'x'*250}}), "
+        "file=sys.stderr)\n"
+        "sys.exit(1)\n"
+    )
+    stub.chmod(0o755)
+    harness = r"""
+T=$1 PY=$2
+selected() { return 1; }
+bad() { printf '%s\n' "$*"; }
+. "$3"
+api_capture "$T/out" "$4" api get server/info
+"""
+    result = subprocess.run(  # noqa: S603
+        [
+            BASH,
+            "-c",
+            harness,
+            "bash",
+            str(tmp_path),
+            sys.executable,
+            str(ROOT / "scripts/live-smoke.d/40-api.sh"),
+            str(stub),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.stdout.split("message=", 1)[1].strip() == "x" * 200

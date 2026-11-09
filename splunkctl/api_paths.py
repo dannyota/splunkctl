@@ -33,6 +33,10 @@ def validate_path(path: str) -> str:
     segments = decoded.split("/")
     if any(s in {".", ".."} for s in segments) or "//" in decoded:
         raise click.BadParameter("PATH contains dot or empty segments")
+    if path.startswith(("services/", "servicesNS/")):
+        path = "/" + path
+        segments = decoded.split("/")
+        segments.insert(0, "")
     if path.startswith("/"):
         if not (path.startswith("/services/") or path.startswith("/servicesNS/")):
             raise click.BadParameter(

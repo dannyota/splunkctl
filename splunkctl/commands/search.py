@@ -36,7 +36,7 @@ _GENERATING = (
 def _normalize_spl(spl: str) -> str:
     """Auto-prepend ``search`` when the query needs it."""
     stripped = spl.strip()
-    if stripped.startswith("|"):
+    if stripped.startswith(("|", "`")):
         return stripped
     first_word = stripped.split()[0].lower() if stripped else ""
     if first_word == "search" or first_word in _GENERATING:

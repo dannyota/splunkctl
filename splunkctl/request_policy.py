@@ -92,15 +92,52 @@ def check_request(
         if method == "GET":
             return
         raise ReadOnlyError(f"{method} is refused for SOAR")
+    params = parameters(url, body)
+    if any(key.lower() == "check_risky_command" for key in params):
+        raise ReadOnlyError("check_risky_command is refused")
+    job_route = re.match(r"search/(?:v[12]/)?jobs/[^/]+/", route)
+    if job_route and any(key.lower() == "search" for key in params):
+        raise ReadOnlyError("job post-processing search is refused")
+    if route in {"search/parser", "search/v1/parser", "search/v2/parser"}:
+        if (
+            method not in {"GET", "HEAD", "POST"}
+            or params.get("parse_only") != ["true"]
+            or params.get("reload_macros") != ["false"]
+            or set(params) - {"q", "output_mode", "parse_only", "reload_macros"}
+        ):
+            raise ReadOnlyError(
+                "search/parser requires parse_only=true and reload_macros=false; "
+                "unclassified parameters are refused"
+            )
+        return
+    result = re.fullmatch(
+        r"search/(?:v[12]/)?jobs/([^/]+)/(results|results_preview|events)", route
+    )
+    if result:
+        # Splunk 10.0 Search endpoint descriptions, result and event GET/POST.
+        # segmentation is also added by SDK 2.1.1 and 3.0.1 to all three reads.
+        allowed = {"count", "offset", "output_mode", "field_list", "f", "segmentation"}
+        if result[2] == "events":
+            allowed |= {
+                "earliest_time",
+                "latest_time",
+                "max_lines",
+                "output_time_format",
+                "time_format",
+                "truncation_mode",
+            }
+        else:
+            allowed.add("add_summary_to_metadata")
+        ctx = current()
+        if (
+            method in {"GET", "HEAD", "POST"}
+            and ctx
+            and result[1] in ctx.owned_sids
+            and not set(params) - allowed
+        ):
+            return
+        raise ReadOnlyError("job result read requires an owned sid and read parameters")
     if method in {"GET", "HEAD"}:
-        if route in {"search/parser", "search/v2/parser"}:
-            params = parameters(url, body)
-            if params.get("parse_only") != ["true"] or params.get("reload_macros") != [
-                "false"
-            ]:
-                raise ReadOnlyError(
-                    "search/parser requires parse_only=true and reload_macros=false"
-                )
         if route.endswith("/_reload"):
             raise ReadOnlyError("GET reload is refused")
         if path.lower().startswith("/debug/refresh"):
@@ -117,7 +154,6 @@ def check_request(
         return
     if kind == "siem" and method == "POST" and route == "auth/login":
         return
-    params = parameters(url, body)
     if (
         kind == "siem"
         and method == "POST"

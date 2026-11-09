@@ -150,12 +150,10 @@ def test_describe() -> None:
     data = {
         "entry": [
             {
-                "content": {
-                    "eai:attributes": {
-                        "requiredFields": ["name"],
-                        "optionalFields": ["search"],
-                        "wildcardFields": [],
-                    }
+                "fields": {
+                    "required": ["name", "search"],
+                    "optional": ["description"],
+                    "wildcard": ["action\\..*"],
                 }
             }
         ]
@@ -164,7 +162,9 @@ def test_describe() -> None:
     assert result.exit_code == 0, result.output
     assert json.loads(result.stdout) == [
         {"field": "name", "required": True},
-        {"field": "search", "required": False},
+        {"field": "search", "required": True},
+        {"field": "description", "required": False},
+        {"field": "action\\..*", "required": False, "wildcard": True},
     ]
     assert str(svc.request.call_args.args[0]).startswith(
         "/services/saved/searches/_new?"
@@ -225,3 +225,12 @@ def test_actual_sdk_wire_encoding() -> None:
         == "https://example.test:8089/services/saved/searches?output_mode=json"
     )
     assert seen[0][1]["body"] == b"name=a+b&f=a&f=b"
+
+
+@pytest.mark.parametrize(
+    "path", ["services/server/info", "servicesNS/nobody/search/server/info"]
+)
+def test_prefix_without_slash(path):
+    result, svc = invoke(["get", path], {})
+    assert result.exit_code == 0, result.output
+    assert str(svc.request.call_args.args[0]).startswith("/" + path + "?")

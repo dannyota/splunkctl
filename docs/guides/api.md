@@ -16,7 +16,7 @@ POST and DELETE preview by default. Add `--yes` to execute. With [`--read-only`]
 
 ## Paths and parameters
 
-Paths can be service-relative (`server/info`), start with `/services/`, or include an explicit namespace (`/servicesNS/nobody/search/saved/searches`). Schemes, authorities, backslashes, control characters, query strings, fragments, dot segments and encoded path attacks are rejected before client creation.
+`services/` and `servicesNS/` prefixes are absolute with or without a leading slash. Paths can be service-relative (`server/info`), start with `/services/`, or include an explicit namespace (`/servicesNS/nobody/search/saved/searches`). Schemes, authorities, backslashes, control characters, query strings, fragments, dot segments and encoded path attacks are rejected before client creation.
 
 Repeat `--param KEY=VALUE` to add request parameters. Duplicate values are preserved. `output_mode` is reserved for JSON output and cannot be overridden.
 
@@ -30,7 +30,7 @@ Check the endpoint's documented body contract before applying a request. The CLI
 
 ## Field discovery and output
 
-`get PATH --describe` reads `PATH/_new` and extracts required and optional fields from `eai:attributes`. Splunk documents this metadata in [Using the REST API reference](https://help.splunk.com/en/splunk-enterprise/rest-api-reference/9.1/introduction/using-the-rest-api-reference). Endpoints without supported discovery return a classified error.
+`get PATH --describe` reads `PATH/_new` and parses JSON `entry[].fields.required`, `optional` and `wildcard`. Each field becomes `{"field":"name","required":true}` or `{"field":"description","required":false}`. Wildcard regexes become `{"field":"action.*","required":false,"wildcard":true}`. This JSON shape was verified on Splunk 10.6.1.1; `eai:attributes.requiredFields` belongs to XML Atom output. Endpoints without supported discovery return a classified error.
 
 Output defaults to JSON. Response dictionaries retain their envelope as one row in the output list; empty responses render as `[]`. The normal `--fields`, `--format` and `--out` options apply.
 

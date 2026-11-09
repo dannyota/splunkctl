@@ -81,18 +81,20 @@ def _request(
 
 
 def _describe(data: Any) -> list[dict[str, Any]]:
-    # Splunk REST reference: Using the REST API reference / EAI response data.
-    # requiredFields/optionalFields are returned inside entry.content.eai:attributes.
+    # JSON discovery uses entry.fields; eai:attributes is XML-only.
     entries = data.get("entry") if isinstance(data, dict) else None
     rows: list[dict[str, Any]] = []
     found = False
     if isinstance(entries, list):
         for entry in entries:
-            content = entry.get("content", {}) if isinstance(entry, dict) else {}
-            attrs = content.get("eai:attributes") if isinstance(content, dict) else None
+            attrs = entry.get("fields") if isinstance(entry, dict) else None
             if not isinstance(attrs, dict):
                 continue
-            for key, required in (("requiredFields", True), ("optionalFields", False)):
+            for key, required in (
+                ("required", True),
+                ("optional", False),
+                ("wildcard", False),
+            ):
                 fields = attrs.get(key)
                 if not isinstance(fields, list) or any(
                     not isinstance(f, str) for f in fields
@@ -102,7 +104,14 @@ def _describe(data: Any) -> list[dict[str, Any]]:
                         kind="http",
                     )
                 found = True
-                rows.extend({"field": field, "required": required} for field in fields)
+                rows.extend(
+                    {
+                        "field": field,
+                        "required": required,
+                        **({"wildcard": True} if key == "wildcard" else {}),
+                    }
+                    for field in fields
+                )
     if not found:
         raise WebSessionError("Endpoint does not support field discovery", kind="http")
     return rows

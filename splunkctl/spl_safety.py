@@ -136,6 +136,10 @@ def check_readonly_spl(
 
     def check(names: Iterable[str]) -> None:
         for name in names:
+            if name == "rest":
+                raise ReadOnlyError(
+                    "SPL command rest is refused; use `splunkctl api get` instead"
+                )
             if (
                 name in WRITE_COMMANDS
                 or name in DYNAMIC_COMMANDS

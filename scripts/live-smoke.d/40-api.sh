@@ -3,12 +3,55 @@
 api_capture() {
     local file=$1
     shift
+    API_CALL=$("$PY" - "$@" <<'PYCALL'
+import sys
+args = sys.argv[1:]
+for group in ("api", "search"):
+    if group in args:
+        i = args.index(group)
+        # Show only the known command words and option names, never values.
+        words = args[i:i+2]
+        flags = [a.split("=", 1)[0] for a in args if a.startswith("--")]
+        print(" ".join(words + flags))
+        break
+else:
+    print("unknown")
+PYCALL
+)
     "$@" > "$file" 2> "$T/api.err"
     local status=$?
-    [ "$status" -eq 0 ] || { bad "API smoke expected exit 0, got $status"; return 1; }
+    if [ "$status" -ne 0 ]; then
+        local diagnostic
+        diagnostic=$("$PY" - "$T/api.err" <<'PYERROR'
+import json, re, sys
+
+def clean(value):
+    text = str(value)
+    # Drop the suffix so quoted, spaced and multiline credentials stay private.
+    text = re.split(r"Splunk\s|Bearer\s|Basic\s|(?:[\w-]*token|password|passwd|authorization)[\s\"']*[:=]",
+                    text, maxsplit=1, flags=re.I)[0]
+    return " ".join(text.split())[:200]
+
+kind, message = "unknown", "No JSON error envelope"
+with open(sys.argv[1]) as stream:
+    for line in stream:
+        try:
+            error = json.loads(line).get("error")
+        except (ValueError, AttributeError):
+            continue
+        if isinstance(error, dict):
+            kind = clean(error.get("kind", "unknown"))
+            message = clean(error.get("message", ""))
+            break
+print(f"kind={kind} message={message}")
+PYERROR
+)
+        bad "API smoke expected exit 0, got $status: ${file##*/}: $API_CALL: $diagnostic"
+        return 1
+    fi
 }
 api_assert() {
-    "$PY" - "$1" "$2" <<'PYAPI' || bad 'API smoke JSON assertion'
+    "$PY" - "$1" "$2" <<'PYAPI' 2>/dev/null || bad "API smoke JSON assertion: ${API_CALL:-unknown}: ${1##*/}"
 import json, sys
 with open(sys.argv[1]) as stream:
     d = json.load(stream)

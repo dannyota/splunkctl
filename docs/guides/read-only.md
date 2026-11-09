@@ -19,7 +19,7 @@ GET and HEAD requests are allowed except known mutations such as logout. Redirec
 
 Splunk password and Web session login requests needed to use existing credentials are allowed. Explicit `auth login`, `auth logout`, browser login and automatic browser reauthentication are refused.
 
-Search dispatch is allowed only after SPL classification. Cancellation, finalization and deletion are allowed only for jobs created by the current invocation. Existing jobs can be read; an independent `search cancel --yes` is refused.
+Search dispatch is allowed only after SPL classification. Cancellation, finalization and deletion are allowed only for jobs created by the current invocation. Job metadata can be read. Results, previews and events require a SID owned by the current invocation; an independent `search cancel --yes` is refused.
 
 Local writes remain allowed: `--out`, `config init`, `config use`, session-file maintenance and `mcp install`. `config init` skips network autodetection under read-only mode.
 
@@ -27,7 +27,11 @@ Local writes remain allowed: `--out`, `config init`, `config use`, session-file 
 
 Read-only mode refuses write commands, `map`, `savedsearch`, `dbxquery`, `dbxoutput` and `run`. It also refuses unknown and custom commands. Built-in read commands must appear in the explicit allowlist derived from the Splunk Enterprise 10.x Search Reference.
 
-Macros and subsearches require expansion through Splunk's REST `search/parser` endpoint. The [Splunk 10.0 REST reference](https://help.splunk.com/en/splunk-enterprise/rest-api-reference/10.0/search-endpoints/search-endpoint-descriptions) documents GET for this endpoint, but marks it deprecated and disabled by default since 9.0.1. The newer v2 parser requires POST and is outside the read-only transport exceptions. Macros and subsearches therefore fail closed on servers where the GET parser is unavailable. The expanded commands must pass the same checks; parser failures refuse the search. The error identifies the offending command. See [Run searches](search.md).
+Macros and subsearches require expansion through POST `search/parser` with `parse_only=true` and `reload_macros=false`. Only `q` and `output_mode` may accompany those flags, including on v2 and namespaced parser routes. Splunk 10.6.1.1 rejects GET parser calls with 405. Expanded commands must pass the same checks; parser failures refuse the search. Leading backtick macros are sent without a `search ` prefix so generating commands remain first.
+
+Result, preview and event reads allow GET or POST only for owned SIDs, with paging, field selection and output options from the [Splunk 10.0 REST reference](https://help.splunk.com/en/splunk-enterprise/rest-api-reference/10.0/search-endpoints/search-endpoint-descriptions). The SDK also supplies `segmentation`. Every job sub-endpoint refuses `search` post-processing and `check_risky_command`, on GET, HEAD and POST, even for owned SIDs.
+
+`| rest` is refused because its server-side requests bypass the transport policy and some GET endpoints reload or refresh state. The error says: "read-only: SPL command rest is refused; use `splunkctl api get` instead". See [Call Splunk REST endpoints](api.md).
 
 These restrictions apply at transport dispatch as well as the command layer, including searches submitted through [the raw API](api.md). Without `--read-only`, the existing write-SPL confirmation behavior is unchanged.
 
