@@ -1,4 +1,11 @@
-"""Auth-token management — list, create, revoke (Splunk 7.3+)."""
+"""Auth-token management: list, create, revoke (Splunk 7.3+).
+
+Verified live on Splunk 10.6.1.1: create requires ``audience``; the list
+filter is ``username``; list entries carry ``lastUsed`` and no ``id`` (the
+entry name is the id); a token is deleted with
+``DELETE authorization/tokens/<user>?id=<id>``, which returns 200 even for
+an unknown id, so revoke looks the token up first.
+"""
 
 import json
 from datetime import UTC, datetime
@@ -30,7 +37,7 @@ def _parse_entry(entry: dict[str, Any]) -> dict[str, Any]:
         else "never"
     )
 
-    last_used = c.get("lastUsedTime")
+    last_used = c.get("lastUsed", c.get("lastUsedTime"))
     last_used_str = (
         datetime.fromtimestamp(int(last_used), tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         if last_used and str(last_used) != "0"
@@ -58,9 +65,9 @@ def tokens_group() -> None:
 def list_tokens(ctx: click.Context, user: str | None) -> None:
     """List auth tokens, optionally filtered by user."""
     client = get_client(ctx)
-    kwargs: dict[str, Any] = {"output_mode": "json"}
+    kwargs: dict[str, Any] = {"output_mode": "json", "count": 0}
     if user:
-        kwargs["userName"] = user
+        kwargs["username"] = user
     resp = client.service.get(_TOKENS_PATH, **kwargs)
     body: dict[str, Any] = json.loads(resp.body.read())
 
@@ -71,7 +78,9 @@ def list_tokens(ctx: click.Context, user: str | None) -> None:
 @tokens_group.command("create")
 @guard.guarded
 @click.option("--user", required=True, help="Username to issue the token for.")
-@click.option("--audience", default=None, help="Token audience claim.")
+@click.option(
+    "--audience", required=True, help="Token audience claim (purpose of the token)."
+)
 @click.option(
     "--expires-in",
     type=int,
@@ -82,13 +91,11 @@ def list_tokens(ctx: click.Context, user: str | None) -> None:
 def create_token(
     ctx: click.Context,
     user: str,
-    audience: str | None,
+    audience: str,
     expires_in: int | None,
 ) -> None:
     """Create an auth token. The token value is shown ONCE."""
-    details = f"  user: {user}"
-    if audience:
-        details += f"\n  audience: {audience}"
+    details = f"  user: {user}\n  audience: {audience}"
     if expires_in is not None:
         details += f"\n  expires_in: {expires_in}d"
 
@@ -96,9 +103,11 @@ def create_token(
         return
 
     client = get_client(ctx)
-    kwargs: dict[str, Any] = {"output_mode": "json", "name": user}
-    if audience:
-        kwargs["audience"] = audience
+    kwargs: dict[str, Any] = {
+        "output_mode": "json",
+        "name": user,
+        "audience": audience,
+    }
     if expires_in is not None:
         kwargs["expires_on"] = f"+{expires_in}d"
     resp = client.service.post(_TOKENS_PATH, **kwargs)
@@ -132,8 +141,19 @@ def revoke_token(ctx: click.Context, token_id: str) -> None:
         return
 
     client = get_client(ctx)
-    client.service.delete(
-        f"{_TOKENS_PATH}/{token_id}",
-        output_mode="json",
+    resp = client.service.get(_TOKENS_PATH, output_mode="json", count=0)
+    body: dict[str, Any] = json.loads(resp.body.read())
+    owner = next(
+        (
+            row["user"]
+            for row in map(_parse_entry, body.get("entry", []))
+            if row["id"] == token_id
+        ),
+        None,
     )
-    output.info(f"Token '{token_id}' revoked.")
+    if not owner:
+        output.error(f"Auth token not found: {token_id}", kind="not_found")
+        ctx.exit(1)
+        return
+    client.service.delete(f"{_TOKENS_PATH}/{owner}", output_mode="json", id=token_id)
+    output.info(f"Token '{token_id}' revoked (user '{owner}').")

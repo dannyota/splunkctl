@@ -204,7 +204,7 @@ splunkctl server tokens create [OPTIONS]
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--user` | text | - | Username to issue the token for. [required] |
-| `--audience` | text | - | Token audience claim. |
+| `--audience` | text | - | Token audience claim (purpose of the token). [required] |
 | `--expires-in` | integer | - | Token lifetime in days (omit for non-expiring). |
 
 ## server tokens list

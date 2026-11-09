@@ -105,7 +105,8 @@ splunkctl soar approvals respond [OPTIONS] APPROVAL_ID {approve|deny}
 ```
 
 ```text
-Posts to ``/rest/external_prompt/<id>`` with the chosen action.
+Posts to ``/rest/approval/<id>``. SOAR rejects a response without a
+message or prompt answers, so pass ``--message`` or ``--response``.
 Guarded: dry-run by default, pass ``--yes`` to apply.
 ```
 
@@ -113,7 +114,8 @@ Guarded: dry-run by default, pass ``--yes`` to apply.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--message` | text | - | Optional response message. |
+| `--message` | text | - | Response message. SOAR requires --message or --response. |
+| `--response` | text | - | Answer to a prompt question, in question order (repeatable). |
 
 ## soar apps get
 

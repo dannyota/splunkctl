@@ -1,4 +1,4 @@
-"""Tests for soar approvals — list, get, respond."""
+"""Tests for soar approvals: list, get, respond."""
 
 from __future__ import annotations
 
@@ -208,7 +208,17 @@ class TestApprovalsRespond:
         mock_cls.return_value = client
 
         result = CliRunner().invoke(
-            cli, ["--json", "soar", "approvals", "respond", "5", "approve"]
+            cli,
+            [
+                "--json",
+                "soar",
+                "approvals",
+                "respond",
+                "5",
+                "approve",
+                "--message",
+                "ok",
+            ],
         )
         assert result.exit_code == 0
         assert "DRY RUN" in result.stderr
@@ -223,10 +233,13 @@ class TestApprovalsRespond:
         mock_cls: MagicMock,
         _banner: MagicMock,
     ) -> None:
-        """--yes posts approve to external_prompt endpoint."""
+        """--yes posts to /rest/approval/<id> (live-verified on SOAR 8.8)."""
         mock_resolve.return_value = soar_cfg()
         client = MagicMock()
-        client.post.return_value = {"success": True}
+        client.post.return_value = {
+            "success": True,
+            "message": "Successfully processed the command.",
+        }
         mock_cls.return_value = client
 
         result = CliRunner().invoke(
@@ -238,15 +251,42 @@ class TestApprovalsRespond:
                 "approvals",
                 "respond",
                 "5",
-                "approve",
+                "APPROVE",
+                "--response",
+                "Yes",
+                "--response",
+                "ticket 42",
             ],
         )
         assert result.exit_code == 0
         client.post.assert_called_once()
         call_args = client.post.call_args
-        assert call_args[0][0] == "external_prompt/5"
-        body = call_args[1]["body"]
-        assert body["status"] == "approve"
+        assert call_args[0][0] == "approval/5"
+        assert call_args[1]["body"] == {
+            "status": "approve",
+            "responses": ["Yes", "ticket 42"],
+        }
+
+    @patch(PATCH_BANNER, return_value="(SOAR @ soar.test:8443)")
+    @patch(PATCH_CLIENT)
+    @patch(PATCH_RESOLVE)
+    def test_respond_requires_message_or_response(
+        self,
+        mock_resolve: MagicMock,
+        mock_cls: MagicMock,
+        _banner: MagicMock,
+    ) -> None:
+        """SOAR 400s without a message or responses, so the CLI refuses first."""
+        mock_resolve.return_value = soar_cfg()
+        client = MagicMock()
+        mock_cls.return_value = client
+
+        result = CliRunner().invoke(
+            cli, ["--json", "--yes", "soar", "approvals", "respond", "5", "deny"]
+        )
+        assert result.exit_code == 2
+        assert "--message or --response" in result.output
+        client.post.assert_not_called()
 
     @patch(PATCH_BANNER, return_value="(SOAR @ soar.test:8443)")
     @patch(PATCH_CLIENT)
@@ -334,6 +374,8 @@ class TestApprovalsRespond:
                 "respond",
                 "5",
                 "approve",
+                "--message",
+                "ok",
             ],
         )
         assert result.exit_code == 1

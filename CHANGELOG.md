@@ -1,5 +1,27 @@
 # Changelog
 
+## Unreleased
+
+Live smoke coverage closed the remaining SIEM and SOAR gaps it can own, and
+found the fixes below on Splunk Enterprise 10.6.1.1 and SOAR 8.8.0.282.
+
+### Fixed
+
+- `server tokens revoke` reported success without deleting anything:
+  `DELETE authorization/tokens/<id>` returns 200 and leaves the token. It
+  now looks up the token's user, deletes `authorization/tokens/<user>?id=<id>`,
+  and reports `not_found` for an unknown id.
+- `server tokens list --user` failed with HTTP 400 (`userName` is not a
+  supported argument); it now sends `username`. The list requests every
+  token (`count=0`) instead of Splunk's default page of 30, and `last_used`
+  reads the `lastUsed` field.
+- `server tokens create` requires `--audience`; Splunk rejects a token
+  without one (HTTP 400).
+- `soar approvals respond` posted to `/rest/external_prompt/<id>`, which
+  returns 404 for an approval. It now posts to `/rest/approval/<id>`, takes
+  prompt answers with `--response`, and requires `--message` or
+  `--response`, as SOAR does.
+
 ## 0.17.2
 
 Browser SAML auth verified live on Splunk Enterprise 10.6.1.1 and SOAR
