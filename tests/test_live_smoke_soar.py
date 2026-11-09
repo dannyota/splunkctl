@@ -342,17 +342,28 @@ def test_active_playbooks_override(tmp_path: Path) -> None:
         ("error", False, 1),
     ],
 )
-def test_asset_absence(tmp_path: Path, mode: str, listed: bool, expected: int) -> None:
+@pytest.mark.parametrize("warning", [False, True])
+def test_asset_absence(
+    tmp_path: Path, mode: str, listed: bool, expected: int, warning: bool
+) -> None:
     env, _ = stub_environment(tmp_path)
     binary = Path(env["SPLUNKCTL"])
     binary.write_text(
         f"#!{sys.executable}\n"
         "import json, sys\n"
-        "if 'get' in sys.argv:\n"
         + (
-            "    print(json.dumps({'error': {'kind': 'not_found'}})); sys.exit(1)\n"
+            "print('Warning: TLS certificate verification is disabled...', "
+            "file=sys.stderr)\n"
+            if warning
+            else ""
+        )
+        + "if 'get' in sys.argv:\n"
+        + (
+            "    print(json.dumps({'error': {'kind': 'not_found'}}), "
+            "file=sys.stderr); sys.exit(1)\n"
             if mode == "missing"
-            else "    print(json.dumps({'error': {'kind': 'auth'}})); sys.exit(1)\n"
+            else "    print(json.dumps({'error': {'kind': 'auth'}}), "
+            "file=sys.stderr); sys.exit(1)\n"
             if mode == "error"
             else "    print(json.dumps("
             + repr({"id": 7, "disabled": mode == "disabled"})
@@ -370,5 +381,81 @@ def test_asset_absence(tmp_path: Path, mode: str, listed: bool, expected: int) -
     harness.write_text(prefix + "\nasset_absent 7\n")
     result = subprocess.run(  # noqa: S603
         [BASH, str(harness)], env=env, capture_output=True, text=True, check=False
+    )
+    assert result.returncode == expected, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize(
+    "owner,missing_phase,expected",
+    [
+        ("analyst", "", 0),
+        (73, "", 0),
+        (99, "", 1),
+        ("analyst", "fixture", 1),
+        ("analyst", "fixture_second", 1),
+    ],
+)
+def test_cases_template_phases_and_owner(
+    tmp_path: Path, owner: str | int, missing_phase: str, expected: int
+) -> None:
+    env, _ = stub_environment(tmp_path)
+    binary = Path(env["SPLUNKCTL"])
+    binary.write_text(
+        f"#!{sys.executable}\n"
+        + r"""
+import json, os, sys
+from pathlib import Path
+args = [a for a in sys.argv[1:] if a not in ('--json', '--yes')]
+state = Path(os.environ['TMPDIR']) / 'task-status'
+status = int(state.read_text()) if state.exists() else 0
+rows = []
+if args[:3] == ['soar', 'containers', 'create']:
+    rows = [{'id': 42}]
+elif args[:3] == ['soar', 'containers', 'get']:
+    rows = [{'id': 42, 'status': 'closed', 'container_type': 'case'}]
+elif args[:3] == ['soar', 'cases', 'workbook']:
+    rows = [{'name': name, 'tasks': []} for name in ('fixture', 'fixture_second')
+            if name != os.environ['SMOKE_MISSING_PHASE']]
+    rows.append({'name': 'manual', 'tasks': [
+        {'id': 51, 'status': status, 'owner': json.loads(os.environ['SMOKE_OWNER'])}]})
+elif args[:4] in (['soar', 'cases', 'phase', 'add'], ['soar', 'cases', 'task', 'add']):
+    rows = [{'id': 51}]
+elif args[:4] == ['soar', 'cases', 'task', 'update']:
+    state.write_text('2' if 'complete' in args else '1')
+elif args[:3] == ['soar', 'users', 'list']:
+    rows = [{'id': 99, 'username': 'inactive', 'is_active': False},
+            {'id': 73, 'username': 'analyst', 'is_active': True}]
+elif args[:3] == ['soar', 'notes', 'list']:
+    rows = [{'content': 'fixture reopen'}]
+print(json.dumps(rows))
+"""
+    )
+    env.update(
+        SMOKE_LIBRARY=str(LIBRARY),
+        SMOKE_SCRIPT=str(ROOT / "scripts/live-smoke-soar.d/60-cases.sh"),
+        SMOKE_OWNER=json.dumps(owner),
+        SMOKE_MISSING_PHASE=missing_phase,
+    )
+    json_helper = (
+        RUNNER.read_text().split("json_value() {", 1)[1].split("# Asset DELETE", 1)[0]
+    )
+    harness = (
+        "json_value() {"
+        + json_helper
+        + r"""
+set -uo pipefail
+S=$SPLUNKCTL PY=$LIVE_PYTHON T=$TMPDIR N=fixture fail=0
+. "$SMOKE_LIBRARY"
+trap - EXIT
+soar_selected() { return 1; }
+absent() { return 0; }
+defer() { return 0; }
+. "$SMOKE_SCRIPT"
+cases_group
+[ "$fail" -eq 0 ]
+"""
+    )
+    result = subprocess.run(  # noqa: S603
+        [BASH, "-c", harness], env=env, capture_output=True, text=True, check=False
     )
     assert result.returncode == expected, result.stdout + result.stderr

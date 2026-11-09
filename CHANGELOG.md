@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fix `soar cases promote --template` to apply the selected workbook using `template_id`.
+
 - Add exact scoped name and result limit filters to `soar playbooks list --name/--limit`.
 
 - Resolve workbook template names and defaults with server filters on SOAR 8.8.

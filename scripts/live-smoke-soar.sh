@@ -28,10 +28,10 @@ json_value() {
 # Asset DELETE disables the record; the default list must also hide it.
 asset_absent() {
     local id=$1 status
-    "$S" --json soar assets get "$id" > "$T/asset-absent.json" 2>&1
+    "$S" --json soar assets get "$id" > "$T/asset-absent.json" 2> "$T/asset-absent.err"
     status=$?
-    if ! is_not_found "$status" "$T/asset-absent.json"; then
-        [ "$status" -eq 0 ] || { cat "$T/asset-absent.json"; return 1; }
+    if ! is_not_found "$status" "$T/asset-absent.err"; then
+        [ "$status" -eq 0 ] || { cat "$T/asset-absent.json" "$T/asset-absent.err"; return 1; }
         "$PY" - "$T/asset-absent.json" <<'PY_ASSET' || return 1
 import json, sys
 data = json.load(open(sys.argv[1]))

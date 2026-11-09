@@ -72,7 +72,7 @@ def promote_cmd(
 
     body: dict[str, Any] = {
         "container_type": "case",
-        "template": template_id,
+        "template_id": template_id,
     }
 
     try:
