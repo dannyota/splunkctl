@@ -1,14 +1,34 @@
 # Changelog
 
-## Unreleased
+## 0.19.0
+
+Object permissions, server health and MCP registration for more agents, the
+rest of the ideas from Splunk's own Go `splunk/splunkctl`. Every response
+shape was captured from Splunk Enterprise 10.6.1.1 before the code was
+written; the captures are in `tests/fixtures/live/splunk-10.6.1.1/`.
 
 ### Added
 
-- Project MCP registration for Claude, Codex, Cursor and Gemini, with preview,
-  stdio read-only policy and comment-preserving Codex TOML edits.
-- Object ACL inspection and guarded ownership, sharing and role changes.
-- Server queue, indexer and disk introspection plus guarded runtime logging
-  changes. Logger changes reset when splunkd restarts.
+- `acl get` and `acl set TYPE NAME` read and change owner, sharing and
+  read/write roles for saved searches, macros, eventtypes, tags
+  (`field=value`), props, transforms, lookup definitions, lookup files,
+  field extractions, data models and views. `set` is guarded and previews
+  a before/after diff. Roles are checked against `authorization/roles`
+  first, because Splunk stores unknown roles without complaint. `--read ''`
+  clears a list; Splunk cannot clear both. `dashboards share` and `rules
+  share` use the same code. See [ACL](docs/guides/acl.md).
+- `server introspection queues|indexer|disk` reports queue fill, indexer
+  status and partition usage as flat rows.
+- `server log-level get [COMPONENT]` and `server log-level set COMPONENT
+  DEBUG|INFO|WARN|ERROR` (guarded). Changes last until splunkd restarts.
+  See [Server introspection](docs/guides/server-introspection.md).
+- `mcp install --client claude|codex|cursor|gemini` writes the project
+  config for each agent (`.mcp.json`, `.codex/config.toml`,
+  `.cursor/mcp.json`, `.gemini/settings.json`). It keeps other servers and
+  comments, refuses JSONC, duplicate keys and symlinked paths, and leaves an
+  unchanged file untouched. `--preview` shows the change; `--read-only` (or
+  the global flag) registers `mcp serve --read-only`. See
+  [MCP clients](docs/guides/mcp-clients.md).
 
 ## 0.18.0
 

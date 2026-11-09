@@ -1,3 +1,3 @@
 """CLI tool for Splunk Enterprise and Splunk SOAR operations."""
 
-__version__ = "0.18.0"
+__version__ = "0.19.0"
