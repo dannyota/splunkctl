@@ -37,6 +37,7 @@ _ENV_MAP: dict[str, str] = {
     "SPLUNK_APP": "app",
     "SPLUNK_OWNER": "owner",
     "SPLUNK_VERIFY": "verify",
+    "SPLUNK_WEB_URL": "web_url",
 }
 
 _SOAR_ENV_MAP: dict[str, str] = {

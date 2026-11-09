@@ -42,6 +42,14 @@ splunkctl docs generate --check
   The `LIVE_HEC_URL` scheme must match `hec settings` `enableSSL`: use
   `https` on a default install, or `http` when SSL is disabled.
   For a mapped port, for example, set `LIVE_HEC_URL=https://127.0.0.1:18088`.
+  A throwaway Splunk container works: publish 8000, 8089 and 8088 on
+  `127.0.0.1` (for example as 18000, 18089, 18088), then set
+  `SPLUNK_HOST`, `SPLUNK_PORT`, `SPLUNK_USER`, `SPLUNK_PASS`,
+  `SPLUNK_VERIFY=false`, `SPLUNK_WEB_URL=http://127.0.0.1:18000` and
+  `LIVE_HEC_URL`. On Ubuntu 24.04 with rootless podman the `splunk/splunk`
+  image exits at startup: the host AppArmor `unix-chkpwd` profile blocks
+  reading the image's mode-0000 `/etc/shadow`. Build a derived image with
+  `RUN chmod 0400 /etc/shadow` (keep `--format docker` for the healthcheck).
   `datamodels rebuild --yes` runs only when `CIM_TGZ` is set and the server
   reports acceleration enabled within 90 seconds; otherwise it reports
   SKIPPED. A populated acceleration summary is not awaited, so the

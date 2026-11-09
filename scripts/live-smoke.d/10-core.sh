@@ -75,7 +75,7 @@ if selected indexes; then
         expect_ok "$S" indexes update "$N" --max-size 100 --yes
         check_json 'str(d[0]["maxTotalDataSizeMB"])=="100"' indexes get "$N"
         expect_ok "$S" indexes reload --yes
-        expect_ok "$S" indexes clean "$N" --yes
+        expect_ok "$S" indexes clean "$N" --clean-timeout 180 --yes
     fi
 fi
 if selected inputs; then
