@@ -21,10 +21,13 @@ fail=0
 [ -n "${TEST_USER_PASSWORD:-}" ] || { bad 'TEST_USER_PASSWORD is not set in lab/keycloak/.env'; exit 1; }
 unset KEYCLOAK_ADMIN_PASSWORD POSTGRES_PASSWORD
 export TEST_USER TEST_USER_PASSWORD KEYCLOAK_HOST KEYCLOAK_PORT
+# Keep the lab addresses first: the loop below also clears exported
+# SOAR_HOST and SOAR_PORT.
+soar_host=${SOAR_HOST:?} soar_port=${SOAR_PORT:?}
 # Only the browser session may authenticate: drop basic-auth overrides.
 for v in $(env | grep -oE '^(SPLUNK|SOAR)_[A-Z_]*'); do unset "$v"; done
 IDP="http://${KEYCLOAK_HOST}:${KEYCLOAK_PORT}/realms/${REALM}"
-SOAR_WEB="https://${SOAR_HOST}:${SOAR_PORT}"
+SOAR_WEB="https://${soar_host}:${soar_port}"
 SSO_URL="$SOAR_WEB/saml2/login?idp=$("$PY" -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$IDP")&next=%2F"
 CFG="$T/config.yaml"
 cat > "$CFG" <<EOF
@@ -37,8 +40,8 @@ profiles:
     web_url: http://$SIEM_HOST:$SIEM_WEB_PORT
     auth_mode: browser
     soar:
-      host: $SOAR_HOST
-      port: $SOAR_PORT
+      host: $soar_host
+      port: $soar_port
       verify: false
       auth_mode: browser
       web_url: $SOAR_WEB
