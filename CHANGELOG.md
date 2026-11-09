@@ -4,6 +4,9 @@
 
 ### Added
 
+- `SPLUNK_WEB_URL` sets `web_url` from the environment, so env-only setups
+  against a port-mapped Splunk Web (for example a container) can use lookup
+  upload, app install and data upload.
 - `soar artifacts update --no-automation` suppresses playbook automation.
 - `scripts/live-smoke-soar.sh`: a maintainer SOAR live smoke test with owned
   fixtures, no licensed actions by default (`LIVE_SOAR_ACTIONS=1` opts in),

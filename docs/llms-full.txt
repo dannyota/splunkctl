@@ -298,6 +298,12 @@ Every dry-run preview and `--yes` confirmation prints which instance is about to
 | `SPLUNK_USER` | `username` |
 | `SPLUNK_PASS` | `password` |
 | `SPLUNK_VERIFY` | `verify` |
+| `SPLUNK_SCHEME` | `scheme` |
+| `SPLUNK_WEB_URL` | `web_url` |
+| `SPLUNK_APP` | `app` |
+| `SPLUNK_OWNER` | `owner` |
+
+Set `SPLUNK_WEB_URL` when Splunk Web is reachable on a different address than the server reports, for example a container that publishes port 8000 as 18000. Commands that go through Splunk Web (lookup upload, app install, data upload) otherwise use the server's own Web port.
 
 `SOAR_HOST`, `SOAR_PORT`, `SOAR_TOKEN`, `SOAR_USER`, `SOAR_PASS`, and `SOAR_VERIFY` override the profile's `soar:` section the same way.
 

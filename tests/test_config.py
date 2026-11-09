@@ -45,6 +45,14 @@ def test_load_env_overlay(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> No
     assert cfg["verify"] is True
 
 
+def test_load_env_web_url(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # A container that publishes Splunk Web on another port needs this
+    # without a config file; Web UI commands otherwise use the server httpport.
+    monkeypatch.setenv("SPLUNK_WEB_URL", "http://127.0.0.1:18000")
+    cfg = config.load(tmp_path / "missing.yaml")
+    assert cfg["web_url"] == "http://127.0.0.1:18000"
+
+
 def test_load_empty_file(tmp_path: Path) -> None:
     p = tmp_path / "config.yaml"
     p.write_text("")
