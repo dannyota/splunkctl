@@ -88,3 +88,50 @@ def test_soar_validate_hits_rest_version(mock_get: MagicMock) -> None:
 def test_get_adapter_dispatch() -> None:
     assert isinstance(adapters.get_adapter("siem"), adapters.SIEMAdapter)
     assert isinstance(adapters.get_adapter("soar"), adapters.SOARAdapter)
+
+
+@pytest.mark.parametrize("target", ["siem", "soar"])
+@pytest.mark.parametrize("operation", ["validate", "logout"])
+def test_unverified_requests_suppress_raw_warning(
+    target, operation, monkeypatch, capsys
+):
+    import warnings
+
+    import urllib3
+
+    from splunkctl import client
+    from splunkctl.soar import client as soar_client
+
+    monkeypatch.setattr(client, "_tls_warned", False)
+    monkeypatch.setattr(soar_client, "_tls_warned", False)
+
+    def request(*args, **kwargs):
+        warnings.warn(
+            "Unverified HTTPS request",
+            urllib3.exceptions.InsecureRequestWarning,
+            stacklevel=2,
+        )
+        return MagicMock(status_code=200)
+
+    monkeypatch.setattr(adapters.requests, "get", request)
+    monkeypatch.setattr(adapters.requests, "post", request)
+    values = {
+        "session_key": "k",
+        "cookie": "splunkd_8000",
+        "sessionid": "s",
+        "csrftoken": "c",
+    }
+    endpoint = {"api_base" if operation == "validate" else "web_url": "https://product"}
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        for _ in range(2):
+            getattr(adapters.get_adapter(target), operation)(
+                values, verify=False, timeout=30, **endpoint
+            )
+    assert not caught
+    assert (
+        capsys.readouterr().err.count(
+            "Warning: TLS certificate verification is disabled"
+        )
+        == 1
+    )

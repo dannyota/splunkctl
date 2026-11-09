@@ -48,8 +48,16 @@ def auth_group() -> None:
 
 @auth_group.command("login")
 @click.option("--target", required=True, type=click.Choice(["siem", "soar"]))
+@click.option(
+    "--timeout",
+    "login_timeout",
+    type=click.IntRange(min=1),
+    default=300,
+    show_default=True,
+    help="Browser login deadline in seconds.",
+)
 @click.pass_context
-def login(ctx: click.Context, target: str) -> None:
+def login(ctx: click.Context, target: str, login_timeout: int) -> None:
     """Complete SAML/MFA in a browser and store a validated product session."""
     obj: dict[str, Any] = ctx.obj or {}
     config_path = _config_path(ctx)
@@ -78,7 +86,7 @@ def login(ctx: click.Context, target: str) -> None:
             login_url=ta.login_url,
             expected_origin=ta.web_url,
             verify=ta.verify,
-            timeout=timeout,
+            timeout=login_timeout,
         )
         values = adapter.extract(cookies)
         if (

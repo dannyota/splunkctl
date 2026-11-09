@@ -114,6 +114,7 @@ host the lab.
   10.6.1.1 + SSE), SOAR `100.65.1.11` (SOAR 8.8.0.282). Keycloak SAML runs on
   the host at `100.65.1.1:8080`:
   `lab/keycloak/labctl.sh start|stop|status|configure|verify`.
+- SIEM SAML setup: `lab/keycloak/siem-configure.sh`; browser check: `lab/keycloak/e2e-login.py`.
 - Build and check: `installers/vmlab/README.md`, then `fetch-installers.sh`,
   `check-lab.sh`, `provision-lab.sh` and `verify-lab.sh`. Real credentials go
   in the git-ignored `installers/vmlab/config.local.env`. Never print them.
