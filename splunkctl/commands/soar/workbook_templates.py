@@ -12,6 +12,7 @@ from splunkctl.commands.soar._client import get_soar_client
 from splunkctl.soar.client import SOARError
 
 _EP = "workbook_template"
+_PHASE_EP = "workbook_phase_template"
 
 
 def resolve_template(client: Any, ref: str | None) -> int | None:
@@ -92,6 +93,13 @@ def get_cmd(ctx: click.Context, *, ref: str) -> None:
         return
 
     if isinstance(result, dict):
+        try:
+            phases = client.get(
+                _PHASE_EP, params={"_filter_template": template_id, "page_size": 0}
+            )
+            result = {**result, "phases": phases.get("data", [])}
+        except SOARError as exc:
+            output.warning(f"Could not fetch workbook template phases: {exc.message}")
         output.render(ctx, result)
     else:
         output.render(ctx, {}, empty="No data.")
@@ -166,7 +174,27 @@ def update_cmd(
         ctx.exit(1)
         return
 
-    details = f"  template: {ref}\n  add phases: {', '.join(add_phases)}"
+    client = get_soar_client(ctx)
+    template_id = _resolve_template_id(ctx, client, ref)
+    if template_id is None:
+        return
+
+    try:
+        current = client.get(
+            _PHASE_EP, params={"_filter_template": template_id, "page_size": 0}
+        )
+    except SOARError as exc:
+        output.error(exc.message, kind=exc.kind, http_status=exc.http_status)
+        ctx.exit(1)
+        return
+
+    existing_phases = current.get("data", [])
+    max_order = max((p.get("order", 0) for p in existing_phases), default=0)
+    existing_names = ", ".join(p["name"] for p in existing_phases) or "(none)"
+    details = (
+        f"  template: {ref}\n  existing phases: {existing_names}"
+        f"\n  add phases: {', '.join(add_phases)}"
+    )
     if not guard.soar_check(
         ctx,
         f"Update workbook template {ref}",
@@ -174,37 +202,20 @@ def update_cmd(
     ):
         return
 
-    client = get_soar_client(ctx)
-    template_id = _resolve_template_id(ctx, client, ref)
-    if template_id is None:
-        return
-
-    # Fetch existing template to get current phases for ordering.
-    try:
-        current = client.get(f"{_EP}/{template_id}", params={})
-    except SOARError as exc:
-        output.error(exc.message, kind=exc.kind, http_status=exc.http_status)
-        ctx.exit(1)
-        return
-
-    existing_phases: list[dict[str, Any]] = []
-    if isinstance(current, dict):
-        existing_phases = current.get("phases", [])
-
-    max_order = max((p.get("order", 0) for p in existing_phases), default=0)
-
-    new_phases = [
-        {"name": name, "order": max_order + i}
-        for i, name in enumerate(add_phases, start=1)
-    ]
-    body: dict[str, Any] = {"phases": existing_phases + new_phases}
-
-    try:
-        client.post(f"{_EP}/{template_id}", body=body)
-    except SOARError as exc:
-        output.error(exc.message, kind=exc.kind, http_status=exc.http_status)
-        ctx.exit(1)
-        return
+    added: list[str] = []
+    for i, name in enumerate(add_phases, start=1):
+        try:
+            client.post(
+                _PHASE_EP,
+                body={"template_id": template_id, "name": name, "order": max_order + i},
+            )
+        except SOARError as exc:
+            if added:
+                output.warning(f"Added phases before error: {', '.join(added)}")
+            output.error(exc.message, kind=exc.kind, http_status=exc.http_status)
+            ctx.exit(1)
+            return
+        added.append(name)
 
     output.info(f"Template {template_id} updated: added {len(add_phases)} phase(s).")
 

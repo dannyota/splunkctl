@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 from click.testing import CliRunner
 
@@ -22,18 +22,11 @@ _TEMPLATES: dict[str, Any] = {
             "id": 1,
             "name": "NIST 800-61",
             "is_default": True,
-            "phases": [
-                {"id": 10, "name": "Detection", "order": 1},
-                {"id": 11, "name": "Analysis", "order": 2},
-            ],
         },
         {
             "id": 2,
             "name": "Custom Investigation",
             "is_default": False,
-            "phases": [
-                {"id": 20, "name": "Triage", "order": 1},
-            ],
         },
     ],
 }
@@ -41,6 +34,52 @@ _TEMPLATES: dict[str, Any] = {
 
 def _soar_guard_cfg() -> dict[str, Any]:
     return {"host": "soar.test", "port": 8443}
+
+
+_PHASES: dict[str, Any] = {
+    "count": 2,
+    "num_pages": 1,
+    "data": [
+        {
+            "create_time": "2026-11-09T00:00:00Z",
+            "id": 10,
+            "modified_time": "2026-11-09T00:00:00Z",
+            "name": "Detection",
+            "order": 7,
+            "sla": 0,
+            "sla_type": "minutes",
+            "template": 1,
+            "tasks": [
+                {
+                    "create_time": "2026-11-09T00:00:00Z",
+                    "description": "Keep this task",
+                    "id": 100,
+                    "is_note_required": True,
+                    "modified_time": "2026-11-09T00:00:00Z",
+                    "name": "Investigate",
+                    "order": 1,
+                    "owner": None,
+                    "phase": 10,
+                    "role": None,
+                    "sla": 0,
+                    "sla_type": "minutes",
+                    "suggestions": [],
+                }
+            ],
+        },
+        {
+            "create_time": "2026-11-09T00:00:00Z",
+            "id": 11,
+            "modified_time": "2026-11-09T00:00:00Z",
+            "name": "Analysis",
+            "order": 2,
+            "sla": 0,
+            "sla_type": "minutes",
+            "tasks": [],
+            "template": 1,
+        },
+    ],
+}
 
 
 # ---------------------------------------------------------------------------
@@ -194,11 +233,9 @@ class TestWorkbookTemplatesUpdate:
         mock_resolve.return_value = _WRITE_CFG
         mock_guard.return_value = _soar_guard_cfg()
         client = MagicMock()
-        # First get: name resolution returns templates list
-        # Second get: fetch current template detail
         client.get.side_effect = [
             _TEMPLATES,  # name resolution
-            _TEMPLATES["data"][0],  # detail (phases order 1, 2)
+            _PHASES,  # phases from their own endpoint
         ]
         client.post.return_value = {"success": True}
         mock_cls.return_value = client
@@ -216,12 +253,19 @@ class TestWorkbookTemplatesUpdate:
             ],
         )
         assert result.exit_code == 0
-        body = client.post.call_args[1]["body"]
-        # Existing 2 phases + 1 new
-        assert len(body["phases"]) == 3
-        new_phase = body["phases"][-1]
-        assert new_phase["name"] == "Recovery"
-        assert new_phase["order"] == 3  # max(1,2) + 1
+        client.get.assert_has_calls(
+            [
+                call("workbook_template", params={"_filter_name": '"NIST 800-61"'}),
+                call(
+                    "workbook_phase_template",
+                    params={"_filter_template": 1, "page_size": 0},
+                ),
+            ]
+        )
+        client.post.assert_called_once_with(
+            "workbook_phase_template",
+            body={"template_id": 1, "name": "Recovery", "order": 8},
+        )
 
     @patch(PATCH_SOAR_RESOLVE)
     @patch(PATCH_CLIENT)
@@ -235,7 +279,7 @@ class TestWorkbookTemplatesUpdate:
         mock_resolve.return_value = _WRITE_CFG
         mock_guard.return_value = _soar_guard_cfg()
         client = MagicMock()
-        client.get.return_value = _TEMPLATES["data"][1]  # id=2
+        client.get.return_value = _PHASES
         client.post.return_value = {"success": True}
         mock_cls.return_value = client
 
@@ -254,9 +298,16 @@ class TestWorkbookTemplatesUpdate:
             ],
         )
         assert result.exit_code == 0
-        body = client.post.call_args[1]["body"]
-        new_names = [p["name"] for p in body["phases"][-2:]]
-        assert new_names == ["Eradicate", "Lessons Learned"]
+        assert client.post.call_args_list == [
+            call(
+                "workbook_phase_template",
+                body={"template_id": 2, "name": "Eradicate", "order": 8},
+            ),
+            call(
+                "workbook_phase_template",
+                body={"template_id": 2, "name": "Lessons Learned", "order": 9},
+            ),
+        ]
 
     @patch(PATCH_SOAR_RESOLVE)
     @patch(PATCH_CLIENT)
@@ -270,6 +321,7 @@ class TestWorkbookTemplatesUpdate:
         mock_resolve.return_value = _WRITE_CFG
         mock_guard.return_value = _soar_guard_cfg()
         client = MagicMock()
+        client.get.return_value = _PHASES
         mock_cls.return_value = client
 
         result = CliRunner().invoke(
@@ -285,6 +337,8 @@ class TestWorkbookTemplatesUpdate:
         )
         assert result.exit_code == 0
         assert "[DRY RUN]" in result.stderr
+        assert "Detection" in result.stderr
+        assert "Analysis" in result.stderr
         client.post.assert_not_called()
 
     @patch(PATCH_SOAR_RESOLVE)
@@ -306,6 +360,78 @@ class TestWorkbookTemplatesUpdate:
             ["--yes", "soar", "workbook-templates", "update", "1"],
         )
         assert result.exit_code != 0
+
+    @patch(PATCH_SOAR_RESOLVE)
+    @patch(PATCH_CLIENT)
+    @patch(PATCH_RESOLVE)
+    def test_update_partial_failure(
+        self, mock_resolve: MagicMock, mock_cls: MagicMock, mock_guard: MagicMock
+    ) -> None:
+        mock_resolve.return_value = _WRITE_CFG
+        mock_guard.return_value = _soar_guard_cfg()
+        client = mock_cls.return_value
+        client.get.return_value = _PHASES
+        client.post.side_effect = [
+            {"success": True, "id": 12},
+            SOARError("cannot add phase", kind="error", http_status=500),
+        ]
+        result = CliRunner().invoke(
+            cli,
+            [
+                "--yes",
+                "soar",
+                "workbook-templates",
+                "update",
+                "1",
+                "--add-phase",
+                "Recovery",
+                "--add-phase",
+                "Review",
+                "--add-phase",
+                "Later",
+            ],
+        )
+        assert result.exit_code == 1
+        assert "Added phases before error: Recovery" in result.stderr
+        assert "cannot add phase" in result.stderr
+        assert client.post.call_args_list == [
+            call(
+                "workbook_phase_template",
+                body={"template_id": 1, "name": "Recovery", "order": 8},
+            ),
+            call(
+                "workbook_phase_template",
+                body={"template_id": 1, "name": "Review", "order": 9},
+            ),
+        ]
+
+    @patch(PATCH_SOAR_RESOLVE)
+    @patch(PATCH_CLIENT)
+    @patch(PATCH_RESOLVE)
+    def test_update_phase_read_failure(
+        self, mock_resolve: MagicMock, mock_cls: MagicMock, mock_guard: MagicMock
+    ) -> None:
+        mock_resolve.return_value = _WRITE_CFG
+        mock_guard.return_value = _soar_guard_cfg()
+        client = mock_cls.return_value
+        client.get.side_effect = SOARError(
+            "cannot read phases", kind="error", http_status=500
+        )
+        result = CliRunner().invoke(
+            cli,
+            [
+                "--yes",
+                "soar",
+                "workbook-templates",
+                "update",
+                "1",
+                "--add-phase",
+                "Recovery",
+            ],
+        )
+        assert result.exit_code == 1
+        assert "cannot read phases" in result.stderr
+        client.post.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

@@ -386,17 +386,23 @@ def test_asset_absence(
 
 
 @pytest.mark.parametrize(
-    "owner,missing_phase,expected",
+    "owner,missing_phase,missing_template_phase,expected",
     [
-        ("analyst", "", 0),
-        (73, "", 0),
-        (99, "", 1),
-        ("analyst", "fixture", 1),
-        ("analyst", "fixture_second", 1),
+        ("analyst", "", "", 0),
+        (73, "", "", 0),
+        (99, "", "", 1),
+        ("analyst", "fixture", "", 1),
+        ("analyst", "fixture_second", "", 1),
+        ("analyst", "", "fixture", 1),
+        ("analyst", "", "fixture_second", 1),
     ],
 )
 def test_cases_template_phases_and_owner(
-    tmp_path: Path, owner: str | int, missing_phase: str, expected: int
+    tmp_path: Path,
+    owner: str | int,
+    missing_phase: str,
+    missing_template_phase: str,
+    expected: int,
 ) -> None:
     env, _ = stub_environment(tmp_path)
     binary = Path(env["SPLUNKCTL"])
@@ -413,6 +419,10 @@ if args[:3] == ['soar', 'containers', 'create']:
     rows = [{'id': 42}]
 elif args[:3] == ['soar', 'containers', 'get']:
     rows = [{'id': 42, 'status': 'closed', 'container_type': 'case'}]
+elif args[:3] == ['soar', 'workbook-templates', 'get']:
+    rows = [{'id': 1, 'name': 'fixture', 'phases': [
+        {'name': name, 'tasks': []} for name in ('fixture', 'fixture_second')
+        if name != os.environ['SMOKE_MISSING_TEMPLATE_PHASE']]}]
 elif args[:3] == ['soar', 'cases', 'workbook']:
     rows = [{'name': name, 'tasks': []} for name in ('fixture', 'fixture_second')
             if name != os.environ['SMOKE_MISSING_PHASE']]
@@ -435,6 +445,7 @@ print(json.dumps(rows))
         SMOKE_SCRIPT=str(ROOT / "scripts/live-smoke-soar.d/60-cases.sh"),
         SMOKE_OWNER=json.dumps(owner),
         SMOKE_MISSING_PHASE=missing_phase,
+        SMOKE_MISSING_TEMPLATE_PHASE=missing_template_phase,
     )
     json_helper = (
         RUNNER.read_text().split("json_value() {", 1)[1].split("# Asset DELETE", 1)[0]

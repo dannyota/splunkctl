@@ -7,6 +7,7 @@ cases_group() {
     expect_ok "$S" soar workbook-templates get "$N" --json
     expect_ok "$S" soar workbook-templates list --json
     expect_ok "$S" soar workbook-templates update "$N" --add-phase "${N}_second" --yes
+    check_json "any(p.get('name') == '$N' for p in d[0]['phases']) and any(p.get('name') == '${N}_second' for p in d[0]['phases'])" soar workbook-templates get "$N"
     capture "$T/case-precheck.json" "$S" soar containers list --filter "_filter_name=\"${N}_case\"" --json || return
     [ "$(json_value "$T/case-precheck.json" 'len(d)')" = 0 ] || { bad 'case name already exists'; return; }
     defer soar_cleanup containers "${N}_case"

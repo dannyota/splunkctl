@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fix `soar workbook-templates update --add-phase` deleting existing phases; `get` now shows phases.
+
 - Fix `soar cases promote --template` to apply the selected workbook using `template_id`.
 
 - Add exact scoped name and result limit filters to `soar playbooks list --name/--limit`.
