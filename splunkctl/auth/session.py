@@ -146,7 +146,10 @@ def resolve_target(
 
 def sessions_dir() -> Path:
     """Return the session directory (derived from config so tests isolate it)."""
-    return cfg_mod.DEFAULT_DIR / "sessions"
+    path = cfg_mod.DEFAULT_DIR / "sessions"
+    path.mkdir(mode=0o700, parents=True, exist_ok=True)
+    path.chmod(stat.S_IRWXU)
+    return path
 
 
 def session_path(profile: str, target: Target) -> Path:

@@ -19,7 +19,8 @@
       "protocol": "saml",
       "redirectUris": ["@@SIEM_ACS@@"],
       "attributes": {
-        "saml.assertion.signature": "false",
+        "saml.server.signature": "true",
+        "saml.assertion.signature": "true",
         "saml.force.post.binding": "true",
         "saml_name_id_format": "email",
         "saml_assertion_consumer_url_post": "@@SIEM_ACS@@",

@@ -3,11 +3,13 @@
 import json
 from unittest.mock import MagicMock, patch
 
+import pytest
 from click.testing import CliRunner
 
 from splunkctl.main import cli
 
 
+@pytest.mark.parametrize("deadline", [None, 600])
 @patch("splunkctl.commands.auth.browser_available", return_value=True)
 @patch("splunkctl.commands.auth.run_login")
 @patch("splunkctl.commands.auth.get_adapter")
@@ -19,6 +21,7 @@ def test_login_creates_session(
     mock_adapter: MagicMock,
     mock_run: MagicMock,
     mock_avail: MagicMock,
+    deadline: int | None,
 ) -> None:
     mock_rt.return_value = MagicMock(
         target="siem",
@@ -34,15 +37,19 @@ def test_login_creates_session(
     adapter.validate.return_value = "valid"
     mock_run.return_value = {"splunkd_8000": "k"}
 
-    result = CliRunner().invoke(cli, ["auth", "login", "--target", "siem"])
+    args = ["--timeout", "17", "auth", "login", "--target", "siem"]
+    if deadline is not None:
+        args += ["--timeout", str(deadline)]
+    result = CliRunner().invoke(cli, args)
     assert result.exit_code == 0, result.output
     assert mock_save.call_count == 1
     mock_run.assert_called_once_with(
         login_url="http://siem:8000/en-US/account/login",
         expected_origin="http://siem:8000",
         verify=True,
-        timeout=30,
+        timeout=deadline or 300,
     )
+    assert adapter.validate.call_args.kwargs["timeout"] == 17
     record = mock_save.call_args.args[1]
     assert record.values["session_key"] == "k"
 

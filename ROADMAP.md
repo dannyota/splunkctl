@@ -7,11 +7,7 @@ shipped command surface is the generated
 
 ## Now
 
-- **Live-verify browser SAML auth on the current lab.** `auth login`,
-  `status` and `logout` were built against the 2026-08 lab and have not yet
-  run against Splunk Enterprise 10.6.1.1 or SOAR 8.8.0.282 with the Keycloak
-  lab. Script the SIEM SAML setup (`lab/keycloak/`) so the check is
-  repeatable.
+Nothing in progress.
 
 ## Out of scope
 
@@ -64,5 +60,5 @@ explicit config import.
 
 Waves 1–34 (v0.1.0 to v0.9.0) built the SIEM command tree, the MCP server
 and the SOAR arc; later releases hardened them against live Splunk 10.6 and
-SOAR 8.8. Per-release detail is in [CHANGELOG.md](CHANGELOG.md) and
+SOAR 8.8; browser SAML login, status and logout now pass on the current Keycloak lab with scripted SIEM setup. Per-release detail is in [CHANGELOG.md](CHANGELOG.md) and
 [docs/changelog-archive.md](docs/changelog-archive.md).

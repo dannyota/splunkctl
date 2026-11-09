@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Add idempotent SIEM Keycloak SAML setup with certificate extraction and config backup.
+- Require Keycloak to sign both the SIEM SAML response and assertion.
+- Add the lab browser login harness and document end-to-end checks for SIEM and SOAR.
+- Give `auth login --timeout` a separate 300-second browser deadline.
+- Enforce 0700 permissions on the sessions directory, including existing directories.
+- Suppress raw urllib3 TLS warnings in auth adapters and emit the CLI warning once.
+- Remove unused lab SP entity URL defaults.
+
 ## 0.17.1
 
 SOAR fixes from the first live run of `scripts/live-smoke-soar.sh`. The SOAR

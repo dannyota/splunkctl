@@ -138,3 +138,23 @@ def test_resolve_target_siem_requires_web_url(tmp_path: Path, monkeypatch) -> No
     cfg_mod.save({"host": "100.65.1.10", "auth_mode": "browser"}, tmp_path / "cfg.yaml")
     with pytest.raises(sess.SessionError):
         sess.resolve_target(tmp_path / "cfg.yaml", None, "siem")
+
+
+@pytest.mark.parametrize("existing", [False, True])
+def test_sessions_root_is_private_under_shared_umask(tmp_path, monkeypatch, existing):
+    import os
+
+    root = tmp_path / ".splunkctl"
+    root.mkdir(mode=0o775)
+    root.chmod(0o775)
+    monkeypatch.setattr(cfg_mod, "DEFAULT_DIR", root)
+    if existing:
+        (root / "sessions").mkdir(mode=0o775)
+        (root / "sessions").chmod(0o775)
+    previous = os.umask(0o002)
+    try:
+        sess.save("default", _record())
+        assert sess.sessions_dir().stat().st_mode & 0o777 == 0o700
+        assert root.stat().st_mode & 0o777 == 0o775
+    finally:
+        os.umask(previous)

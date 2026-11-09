@@ -12,10 +12,19 @@ from __future__ import annotations
 from typing import Literal, Protocol
 
 import requests
+import urllib3
 
 from splunkctl.auth.session import Target
+from splunkctl.client import _warn_tls_off as _warn_siem_tls_off
+from splunkctl.soar.client import _warn_tls_off as _warn_soar_tls_off
 
 type ValidationStatus = Literal["valid", "expired", "unreachable"]
+
+
+def _configure_tls(target: Target, verify: bool) -> None:
+    if not verify:
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        (_warn_siem_tls_off if target == "siem" else _warn_soar_tls_off)()
 
 
 class ExtractError(RuntimeError):
@@ -64,6 +73,7 @@ class SIEMAdapter:
         self, values: dict[str, str], *, api_base: str, verify: bool, timeout: int
     ) -> ValidationStatus:
         """Validate the session key against the management API."""
+        _configure_tls(self.target, verify)
         try:
             resp = requests.get(
                 f"{api_base.rstrip('/')}/services/server/info",
@@ -84,6 +94,7 @@ class SIEMAdapter:
         self, values: dict[str, str], *, web_url: str, verify: bool, timeout: int
     ) -> None:
         """GET the Splunk Web logout route to end the session."""
+        _configure_tls(self.target, verify)
         requests.get(
             f"{web_url.rstrip('/')}/en-US/account/logout",
             cookies={values["cookie"]: values["session_key"]},
@@ -112,6 +123,7 @@ class SOARAdapter:
         self, values: dict[str, str], *, api_base: str, verify: bool, timeout: int
     ) -> ValidationStatus:
         """Validate the cookies against ``/rest/version``."""
+        _configure_tls(self.target, verify)
         try:
             resp = requests.get(
                 f"{api_base.rstrip('/')}/rest/version",
@@ -131,6 +143,7 @@ class SOARAdapter:
         self, values: dict[str, str], *, web_url: str, verify: bool, timeout: int
     ) -> None:
         """POST the SOAR logout route to end the session."""
+        _configure_tls(self.target, verify)
         requests.post(
             f"{web_url.rstrip('/')}/logout",
             cookies=values,

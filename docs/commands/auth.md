@@ -18,6 +18,7 @@ splunkctl auth login [OPTIONS]
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--target` | choice: siem, soar | - | [required] |
+| `--timeout` | integer range | 300 | Browser login deadline in seconds. |
 
 ## auth logout
 

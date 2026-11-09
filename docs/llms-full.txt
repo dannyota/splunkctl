@@ -3675,7 +3675,7 @@ When to use: your Splunk or SOAR instance authenticates through a SAML identity 
 ```text
 splunkctl config init --web-url <https://splunk.example.com:8000> [--profile NAME] [--auth-mode auto|browser]
 splunkctl config init --soar --web-url <https://soar.example.com> [--sso-url URL] [--profile NAME]
-splunkctl auth login --target <siem|soar>
+splunkctl auth login --target <siem|soar> [--timeout SECONDS]
 splunkctl auth status [--target siem|soar|both]
 splunkctl auth logout [--target siem|soar|both]
 ```
@@ -3699,6 +3699,8 @@ splunkctl auth login --target soar
 ```
 
 Expected result: Chromium opens at the product login route; you complete the identity provider prompts, including any TOTP code; splunkctl extracts only the product session (the Splunk `splunkd_<port>` cookie, or the SOAR `sessionid` and `csrftoken` cookies), proves it against the product API, and prints `siem session stored (profile 'NAME').`. `login` requires exactly one target because two back-to-back browser flows are easy to confuse.
+
+`auth login --timeout` sets the browser deadline (default 300 seconds), allowing time for SSO and MFA. The global `splunkctl --timeout` still controls product API requests and session validation.
 
 #### Check the session
 

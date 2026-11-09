@@ -432,6 +432,16 @@
                 "siem",
                 "soar"
               ]
+            },
+            {
+              "name": "login_timeout",
+              "type": "integer range",
+              "kind": "option",
+              "flags": [
+                "--timeout"
+              ],
+              "help": "Browser login deadline in seconds.",
+              "default": 300
             }
           ]
         },
