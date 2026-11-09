@@ -1,6 +1,13 @@
 # Changelog
 
-## Unreleased
+## 0.17.0
+
+A reusable single-host lab for Splunk Enterprise 10.6.1.1 and SOAR 8.8, Splunk
+10.6 KV store support, `SPLUNK_WEB_URL`, and a SOAR live smoke test with the
+SOAR fixes found while building it. The SIEM live smoke passed with 0
+failures on Splunk 10.6.1.1 (macOS arm64 build and an Ubuntu 24.04 podman
+container). The SOAR changes are unit-tested; they have not yet run against
+a SOAR instance.
 
 ### Added
 
