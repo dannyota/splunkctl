@@ -1,14 +1,32 @@
 # Changelog
 
-## Unreleased
+## 0.17.2
 
-- Add idempotent SIEM Keycloak SAML setup with certificate extraction and config backup.
-- Require Keycloak to sign both the SIEM SAML response and assertion.
-- Add the lab browser login harness and document end-to-end checks for SIEM and SOAR.
-- Give `auth login --timeout` a separate 300-second browser deadline.
-- Enforce 0700 permissions on the sessions directory, including existing directories.
-- Suppress raw urllib3 TLS warnings in auth adapters and emit the CLI warning once.
-- Remove unused lab SP entity URL defaults.
+Browser SAML auth verified live on Splunk Enterprise 10.6.1.1 and SOAR
+8.8.0.282 against the Keycloak lab: `auth login`, `status` and `logout` work
+for both products, commands run on the browser session alone, and
+`config init` detects SAML and derives the SOAR SSO URL.
+
+### Fixed
+
+- `auth login` used the 30-second request timeout as the whole browser
+  deadline. `auth login --timeout` now sets it, default 300 seconds; the
+  request timeout still applies to session validation.
+- The sessions directory is created 0700 on save, including an existing
+  directory that was created with a looser umask. Reads no longer touch the
+  filesystem.
+- With `verify: false`, auth commands showed a raw urllib3
+  `InsecureRequestWarning`; they now print the usual splunkctl TLS warning.
+
+### Lab
+
+- `lab/keycloak/siem-configure.sh` configures Splunk SAML over SSH: it
+  extracts the Keycloak signing certificate, backs up `authentication.conf`,
+  restarts the systemd `Splunkd` unit, and confirms SAML is active.
+- `lab/keycloak/e2e-login.py` runs the real login broker and fills only the
+  Keycloak form, for repeatable end-to-end checks.
+- The Keycloak `splunk-siem` client signs the SAML response and assertion,
+  which Splunk requires. Unused SP entity URL defaults are removed.
 
 ## 0.17.1
 
