@@ -10,6 +10,7 @@ from click.shell_completion import get_completion_class
 from splunkctl import __version__, output
 from splunkctl import config as cfg_mod
 from splunkctl import errors as err_mod
+from splunkctl.commands.acl import acl_group
 from splunkctl.commands.alerts import alerts_group
 from splunkctl.commands.api import api_group
 from splunkctl.commands.apps import apps_group
@@ -321,6 +322,7 @@ def completion_cmd(shell: str) -> None:
     click.echo(comp.source())
 
 
+cli.add_command(acl_group)
 cli.add_command(alerts_group)
 cli.add_command(api_group)
 cli.add_command(apps_group)

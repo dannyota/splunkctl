@@ -8,6 +8,7 @@ from splunklib.client import OperationError
 from splunkctl import guard, output
 from splunkctl.client import get_client
 from splunkctl.commands.common import fetch_page, list_options
+from splunkctl.commands.server_introspection import number
 
 _LIST_FIELDS = (
     "datatype",
@@ -41,6 +42,8 @@ def _index_row(idx: Any, fields: tuple[str, ...] = _LIST_FIELDS) -> dict[str, An
     c: dict[str, Any] = idx.content
     row: dict[str, Any] = {"name": idx.name}
     row.update({f: c.get(f, "") for f in fields})
+    if "currentDBSizeMB" in row:
+        row["currentDBSizeMB"] = number(row["currentDBSizeMB"])
     return row
 
 

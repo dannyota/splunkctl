@@ -34,7 +34,7 @@ ensure_index() {
 ensure_rule() {
     if [ "${rule_ready:-0}" = 0 ]; then
         if absent rules get "$N" --app search && {
-            defer "$S" rules delete "$N" --yes
+            defer shared_fixture_delete saved/searches "$N"
             run "$S" rules create --name "$N" --search '| makeresults | eval sc_live_n=1' --app search --yes
         }; then
             rule_ready=1

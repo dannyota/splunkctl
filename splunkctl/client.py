@@ -257,8 +257,38 @@ class SplunkClient:
             sharing: One of user, app, global.
             owner: Defaults to the entity's current owner, else "nobody".
         """
+        from splunkctl import acl_ops
+        from splunkctl.rest_adapters import _Entity, _segment
+
         acl: dict[str, Any] = dict(entity.access)
-        entity.acl_update(sharing=sharing, owner=owner or acl.get("owner", "nobody"))
+        if isinstance(entity, _Entity):
+            path = entity._alternate or entity._path
+        else:
+            path = entity.path
+        if not str(path).startswith("/services"):
+            namespace_owner = (
+                acl.get("owner", "nobody") if acl.get("sharing") == "user" else "nobody"
+            )
+            path = (
+                "/servicesNS/"
+                + _segment(namespace_owner)
+                + "/"
+                + _segment(acl.get("app", "search"))
+                + "/"
+                + path
+            )
+        entry = acl_ops.one(rest_get_json(self.service, path))
+        fields = acl_ops.changes(
+            self.service, entry, sharing=sharing, owner=owner, read=None, write=None
+        )
+        if acl_ops.unchanged(entry, fields):
+            return
+        updated = acl_ops.update(self.service, entry, fields)
+        if isinstance(entity, _Entity):
+            entity._load(updated, owner=None, app=None)
+        else:
+            entity.path = acl_ops.canonical(updated)
+            entity._state.access.update(updated["acl"])
 
 
 def rest_get_json(

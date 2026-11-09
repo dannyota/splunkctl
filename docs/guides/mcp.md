@@ -15,8 +15,10 @@ When to use: you want an AI agent (Claude Code, Claude Desktop, Cursor, Windsurf
 
 ```text
 splunkctl mcp serve [--read-only] [--transport stdio|http] [--host 127.0.0.1|localhost|::1] [--port N]
-splunkctl mcp install [--transport stdio|http] [--host 127.0.0.1|localhost|::1] [--port N]
+splunkctl mcp install [--client claude|codex|cursor|gemini] [--preview] [--read-only] [--transport stdio|http] [--host 127.0.0.1|localhost|::1] [--port N]
 ```
+
+See [Install MCP client registrations](mcp-clients.md) for all four project adapters, preview and merge behavior.
 
 `serve` starts the server (stdio by default). `install` writes a `splunkctl` entry into `.mcp.json` in the current directory for Claude Code. `--host` and `--port` apply only to `--transport http`; the default listener is `127.0.0.1:8765` and the MCP URL is `http://127.0.0.1:8765/mcp`.
 

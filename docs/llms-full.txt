@@ -3215,6 +3215,36 @@ splunkctl --read-only --yes rules delete 'Example Rule'  # refused
 
 For MCP, mutation tools are omitted from discovery and focus results. The generic `run` tool also refuses mutations, and every CLI subprocess inherits read-only mode. See [Set up the MCP server](https://splunkctl.danny.vn/guides/mcp.md).
 
+## Inspect and change permissions
+
+Source: https://splunkctl.danny.vn/guides/acl.md
+
+
+Use `acl get` to inspect an object's owner, app, sharing, role arrays and modification capabilities. Use `acl set` to preview a change; add `--yes` to apply it.
+
+```bash
+splunkctl acl get saved-search 'My search' --app search
+splunkctl acl set saved-search 'My search' --app search --sharing app --read '*' --write admin
+splunkctl acl set saved-search 'My search' --app search --sharing app --read '*' --write admin --yes
+splunkctl acl get saved-search 'My search' --app search
+```
+
+`--app` selects the namespace. On `get`, `--owner` selects the current owner. On `set`, `--current-owner` selects it and `--owner` changes ownership. Omitted selectors use the current namespace. Without configured selectors, lookup uses all owners (`-`) in the `search` app. An ambiguous lookup fails with `conflict`; select an owner and app explicitly.
+
+Supported types: `saved-search`, `macro`, `eventtype`, `tag`, `props`, `transform`, `lookup-definition`, `lookup-table`, `field-extraction`, `data-model`, `view` and `dashboard`.
+
+Names are exact stanza names. Include a macro's argument suffix, such as `'my_macro(2)'`. For `tag`, NAME is the tags.conf stanza `field=value`, such as `'sourcetype=my_source'`; permissions belong to the field/value pair. A field extraction is named `'<stanza> : EXTRACT-<name>'`. The CLI encodes each name as one URL segment.
+
+`--sharing` accepts `user`, `app` or `global`. `--read` and `--write` accept comma-separated roles. Quote `'*'` for everyone, pass `''` to clear a role list, and omit an option to preserve its value. Duplicate roles are removed. Unknown roles fail before any write.
+
+Private objects (`sharing=user`) have null read and write permissions in JSON and blank cells in table or CSV output. Permission options are rejected when the effective sharing is `user`. To change permissions, also select `app` or `global` sharing.
+
+Sharing can move an object to the `nobody` namespace. The CLI reads back from the response's current location. Existing `dashboards share` and `rules share` commands use the same ACL helper.
+
+The [Splunk REST ACL rules](https://help.splunk.com/en/splunk-enterprise/leverage-rest-apis/rest-api-user-manual/10.0/rest-api-user-manual/basic-concepts-about-the-splunk-platform-rest-api) describe sharing and role permissions. The supplied Splunk 10.6.1.1 fixtures additionally show that ACL updates require both owner and sharing, and that Splunk silently stores unknown roles; splunkctl validates them first.
+
+See [Command reference: acl](https://splunkctl.danny.vn/commands/acl.md) and [Read-only access](https://splunkctl.danny.vn/guides/read-only.md).
+
 ## Call Splunk REST endpoints
 
 Source: https://splunkctl.danny.vn/guides/api.md
@@ -3578,8 +3608,10 @@ When to use: you want an AI agent (Claude Code, Claude Desktop, Cursor, Windsurf
 
 ```text
 splunkctl mcp serve [--read-only] [--transport stdio|http] [--host 127.0.0.1|localhost|::1] [--port N]
-splunkctl mcp install [--transport stdio|http] [--host 127.0.0.1|localhost|::1] [--port N]
+splunkctl mcp install [--client claude|codex|cursor|gemini] [--preview] [--read-only] [--transport stdio|http] [--host 127.0.0.1|localhost|::1] [--port N]
 ```
+
+See [Install MCP client registrations](https://splunkctl.danny.vn/guides/mcp-clients.md) for all four project adapters, preview and merge behavior.
 
 `serve` starts the server (stdio by default). `install` writes a `splunkctl` entry into `.mcp.json` in the current directory for Claude Code. `--host` and `--port` apply only to `--transport http`; the default listener is `127.0.0.1:8765` and the MCP URL is `http://127.0.0.1:8765/mcp`.
 
@@ -3755,6 +3787,45 @@ Expected result: the read-back shows `disabled: 1` after the apply.
 - [Set up and check SOAR](https://splunkctl.danny.vn/guides/soar.md)
 - [Run searches](https://splunkctl.danny.vn/guides/search.md)
 - [Command reference: mcp](https://splunkctl.danny.vn/commands/mcp.md)
+
+## Install MCP client registrations
+
+Source: https://splunkctl.danny.vn/guides/mcp-clients.md
+
+
+Run `mcp install` in the project directory. Claude is the default client.
+
+```bash
+splunkctl mcp install --preview
+splunkctl mcp install --client claude
+splunkctl mcp install --client codex --read-only
+splunkctl mcp install --client cursor
+splunkctl mcp install --client gemini
+```
+
+| Client | Project file | Server key | HTTP field |
+| --- | --- | --- | --- |
+| Claude | `.mcp.json` | `mcpServers.splunkctl` | `type: http`, `url` |
+| Codex | `.codex/config.toml` | `mcp_servers.splunkctl` | `url` |
+| Cursor | `.cursor/mcp.json` | `mcpServers.splunkctl` | `url` |
+| Gemini | `.gemini/settings.json` | `mcpServers.splunkctl` | `httpUrl` |
+
+Stdio entries launch the current Python interpreter with `-m splunkctl mcp serve`. `--read-only` adds the server's mutation policy. HTTP registrations cannot enforce that policy, so `--read-only --transport http` is rejected. Start the HTTP server separately with the desired policy:
+
+```bash
+splunkctl mcp serve --transport http --read-only
+splunkctl mcp install --client codex --transport http
+```
+
+The default URL is `http://127.0.0.1:8765/mcp`. `--host` accepts loopback addresses only; `--port` selects the listener port.
+
+Installation writes immediately unless `--preview` is supplied. It preserves unrelated servers and settings, removes obsolete connection fields when switching transports, and preserves TOML comments. Identical registrations leave file bytes and modification time unchanged. Changed files are replaced atomically with their existing permissions.
+
+JSON files must contain strict JSON. JSONC, malformed JSON and incompatible configuration shapes are refused with a usage error and the entry to add by hand. The installer never rewrites JSONC. User-wide registration and VS Code registration are deferred.
+
+Client references: [Claude Code](https://code.claude.com/docs/en/mcp), [Codex](https://developers.openai.com/codex/mcp), [Cursor](https://cursor.com/docs/mcp), [Gemini CLI](https://geminicli.com/docs/tools/mcp-server/).
+
+See [MCP setup and transports](https://splunkctl.danny.vn/guides/mcp.md), [Read-only access](https://splunkctl.danny.vn/guides/read-only.md) and [Command reference: mcp](https://splunkctl.danny.vn/commands/mcp.md).
 
 ## Log in through browser SAML
 
@@ -4691,6 +4762,48 @@ Expected result (read-only): `pools` gives one row per pool (`name`, `cpu_weight
 - [Log in through browser SAML](https://splunkctl.danny.vn/guides/auth.md)
 - [Manage KV store collections](https://splunkctl.danny.vn/guides/kvstore.md)
 - [Command reference: server](https://splunkctl.danny.vn/commands/server.md)
+
+## Inspect ingestion and runtime logging
+
+Source: https://splunkctl.danny.vn/guides/server-introspection.md
+
+
+Read ingestion queue occupancy, indexer status and filesystem usage:
+
+```bash
+splunkctl --json server introspection queues
+splunkctl --json server introspection indexer
+splunkctl --json server introspection disk
+```
+
+Queue rows include current occupancy, maximum, unit, fill ratio and blocked status. A zero maximum produces a null ratio. Indexer rows include name, status, reason and average KB per second. Disk sizes are numbers in MB, with capacity, available, used and fill ratio. Missing fields, including filesystem type, become JSON nulls. Table and CSV cells for null values are blank.
+
+These commands use the [Splunk introspection endpoints](https://help.splunk.com/en/splunk-enterprise/rest-api-reference/10.0/introspection-endpoints/introspection-endpoint-descriptions) and `server/status/partitions-space`. Response mapping is covered by supplied Splunk 10.6.1.1 fixtures.
+
+Inspect every logger, or fetch one component:
+
+```bash
+splunkctl server log-level get
+splunkctl server log-level get TcpOutputProc
+```
+
+The unfiltered command requests `count=0` to avoid Splunk's default page limit. A component filter fetches that component directly.
+
+Save the original level before changing it:
+
+```bash
+splunkctl server log-level get TcpOutputProc
+splunkctl server log-level set TcpOutputProc DEBUG
+splunkctl server log-level set TcpOutputProc DEBUG --yes
+splunkctl server log-level get TcpOutputProc
+splunkctl server log-level set TcpOutputProc INFO --yes
+```
+
+The final example assumes the original level was INFO. Restore the level you actually recorded. Accepted levels are DEBUG, INFO, WARN and ERROR, case-insensitive. Without `--yes`, the setter previews the before and after levels. An unchanged level skips the write.
+
+Changes are runtime only. Restarting splunkd resets them, as verified by the fixture capture on Splunk 10.6.1.1. Persistent logging configuration requires `log-local.cfg`; see [Splunk's logging guide](https://help.splunk.com/en/splunk-enterprise/administer/troubleshoot/10.6/splunk-enterprise-log-files/enable-debug-logging).
+
+See [Command reference: server](https://splunkctl.danny.vn/commands/server.md).
 
 ## Manage KV store collections
 

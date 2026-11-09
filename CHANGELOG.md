@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Project MCP registration for Claude, Codex, Cursor and Gemini, with preview,
+  stdio read-only policy and comment-preserving Codex TOML edits.
+- Object ACL inspection and guarded ownership, sharing and role changes.
+- Server queue, indexer and disk introspection plus guarded runtime logging
+  changes. Logger changes reset when splunkd restarts.
+
 ## 0.18.0
 
 Read-only mode, raw REST access and request tagging, inspired by Splunk's

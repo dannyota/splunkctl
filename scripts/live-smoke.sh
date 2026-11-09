@@ -34,6 +34,38 @@ delete_fixture() {
         *) absent "$group" get "$name";;
     esac
 }
+# Resolve again at cleanup: sharing moves objects to the nobody namespace.
+shared_fixture_delete() {
+    local resource=$1 name=$2 status paths path
+    case "$resource" in saved/searches|data/ui/views|configs/conf-macros) ;; *) return 1;; esac
+    case "$name" in sc_live_*) ;; *) return 1;; esac
+    "$S" --json api get "/servicesNS/-/search/$resource/$name" \
+        > "$T/shared-get.json" 2> "$T/shared-get.err"
+    status=$?
+    if [ "$status" -ne 0 ]; then
+        is_not_found "$status" "$T/shared-get.err"
+        return $?
+    fi
+    paths=$("$PY" - "$T/shared-get.json" "$name" "$resource" <<'PYSHARED' 2> "$T/shared-path.err"
+import json, sys
+from urllib.parse import urlsplit
+body, name, resource = sys.argv[1:]
+for entry in json.load(open(body))[0].get('entry', []):
+    assert entry['name'] == name and entry['acl']['app'] == 'search'
+    target = urlsplit(entry['id']).path
+    assert target.startswith('/servicesNS/') and '/' + resource + '/' in target
+    print(target)
+PYSHARED
+) || return 1
+    while IFS= read -r path; do
+        [ -n "$path" ] || continue
+        "$S" --json api delete "$path" --yes > "$T/shared-delete.json" 2> "$T/shared-delete.err"
+        status=$?
+        if [ "$status" -ne 0 ]; then
+            is_not_found "$status" "$T/shared-delete.err" || return 1
+        fi
+    done <<< "$paths"
+}
 # No CLI stanza-delete verb exists. Use the same installed client and profile.
 stanza_delete() {
     "$PY" - "$1" "$2" <<'PY'
@@ -63,4 +95,5 @@ printf '<dashboard version="1.1"><label>sc_live_v2</label></dashboard>\n' > "$T/
 . "$HERE/live-smoke.d/20-content.sh"
 . "$HERE/live-smoke.d/30-admin.sh"
 . "$HERE/live-smoke.d/40-api.sh"
+. "$HERE/live-smoke.d/45-acl-server.sh"
 if [ -n "${alert_started:-}" ]; then finish_fired_alert; fi

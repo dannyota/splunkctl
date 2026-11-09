@@ -97,6 +97,21 @@ if group in ('rules', 'lookups', 'dashboards'):
             print('{"error":{"kind":"not_found"}}', file=sys.stderr)
             sys.exit(1)
         respond([{'description': 'sc_live_state_changed'}])
+if group == 'api':
+    name = state['rules']
+    if verb == 'get':
+        assert args[2] == '/servicesNS/-/search/saved/searches/' + name
+        fixture = json.loads(Path(os.environ['ACL_FIXTURE']).read_text())
+        entry = fixture['entry'][0]
+        entry['name'] = name
+        entry['id'] = ('https://splunk-host/servicesNS/nobody/search/'
+                       'saved/searches/' + name)
+        respond([fixture])
+    if verb == 'delete':
+        assert args[2] == '/servicesNS/nobody/search/saved/searches/' + name
+        state.pop('rules')
+        state['shared_cleanup'] = True
+        respond()
 if group == 'state':
     target = Path(args[args.index('--dir')+1])
     if verb == 'pull':
@@ -137,10 +152,18 @@ raise AssertionError(args)
             "LIVE_ONLY": "state",
             "LIVE_SKIP": "",
             "STATE_FILE": str(state_file),
+            "ACL_FIXTURE": str(
+                ROOT
+                / "tests/fixtures/live/splunk-10.6.1.1"
+                / "acl-set-saved-search-getback.json"
+            ),
         },
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    assert json.loads(state_file.read_text())["pushes"] == 2
+    state = json.loads(state_file.read_text())
+    assert state["pushes"] == 2
+    assert state["shared_cleanup"] is True
+    assert "rules" not in state
 
 
 @pytest.mark.parametrize("mode", ["enables", "empty", "error", "transient"])

@@ -121,7 +121,13 @@ class _Entity:
                 + "/"
                 + self._path
             )
-        self._service.post(path + "/acl", body=fields)
+        from splunkctl import acl_ops
+
+        fields.setdefault("owner", self.access["owner"])
+        fields.setdefault("sharing", self.access["sharing"])
+        response = self._service.post(path + "/acl", body=fields, output_mode="json")
+        posted = acl_ops.one(json.loads(response.body.read()))
+        self._alternate = acl_ops.canonical(posted)
         return self._refresh()
 
 
