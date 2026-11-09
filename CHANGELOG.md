@@ -1,5 +1,47 @@
 # Changelog
 
+## Unreleased
+
+Live smoke coverage closed the remaining SIEM and SOAR gaps it can own, and
+found the fixes below on Splunk Enterprise 10.6.1.1 and SOAR 8.8.0.282.
+
+### Fixed
+
+- `server tokens revoke` reported success without deleting anything:
+  `DELETE authorization/tokens/<id>` returns 200 and leaves the token. It
+  now looks up the token's user, deletes `authorization/tokens/<user>?id=<id>`,
+  and reports `not_found` for an unknown id.
+- `server tokens list --user` failed with HTTP 400 (`userName` is not a
+  supported argument); it now sends `username`. The list requests every
+  token (`count=0`) instead of Splunk's default page of 30, and `last_used`
+  reads the `lastUsed` field.
+- `server tokens create` requires `--audience`; Splunk rejects a token
+  without one (HTTP 400).
+- `soar approvals respond` posted to `/rest/external_prompt/<id>`, which
+  returns 404 for an approval. It now posts to `/rest/approval/<id>`, takes
+  prompt answers with `--response`, and requires `--message` or
+  `--response`, as SOAR does.
+- Commands that upload through Splunk Web (`lookups upload`, `lookups
+  update` and lookup files in `state push`) failed on a SAML-enabled
+  Splunk with "Could not obtain CSRF token": the login page serves SAML
+  and rejects the local login with HTTP 400. The login now uses
+  `?loginType=splunk`, Splunk's local-login form, and an HTTP error
+  status is reported as a login failure.
+- `auth login` could wait out its whole timeout when the identity provider
+  returned to the product within half a second (silent SSO, or the lab's
+  auto-filled Keycloak form): the browser broker sampled the page URL every
+  500 ms and missed the round trip. It now records every main-frame
+  navigation.
+
+### Tests
+
+- The SIEM live smoke covers `alerts get` with an owned scheduled alert
+  and `server tokens create`/`revoke`. The SOAR smoke covers `soar approvals
+  get`/`respond` with `LIVE_SOAR_APPROVALS=1`, and tolerates a fast licensed
+  action finishing before `soar actions cancel`.
+- `lab/keycloak/auth-smoke.sh` runs browser `auth login`, `status` and
+  `logout` for SIEM and SOAR against the Keycloak lab.
+
 ## 0.17.2
 
 Browser SAML auth verified live on Splunk Enterprise 10.6.1.1 and SOAR

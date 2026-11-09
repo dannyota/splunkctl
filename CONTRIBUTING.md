@@ -59,6 +59,13 @@ bash scripts/gen-seo.sh --check
   SKIPPED. A populated acceleration summary is not awaited, so the
   populated-status fields stay covered by unit tests only.
   The `kvstore` export/import round trip requires a healthy KV store.
+  The alerts group creates an owned every-minute alert and checks
+  `alerts get` after the last group; it fails if the alert has not fired
+  within `LIVE_ALERT_WAIT` seconds (default 180, `0` skips it).
+  `server tokens create`/`revoke` run when token authentication is
+  enabled (the default on Splunk 10) and print SKIPPED otherwise.
+  Browser SAML `auth login`, `status` and `logout` run against the
+  Keycloak lab with `uv run bash lab/keycloak/auth-smoke.sh`.
 - Pages under `docs/commands/` are generated. Run `splunkctl docs generate`
   after changing help text and commit the result.
 - Prose in the repository is English, plain and direct. No em dashes.
@@ -78,6 +85,8 @@ playbook is excluded. A failed preflight blocks mutations.
 Community edition allows 100 licensed actions per day and five New/Open
 cases. Licensed probes require `LIVE_SOAR_ACTIONS=1`, `LIVE_SOAR_ACTION_ASSET`,
 and `LIVE_SOAR_ACTION`; optional `LIVE_SOAR_ACTION_PARAMS` is a JSON object.
+`LIVE_SOAR_APPROVALS=1` runs an owned prompt playbook for `soar approvals
+get` and `respond`; its prompt consumes one licensed action.
 The runner uses at most one action run, closes its case before promotion,
 and retains failed cleanup commands for recovery. It passes with 0 failures
 on SOAR 8.8.0.282 (licensed actions and indicators skipped).

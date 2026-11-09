@@ -304,7 +304,9 @@ class _WebSession:
 
     def _login(self) -> None:
         """Authenticate to Splunk Web and obtain session cookies."""
-        login_url = f"{self._base_url}/en-US/account/login"
+        # loginType=splunk keeps the local login form when SAML is enabled
+        # (verified on Splunk 10.6.1.1); Splunk-native auth ignores it.
+        login_url = f"{self._base_url}/en-US/account/login?loginType=splunk"
         page = self._request("GET", login_url).text
 
         m = re.search(r'"cval"\s*:\s*(\d+)', page)
@@ -326,8 +328,8 @@ class _WebSession:
                 f"Splunk Web login failed: HTTP {resp.status_code}",
                 kind="auth",
             ) from None
-        if body.get("status") == "fail":
-            msg = body.get("msg", "unknown error")
+        if resp.status_code >= 400 or body.get("status") == "fail":
+            msg = body.get("msg") or f"HTTP {resp.status_code}"
             raise WebSessionError(f"Splunk Web login failed: {msg}", kind="auth")
 
         for cookie in self._session.cookies:

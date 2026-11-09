@@ -74,14 +74,33 @@ def run_login(
         context = browser.new_context(ignore_https_errors=not verify)
         page = context.new_page()
         deadline = time.monotonic() + timeout
+        expected = _origin_of(expected_origin)
+        left_origin = False
+
+        def _departed(url: str) -> bool:
+            # Only an http(s) page on another origin is the IdP; error pages
+            # (chrome-error://) and about:blank are not.
+            return urlsplit(url).scheme in ("http", "https") and (
+                _origin_of(url) != expected
+            )
+
+        def _on_navigated(frame: Any) -> None:
+            nonlocal left_origin
+            if frame == page.main_frame and _departed(frame.url):
+                left_origin = True
+
         try:
+            # A fast IdP (silent SSO, or the lab's auto-filled form) can return
+            # to the product between two polls of page.url (measured at
+            # 0.24-0.66 s on the Keycloak lab), so record every main-frame
+            # navigation instead of only sampling the current URL.
+            page.on("framenavigated", _on_navigated)
             page.goto(login_url)
-            expected = _origin_of(expected_origin)
             # The login route is often on the product origin and only bounces to
             # the IdP after a JS auto-submit or server redirect. Wait for the
             # browser to leave the product origin first, then wait for it to
             # return once the user completes the identity-provider flow.
-            while _origin_of(page.url) == expected:
+            while not left_origin and not _departed(page.url):
                 if page.is_closed():
                     raise BrokerError(
                         "The browser was closed before login finished.", kind="auth"

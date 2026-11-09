@@ -1,4 +1,4 @@
-"""SOAR approvals — list, get, and respond to approval requests.
+"""SOAR approvals: list, get, and respond to approval requests.
 
 Approvals are created by playbook prompt blocks. A paused playbook waits
 for an external approve/deny response before continuing. This module
@@ -6,10 +6,13 @@ surfaces pending approvals and lets an operator respond from the terminal,
 unblocking automation without switching to the SOAR UI.
 
 Endpoints:
-- ``GET /rest/approval`` — list all approvals
-- ``GET /rest/container/<id>/approvals`` — per-container approvals
-- ``GET /rest/approval/<id>?_detail=detail_summary_view`` — detail view
-- ``POST /rest/external_prompt/<id>`` — respond (approve/deny)
+- ``GET /rest/approval``: list all approvals
+- ``GET /rest/container/<id>/approvals``: per-container approvals
+- ``GET /rest/approval/<id>?_detail=detail_summary_view``: detail view
+- ``POST /rest/approval/<id>``: respond with ``{status, message,
+  responses}``; SOAR requires a message or responses (verified live on
+  8.8.0.282; ``/rest/external_prompt/<id>`` is only for secure-link
+  prompts and returns 404 for an approval id)
 """
 
 from __future__ import annotations
@@ -113,7 +116,13 @@ def get_cmd(ctx: click.Context, *, approval_id: int) -> None:
 @click.option(
     "--message",
     default=None,
-    help="Optional response message.",
+    help="Response message. SOAR requires --message or --response.",
+)
+@click.option(
+    "--response",
+    "responses",
+    multiple=True,
+    help="Answer to a prompt question, in question order (repeatable).",
 )
 @click.pass_context
 def respond_cmd(
@@ -122,15 +131,22 @@ def respond_cmd(
     approval_id: int,
     action: str,
     message: str | None,
+    responses: tuple[str, ...],
 ) -> None:
     """Respond to an approval request (approve or deny).
 
-    Posts to ``/rest/external_prompt/<id>`` with the chosen action.
+    Posts to ``/rest/approval/<id>``. SOAR rejects a response without a
+    message or prompt answers, so pass ``--message`` or ``--response``.
     Guarded: dry-run by default, pass ``--yes`` to apply.
     """
+    if not message and not responses:
+        raise click.UsageError("Pass --message or --response; SOAR requires one.")
+    action = action.lower()
     details = f"  approval: {approval_id}\n  action:   {action}"
     if message:
         details += f"\n  message:  {message[:80]}{'...' if len(message) > 80 else ''}"
+    if responses:
+        details += f"\n  responses: {list(responses)}"
 
     if not soar_check(
         ctx, f"Respond to approval {approval_id}: {action}", details=details
@@ -140,10 +156,12 @@ def respond_cmd(
     body: dict[str, Any] = {"status": action}
     if message:
         body["message"] = message
+    if responses:
+        body["responses"] = list(responses)
 
     client = get_soar_client(ctx)
     try:
-        result = client.post(f"external_prompt/{approval_id}", body=body)
+        result = client.post(f"approval/{approval_id}", body=body)
     except SOARError as exc:
         output.error(exc.message, kind=exc.kind, http_status=exc.http_status)
         ctx.exit(1)

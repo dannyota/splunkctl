@@ -26,7 +26,9 @@ def _token_entry(
     last_used: int = 1788000000,
     status: str = "enabled",
 ) -> dict[str, Any]:
-    claims: dict[str, Any] = {"sub": user}
+    # Shape verified on Splunk 10.6.1.1: the entry name is the token id and
+    # content has no id or userName.
+    claims: dict[str, Any] = {"sub": user, "iss": f"{user} from splunk"}
     if audience:
         claims["aud"] = audience
     if exp is not None:
@@ -34,11 +36,11 @@ def _token_entry(
     return {
         "name": name,
         "content": {
-            "id": name,
-            "userName": user,
-            "status": status,
-            "lastUsedTime": last_used,
             "claims": claims,
+            "headers": {"alg": "HS512", "ttyp": "static", "ver": "v2"},
+            "lastUsed": last_used,
+            "lastUsedIp": "",
+            "status": status,
         },
     }
 
@@ -57,6 +59,8 @@ def test_tokens_list(mock_gc: MagicMock) -> None:
     assert data[0]["id"] == "token_abc"
     assert data[0]["user"] == "admin"
     assert data[0]["expires"].startswith("2026-")
+    assert data[0]["last_used"].startswith("2026-")
+    assert svc.get.call_args[1].get("count") == 0
 
 
 @patch(_PATCH)
@@ -80,7 +84,8 @@ def test_tokens_list_filter_user(mock_gc: MagicMock) -> None:
     assert result.exit_code == 0
     svc.get.assert_called_once()
     call_kwargs = svc.get.call_args
-    assert call_kwargs[1].get("userName") == "analyst"
+    assert call_kwargs[1].get("username") == "analyst"
+    assert "userName" not in call_kwargs[1]
 
 
 @patch(_PATCH)
@@ -127,7 +132,9 @@ def test_tokens_list_claims_as_string(mock_gc: MagicMock) -> None:
 @patch(_PATCH)
 def test_tokens_create_dry_run(mock_gc: MagicMock) -> None:
     """Without --yes, create shows dry-run and does not call the API."""
-    result = CliRunner().invoke(cli, ["server", "tokens", "create", "--user", "admin"])
+    result = CliRunner().invoke(
+        cli, ["server", "tokens", "create", "--user", "admin", "--audience", "ci"]
+    )
     assert result.exit_code == 0
     assert "[DRY RUN]" in result.stderr
     mock_gc.return_value.service.post.assert_not_called()
@@ -151,11 +158,33 @@ def test_tokens_create_applies(mock_gc: MagicMock) -> None:
 
     result = CliRunner().invoke(
         cli,
-        ["--yes", "--json", "server", "tokens", "create", "--user", "admin"],
+        [
+            "--yes",
+            "--json",
+            "server",
+            "tokens",
+            "create",
+            "--user",
+            "admin",
+            "--audience",
+            "ci",
+        ],
     )
     assert result.exit_code == 0
     svc.post.assert_called_once()
+    assert svc.post.call_args[1].get("audience") == "ci"
     assert "cannot be retrieved again" in result.stderr
+
+
+@patch(_PATCH)
+def test_tokens_create_requires_audience(mock_gc: MagicMock) -> None:
+    """Splunk rejects a token without an audience, so the CLI requires one."""
+    result = CliRunner().invoke(
+        cli, ["--yes", "server", "tokens", "create", "--user", "admin"]
+    )
+    assert result.exit_code == 2
+    assert "--audience" in result.output
+    mock_gc.return_value.service.post.assert_not_called()
 
 
 @patch(_PATCH)
@@ -200,11 +229,32 @@ def test_tokens_revoke_dry_run(mock_gc: MagicMock) -> None:
 
 @patch(_PATCH)
 def test_tokens_revoke_applies(mock_gc: MagicMock) -> None:
+    """Revoke deletes through the owner's path with the id parameter."""
     svc = mock_gc.return_value.service
+    svc.get.return_value = _resp(
+        {"entry": [_token_entry(name="other"), _token_entry(user="analyst")]}
+    )
 
     result = CliRunner().invoke(
         cli, ["--yes", "server", "tokens", "revoke", "token_abc"]
     )
     assert result.exit_code == 0
-    svc.delete.assert_called_once()
+    svc.delete.assert_called_once_with(
+        "/services/authorization/tokens/analyst", output_mode="json", id="token_abc"
+    )
     assert "revoked" in result.stderr
+
+
+@patch(_PATCH)
+def test_tokens_revoke_unknown_id(mock_gc: MagicMock) -> None:
+    """Splunk returns 200 for an unknown id, so revoke checks first."""
+    svc = mock_gc.return_value.service
+    svc.get.return_value = _resp({"entry": [_token_entry(name="other")]})
+
+    result = CliRunner().invoke(
+        cli, ["--yes", "--json", "server", "tokens", "revoke", "token_abc"]
+    )
+    assert result.exit_code == 1
+    error = json.loads(result.stderr.strip().splitlines()[-1])
+    assert error["error"]["kind"] == "not_found"
+    svc.delete.assert_not_called()

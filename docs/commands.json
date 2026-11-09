@@ -4809,7 +4809,8 @@
                   "flags": [
                     "--audience"
                   ],
-                  "help": "Token audience claim."
+                  "required": true,
+                  "help": "Token audience claim (purpose of the token)."
                 },
                 {
                   "name": "expires_in",
@@ -5106,7 +5107,16 @@
                   "flags": [
                     "--message"
                   ],
-                  "help": "Optional response message."
+                  "help": "Response message. SOAR requires --message or --response."
+                },
+                {
+                  "name": "responses",
+                  "type": "text",
+                  "kind": "option",
+                  "flags": [
+                    "--response"
+                  ],
+                  "help": "Answer to a prompt question, in question order (repeatable)."
                 }
               ]
             }

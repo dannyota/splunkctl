@@ -130,6 +130,25 @@ def test_login_bad_creds_raises_websession_error(
 
 
 @patch("splunkctl.client.requests.Session")
+def test_login_http_error_status_raises_websession_error(
+    mock_session_cls: MagicMock,
+) -> None:
+    """SAML login page without loginType: HTTP 400, JSON status 2, no msg."""
+    from splunkctl.client import _WebSession
+
+    session = mock_session_cls.return_value
+    session.request.side_effect = [
+        _resp(text="<html>no cval</html>"),
+        _resp(json_body={"status": 2}, status=400),
+    ]
+    session.cookies = []
+
+    ws = _WebSession(_mock_service(), verify=False)
+    with pytest.raises(WebSessionError, match="login failed: HTTP 400"):
+        ws._login()
+
+
+@patch("splunkctl.client.requests.Session")
 def test_login_non_json_response_raises_websession_error(
     mock_session_cls: MagicMock,
 ) -> None:

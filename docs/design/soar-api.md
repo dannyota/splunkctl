@@ -206,9 +206,10 @@ github.com/phantomcyber/playbooks.
   status 1 (in progress) transitions demand a closing note ("Closing note
   content is required"); invalid transitions are rejected with an explicit
   message.
-- Approvals: `GET /rest/approval` (+ per-container), detail
-  `.../detail_summary_view`; respond via `POST /rest/external_prompt/<id>`
-  `{status: "approve"|"deny", ...}` *(docs)*.
+- Approvals: `GET /rest/approval` (+ `container/<id>/approvals`), detail
+  `approval/<id>?_detail=detail_summary_view`; respond via
+  `POST /rest/approval/<id>` `{status: "approve"|"deny", message,
+  responses}` (verified live on 8.8.0.282).
 
 ## Read-side inventory (beyond the above)
 
@@ -277,8 +278,14 @@ Corrections to the original discovery doc, all verified during the build:
   (`Content-Type: application/csv`).
 - **`decided_list` create**: empty `content` → server 500; always provide
   at least `content: []`.
-- **`external_prompt` respond**: shape remains docs-only (no live
-  approval prompts exercised on the lab).
+- **Approval respond** (8.8.0.282): `POST /rest/approval/<id>` with
+  `status` plus a `message` or `responses` (one answer per prompt
+  question, in order); with neither it is HTTP 400 "Must provide either a
+  `message` or `responses`". `type` and `action` are optional.
+  `/rest/external_prompt/<id>` serves secure-link prompts only and returns
+  404 for an approval id. A deny fails the waiting playbook run. A
+  `phantom.prompt2()` prompt is an action run: it adds 1 to the license
+  `recent_app_run_count` on Community edition.
 - **Container owner/role assign**: only numeric `owner_id`/`role_id`
   stick; `owner_name` returns success but writes nothing (the earlier
   "works live" note here trusted the 200 without a read-back). Owner
