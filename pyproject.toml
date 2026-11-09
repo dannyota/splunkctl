@@ -33,6 +33,7 @@ dependencies = [
     "requests>=2.32",
     "defusedxml>=0.7",
     "mcp>=2.3,<3",
+    "tomlkit>=0.13",
 ]
 
 [project.optional-dependencies]

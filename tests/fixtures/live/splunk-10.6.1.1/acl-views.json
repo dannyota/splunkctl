@@ -1,0 +1,77 @@
+{
+  "links": {
+    "create": "/servicesNS/admin/search/data/ui/views/_new",
+    "_reload": "/servicesNS/admin/search/data/ui/views/_reload",
+    "_acl": "/servicesNS/admin/search/data/ui/views/_acl"
+  },
+  "origin": "https://127.0.0.1:18089/servicesNS/admin/search/data/ui/views",
+  "updated": "2026-11-09T15:00:27+00:00",
+  "generator": {
+    "build": "b2ae2962645c",
+    "version": "10.6.1.1"
+  },
+  "entry": [
+    {
+      "name": "sc_live_acl_view",
+      "id": "https://127.0.0.1:18089/servicesNS/admin/search/data/ui/views/sc_live_acl_view",
+      "updated": "2026-11-09T15:00:12+00:00",
+      "links": {
+        "alternate": "/servicesNS/admin/search/data/ui/views/sc_live_acl_view",
+        "list": "/servicesNS/admin/search/data/ui/views/sc_live_acl_view",
+        "_reload": "/servicesNS/admin/search/data/ui/views/sc_live_acl_view/_reload",
+        "edit": "/servicesNS/admin/search/data/ui/views/sc_live_acl_view",
+        "remove": "/servicesNS/admin/search/data/ui/views/sc_live_acl_view",
+        "move": "/servicesNS/admin/search/data/ui/views/sc_live_acl_view/move",
+        "disable": "/servicesNS/admin/search/data/ui/views/sc_live_acl_view/disable"
+      },
+      "author": "admin",
+      "acl": {
+        "app": "search",
+        "can_change_perms": true,
+        "can_list": true,
+        "can_share_app": true,
+        "can_share_global": true,
+        "can_share_user": true,
+        "can_write": true,
+        "modifiable": true,
+        "owner": "admin",
+        "perms": null,
+        "removable": true,
+        "sharing": "user"
+      },
+      "fields": {
+        "required": [
+          "eai:data"
+        ],
+        "optional": [
+          "eai:changelog",
+          "eai:type"
+        ],
+        "wildcard": []
+      },
+      "content": {
+        "dashboardType": 0,
+        "disabled": false,
+        "eai:acl": null,
+        "eai:appName": "search",
+        "eai:data": "<dashboard version=\"1.1\"><label>sc_live_acl_view</label></dashboard>",
+        "eai:digest": "0cb56f2bb15b6901752636b8c17c312e",
+        "eai:type": "views",
+        "eai:userName": "admin",
+        "embed.enabled": false,
+        "embed.expiry": 0,
+        "isDashboard": true,
+        "isVisible": true,
+        "label": "sc_live_acl_view",
+        "rootNode": "dashboard",
+        "version": "1.1"
+      }
+    }
+  ],
+  "paging": {
+    "total": 1,
+    "perPage": 30,
+    "offset": 0
+  },
+  "messages": []
+}

@@ -1,0 +1,8 @@
+{
+  "messages": [
+    {
+      "type": "ERROR",
+      "text": "unknown sharing=bogus"
+    }
+  ]
+}

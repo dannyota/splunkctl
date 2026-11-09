@@ -1,13 +1,11 @@
 """MCP server commands — serve and install."""
 
-import json
-import sys
 from pathlib import Path
 
 import click
 
 from splunkctl import output
-from splunkctl.mcp.transport import LOOPBACK_HOSTS, local_mcp_url
+from splunkctl.mcp.transport import LOOPBACK_HOSTS
 
 
 @click.group("mcp")
@@ -79,32 +77,40 @@ def mcp_serve(transport: str, host: str, port: int, read_only: bool) -> None:
     show_default=True,
     help="Port for HTTP config (ignored for stdio).",
 )
-def mcp_install(transport: str, host: str, port: int) -> None:
-    """Write .mcp.json for Claude Code registration."""
-    if transport == "http":
-        server_entry: dict[str, object] = {
-            "url": local_mcp_url(host, port),
-        }
+@click.option(
+    "--client",
+    type=click.Choice(["claude", "codex", "cursor", "gemini"]),
+    default="claude",
+    show_default=True,
+)
+@click.option(
+    "--preview", is_flag=True, help="Show registration changes without writing."
+)
+@click.option(
+    "--read-only",
+    is_flag=True,
+    help="Register stdio with server mutations disabled.",
+)
+def mcp_install(
+    transport: str, host: str, port: int, client: str, preview: bool, read_only: bool
+) -> None:
+    """Register splunkctl in this project's MCP configuration."""
+    from splunkctl.mcp.install import install
+    from splunkctl.mcp.policy import enabled
+
+    dest, changed, entry = install(
+        Path.cwd(),
+        client=client,
+        transport=transport,
+        host=host,
+        port=port,
+        preview=preview,
+        read_only=enabled(read_only),
+    )
+    if preview:
+        output.render(
+            click.get_current_context(),
+            {"path": str(dest), "changed": changed, "entry": entry},
+        )
     else:
-        exe = sys.executable
-        server_entry = {
-            "command": exe,
-            "args": ["-m", "splunkctl", "mcp", "serve"],
-        }
-
-    config: dict[str, object] = {
-        "mcpServers": {
-            "splunkctl": server_entry,
-        },
-    }
-
-    dest = Path.cwd() / ".mcp.json"
-    if dest.exists():
-        existing = json.loads(dest.read_text(encoding="utf-8"))
-        if existing.get("mcpServers") is None:
-            existing["mcpServers"] = {}
-        existing.setdefault("mcpServers", {})["splunkctl"] = server_entry
-        config = existing
-
-    dest.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
-    output.info(f"Wrote MCP config to {dest}")
+        output.info(f"{'Wrote' if changed else 'Unchanged'} MCP config at {dest}")

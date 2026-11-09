@@ -1,0 +1,56 @@
+{
+  "links": {
+    "create": "/servicesNS/admin/search/saved/searches/_new",
+    "_reload": "/servicesNS/admin/search/saved/searches/_reload",
+    "_acl": "/servicesNS/admin/search/saved/searches/_acl"
+  },
+  "origin": "https://127.0.0.1:18089/servicesNS/admin/search/saved/searches",
+  "updated": "2026-11-09T15:00:27+00:00",
+  "generator": {
+    "build": "b2ae2962645c",
+    "version": "10.6.1.1"
+  },
+  "entry": [
+    {
+      "name": "sc_live_acl_search",
+      "id": "https://127.0.0.1:18089/servicesNS/admin/search/saved/searches/sc_live_acl_search",
+      "updated": "2026-11-09T15:00:11+00:00",
+      "links": {
+        "alternate": "/servicesNS/admin/search/saved/searches/sc_live_acl_search",
+        "list": "/servicesNS/admin/search/saved/searches/sc_live_acl_search",
+        "_reload": "/servicesNS/admin/search/saved/searches/sc_live_acl_search/_reload",
+        "edit": "/servicesNS/admin/search/saved/searches/sc_live_acl_search",
+        "remove": "/servicesNS/admin/search/saved/searches/sc_live_acl_search",
+        "move": "/servicesNS/admin/search/saved/searches/sc_live_acl_search/move",
+        "disable": "/servicesNS/admin/search/saved/searches/sc_live_acl_search/disable",
+        "dispatch": "/servicesNS/admin/search/saved/searches/sc_live_acl_search/dispatch",
+        "embed": "/servicesNS/admin/search/saved/searches/sc_live_acl_search/embed",
+        "history": "/servicesNS/admin/search/saved/searches/sc_live_acl_search/history"
+      },
+      "author": "admin",
+      "acl": {
+        "app": "search",
+        "can_change_perms": true,
+        "can_list": true,
+        "can_share_app": true,
+        "can_share_global": true,
+        "can_share_user": true,
+        "can_write": true,
+        "modifiable": true,
+        "owner": "admin",
+        "perms": null,
+        "removable": true,
+        "sharing": "user"
+      },
+      "content": {
+        "eai:acl": null
+      }
+    }
+  ],
+  "paging": {
+    "total": 1,
+    "perPage": 30,
+    "offset": 0
+  },
+  "messages": []
+}

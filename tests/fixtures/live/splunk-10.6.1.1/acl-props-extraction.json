@@ -1,0 +1,65 @@
+{
+  "links": {
+    "create": "/servicesNS/admin/search/data/props/extractions/_new",
+    "_reload": "/servicesNS/admin/search/data/props/extractions/_reload",
+    "_acl": "/servicesNS/admin/search/data/props/extractions/_acl"
+  },
+  "origin": "https://127.0.0.1:18089/servicesNS/admin/search/data/props/extractions",
+  "updated": "2026-11-09T15:00:27+00:00",
+  "generator": {
+    "build": "b2ae2962645c",
+    "version": "10.6.1.1"
+  },
+  "entry": [
+    {
+      "name": "sc_live_acl_st : EXTRACT-sc_live_acl_ext",
+      "id": "https://127.0.0.1:18089/servicesNS/admin/search/data/props/extractions/sc_live_acl_st%20%3A%20EXTRACT-sc_live_acl_ext",
+      "updated": "2026-11-09T15:00:12+00:00",
+      "links": {
+        "alternate": "/servicesNS/admin/search/data/props/extractions/sc_live_acl_st%20%3A%20EXTRACT-sc_live_acl_ext",
+        "list": "/servicesNS/admin/search/data/props/extractions/sc_live_acl_st%20%3A%20EXTRACT-sc_live_acl_ext",
+        "_reload": "/servicesNS/admin/search/data/props/extractions/sc_live_acl_st%20%3A%20EXTRACT-sc_live_acl_ext/_reload",
+        "edit": "/servicesNS/admin/search/data/props/extractions/sc_live_acl_st%20%3A%20EXTRACT-sc_live_acl_ext",
+        "remove": "/servicesNS/admin/search/data/props/extractions/sc_live_acl_st%20%3A%20EXTRACT-sc_live_acl_ext",
+        "move": "/servicesNS/admin/search/data/props/extractions/sc_live_acl_st%20%3A%20EXTRACT-sc_live_acl_ext/move"
+      },
+      "author": "admin",
+      "acl": {
+        "app": "search",
+        "can_change_perms": true,
+        "can_list": true,
+        "can_share_app": true,
+        "can_share_global": true,
+        "can_share_user": true,
+        "can_write": true,
+        "modifiable": true,
+        "owner": "admin",
+        "perms": null,
+        "removable": true,
+        "sharing": "user"
+      },
+      "fields": {
+        "required": [
+          "value"
+        ],
+        "optional": [
+          "safe_encoding"
+        ],
+        "wildcard": []
+      },
+      "content": {
+        "attribute": "EXTRACT-sc_live_acl_ext",
+        "eai:acl": null,
+        "stanza": "sc_live_acl_st",
+        "type": "Inline",
+        "value": "(?<sc_live_acl_f>\\d+)"
+      }
+    }
+  ],
+  "paging": {
+    "total": 1,
+    "perPage": 30,
+    "offset": 0
+  },
+  "messages": []
+}

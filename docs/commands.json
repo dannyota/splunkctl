@@ -123,6 +123,149 @@
   "note": "guarded commands are dry-run by default; pass --yes to apply",
   "commands": [
     {
+      "name": "acl",
+      "help": "Inspect and change knowledge object permissions.",
+      "subcommands": [
+        {
+          "name": "get",
+          "help": "Show object permissions and modification capabilities.",
+          "params": [
+            {
+              "name": "type",
+              "type": "choice",
+              "kind": "argument",
+              "choices": [
+                "saved-search",
+                "macro",
+                "eventtype",
+                "tag",
+                "props",
+                "transform",
+                "lookup-definition",
+                "lookup-table",
+                "field-extraction",
+                "data-model",
+                "view",
+                "dashboard"
+              ]
+            },
+            {
+              "name": "name",
+              "type": "text",
+              "kind": "argument"
+            },
+            {
+              "name": "app",
+              "type": "text",
+              "kind": "option",
+              "flags": [
+                "--app"
+              ],
+              "help": "App namespace (default: current)."
+            },
+            {
+              "name": "owner",
+              "type": "text",
+              "kind": "option",
+              "flags": [
+                "--owner"
+              ],
+              "help": "Owner namespace (default: current)."
+            }
+          ]
+        },
+        {
+          "name": "set",
+          "help": "Preview or apply object permission changes.",
+          "guarded": true,
+          "params": [
+            {
+              "name": "type",
+              "type": "choice",
+              "kind": "argument",
+              "choices": [
+                "saved-search",
+                "macro",
+                "eventtype",
+                "tag",
+                "props",
+                "transform",
+                "lookup-definition",
+                "lookup-table",
+                "field-extraction",
+                "data-model",
+                "view",
+                "dashboard"
+              ]
+            },
+            {
+              "name": "name",
+              "type": "text",
+              "kind": "argument"
+            },
+            {
+              "name": "app",
+              "type": "text",
+              "kind": "option",
+              "flags": [
+                "--app"
+              ],
+              "help": "App namespace (default: current)."
+            },
+            {
+              "name": "current_owner",
+              "type": "text",
+              "kind": "option",
+              "flags": [
+                "--current-owner"
+              ],
+              "help": "Current owner namespace."
+            },
+            {
+              "name": "sharing",
+              "type": "choice",
+              "kind": "option",
+              "flags": [
+                "--sharing"
+              ],
+              "choices": [
+                "user",
+                "app",
+                "global"
+              ]
+            },
+            {
+              "name": "owner",
+              "type": "text",
+              "kind": "option",
+              "flags": [
+                "--owner"
+              ],
+              "help": "New object owner."
+            },
+            {
+              "name": "read",
+              "type": "text",
+              "kind": "option",
+              "flags": [
+                "--read"
+              ],
+              "help": "Read roles, comma-separated; '*' everyone, '' clears."
+            },
+            {
+              "name": "write",
+              "type": "text",
+              "kind": "option",
+              "flags": [
+                "--write"
+              ],
+              "help": "Write roles, comma-separated; '*' everyone, '' clears."
+            }
+          ]
+        }
+      ]
+    },
+    {
       "name": "alerts",
       "help": "Manage fired alerts and alert actions.",
       "subcommands": [
@@ -3230,7 +3373,7 @@
       "subcommands": [
         {
           "name": "install",
-          "help": "Write .mcp.json for Claude Code registration.",
+          "help": "Register splunkctl in this project's MCP configuration.",
           "params": [
             {
               "name": "transport",
@@ -3270,6 +3413,39 @@
               ],
               "help": "Port for HTTP config (ignored for stdio).",
               "default": 8765
+            },
+            {
+              "name": "client",
+              "type": "choice",
+              "kind": "option",
+              "flags": [
+                "--client"
+              ],
+              "choices": [
+                "claude",
+                "codex",
+                "cursor",
+                "gemini"
+              ],
+              "default": "claude"
+            },
+            {
+              "name": "preview",
+              "type": "flag",
+              "kind": "option",
+              "flags": [
+                "--preview"
+              ],
+              "help": "Show registration changes without writing."
+            },
+            {
+              "name": "read_only",
+              "type": "flag",
+              "kind": "option",
+              "flags": [
+                "--read-only"
+              ],
+              "help": "Register stdio with server mutations disabled."
             }
           ]
         },
@@ -4830,6 +5006,24 @@
           "help": "Component-level splunkd health report (scheduler, disk, KV store...)."
         },
         {
+          "name": "introspection",
+          "help": "Inspect live ingestion and filesystem usage.",
+          "subcommands": [
+            {
+              "name": "disk",
+              "help": "Show filesystem usage in MB."
+            },
+            {
+              "name": "indexer",
+              "help": "Show indexing status."
+            },
+            {
+              "name": "queues",
+              "help": "Show ingestion queue occupancy."
+            }
+          ]
+        },
+        {
           "name": "kvstore",
           "help": "Show KV store status."
         },
@@ -4845,6 +5039,46 @@
                 "--usage"
               ],
               "help": "Today's indexed volume vs quota and soonest license expiry."
+            }
+          ]
+        },
+        {
+          "name": "log-level",
+          "help": "Manage runtime logging levels. Restarting splunkd resets changes.",
+          "subcommands": [
+            {
+              "name": "get",
+              "help": "Show runtime logging levels for one component or every component.",
+              "params": [
+                {
+                  "name": "component",
+                  "type": "text",
+                  "kind": "argument"
+                }
+              ]
+            },
+            {
+              "name": "set",
+              "help": "Preview or set a runtime logging level. Restarting splunkd resets it.",
+              "guarded": true,
+              "params": [
+                {
+                  "name": "component",
+                  "type": "text",
+                  "kind": "argument"
+                },
+                {
+                  "name": "level",
+                  "type": "choice",
+                  "kind": "argument",
+                  "choices": [
+                    "DEBUG",
+                    "INFO",
+                    "WARN",
+                    "ERROR"
+                  ]
+                }
+              ]
             }
           ]
         },

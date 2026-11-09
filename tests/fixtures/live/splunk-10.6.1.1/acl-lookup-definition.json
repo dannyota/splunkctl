@@ -1,0 +1,109 @@
+{
+  "links": {
+    "create": "/servicesNS/admin/search/data/transforms/lookups/_new",
+    "_reload": "/servicesNS/admin/search/data/transforms/lookups/_reload",
+    "_acl": "/servicesNS/admin/search/data/transforms/lookups/_acl"
+  },
+  "origin": "https://127.0.0.1:18089/servicesNS/admin/search/data/transforms/lookups",
+  "updated": "2026-11-09T15:00:26+00:00",
+  "generator": {
+    "build": "b2ae2962645c",
+    "version": "10.6.1.1"
+  },
+  "entry": [
+    {
+      "name": "sc_live_acl_lookup",
+      "id": "https://127.0.0.1:18089/servicesNS/admin/search/data/transforms/lookups/sc_live_acl_lookup",
+      "updated": "2026-11-09T15:00:12+00:00",
+      "links": {
+        "alternate": "/servicesNS/admin/search/data/transforms/lookups/sc_live_acl_lookup",
+        "list": "/servicesNS/admin/search/data/transforms/lookups/sc_live_acl_lookup",
+        "_reload": "/servicesNS/admin/search/data/transforms/lookups/sc_live_acl_lookup/_reload",
+        "edit": "/servicesNS/admin/search/data/transforms/lookups/sc_live_acl_lookup",
+        "remove": "/servicesNS/admin/search/data/transforms/lookups/sc_live_acl_lookup",
+        "move": "/servicesNS/admin/search/data/transforms/lookups/sc_live_acl_lookup/move",
+        "disable": "/servicesNS/admin/search/data/transforms/lookups/sc_live_acl_lookup/disable"
+      },
+      "author": "admin",
+      "acl": {
+        "app": "search",
+        "can_change_perms": true,
+        "can_list": true,
+        "can_share_app": true,
+        "can_share_global": true,
+        "can_share_user": true,
+        "can_write": true,
+        "modifiable": true,
+        "owner": "admin",
+        "perms": null,
+        "removable": true,
+        "sharing": "user"
+      },
+      "fields": {
+        "required": [],
+        "optional": [
+          "allow_caching",
+          "batch_index_query",
+          "cache_size",
+          "case_sensitive_match",
+          "check_permission",
+          "cidr_priority",
+          "collection",
+          "default_match",
+          "disabled",
+          "event_time_field",
+          "external_cmd",
+          "external_type",
+          "feature_id_element",
+          "fields_list",
+          "filename",
+          "filter",
+          "index_fields_list",
+          "match_type",
+          "max_duplicates",
+          "max_ext_batch",
+          "max_matches",
+          "max_offset_secs",
+          "min_matches",
+          "min_offset_secs",
+          "reverse_lookup_honor_case_sensitive_match",
+          "time_field",
+          "time_format"
+        ],
+        "wildcard": []
+      },
+      "content": {
+        "CAN_OPTIMIZE": true,
+        "CLEAN_KEYS": true,
+        "DEFAULT_VALUE": "",
+        "DEPTH_LIMIT": "1000",
+        "DEST_KEY": "",
+        "FORMAT": "",
+        "KEEP_EMPTY_VALS": false,
+        "LOOKAHEAD": "4096",
+        "MATCH_LIMIT": "100000",
+        "MV_ADD": false,
+        "REGEX": "",
+        "SOURCE_KEY": "_raw",
+        "WRITE_META": "False",
+        "disabled": false,
+        "eai:acl": null,
+        "eai:appName": "search",
+        "eai:userName": "admin",
+        "fields_array": [
+          "host",
+          "owner"
+        ],
+        "fields_list": "host,owner",
+        "filename": "sc_live_acl_lookup.csv",
+        "type": "file"
+      }
+    }
+  ],
+  "paging": {
+    "total": 1,
+    "perPage": 30,
+    "offset": 0
+  },
+  "messages": []
+}

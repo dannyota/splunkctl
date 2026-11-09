@@ -1,0 +1,109 @@
+{
+  "links": {},
+  "origin": "https://127.0.0.1:18089/services/server/info",
+  "updated": "2026-11-09T14:59:40+00:00",
+  "generator": {
+    "build": "b2ae2962645c",
+    "version": "10.6.1.1"
+  },
+  "entry": [
+    {
+      "name": "server-info",
+      "id": "https://127.0.0.1:18089/services/server/info/server-info",
+      "updated": "1970-01-01T00:00:00+00:00",
+      "links": {
+        "alternate": "/services/server/info/server-info",
+        "list": "/services/server/info/server-info"
+      },
+      "author": "system",
+      "acl": {
+        "app": "",
+        "can_list": true,
+        "can_write": true,
+        "modifiable": false,
+        "owner": "system",
+        "perms": {
+          "read": [
+            "*"
+          ],
+          "write": []
+        },
+        "removable": false,
+        "sharing": "system"
+      },
+      "content": {
+        "activeLicenseGroup": "Trial",
+        "activeLicenseSubgroup": "Production",
+        "addOns": {
+          "hadoop": {
+            "parameters": {
+              "erp_type": "report",
+              "guid": "00000000-0000-0000-0000-000000000001",
+              "maxNodes": "200"
+            },
+            "type": "external_results_provider"
+          }
+        },
+        "build": "b2ae2962645c",
+        "cgroups_version": "V2",
+        "conf_generation": 10,
+        "cpu_arch": "x86_64",
+        "eai:acl": null,
+        "federated_search_enabled": true,
+        "fips_mode": false,
+        "guid": "00000000-0000-0000-0000-000000000002",
+        "health_info": "green",
+        "health_version": 3925674274,
+        "host": "splunk-host",
+        "host_fqdn": "splunk-host",
+        "host_resolved": "splunk-host",
+        "isConverged": false,
+        "isForwarding": false,
+        "isFree": false,
+        "isTrial": true,
+        "kvStoreStatus": "starting",
+        "licenseKeys": [
+          "REDACTED"
+        ],
+        "licenseSignature": "REDACTED",
+        "licenseState": "OK",
+        "license_labels": [
+          "Splunk Enterprise   Splunk Analytics for Hadoop Download Trial"
+        ],
+        "manager_guid": "00000000-0000-0000-0000-000000000002",
+        "manager_uri": "self",
+        "master_guid": "00000000-0000-0000-0000-000000000002",
+        "master_uri": "self",
+        "max_users": 4294967295,
+        "mode": "normal",
+        "numberOfCores": 8,
+        "numberOfVirtualCores": 8,
+        "os_build": "#33-Ubuntu SMP PREEMPT_DYNAMIC Mon Aug 24 05:45:54 UTC 2026",
+        "os_name": "Linux",
+        "os_name_extended": "Linux",
+        "os_version": "6.17.0-1033-oem",
+        "physicalMemoryMB": 31612,
+        "product_type": "enterprise",
+        "resource_group_id": "00000000-0000-0000-0000-000000000002",
+        "rtsearch_enabled": true,
+        "serverName": "splunk-host",
+        "server_roles": [
+          "indexer",
+          "license_master",
+          "license_manager"
+        ],
+        "shutting_down": "0",
+        "startup_time": 1794236354,
+        "staticAssetId": "REDACTED",
+        "version": "10.6.1.1",
+        "versionControlEnabled": true
+      }
+    }
+  ],
+  "paging": {
+    "total": 1,
+    "perPage": 30,
+    "offset": 0
+  },
+  "messages": []
+}

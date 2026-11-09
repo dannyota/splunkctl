@@ -1,0 +1,69 @@
+{
+  "links": {
+    "create": "/servicesNS/admin/search/data/lookup-table-files/_new",
+    "_reload": "/servicesNS/admin/search/data/lookup-table-files/_reload",
+    "_acl": "/servicesNS/admin/search/data/lookup-table-files/_acl"
+  },
+  "origin": "https://127.0.0.1:18089/servicesNS/admin/search/data/lookup-table-files",
+  "updated": "2026-11-09T15:00:26+00:00",
+  "generator": {
+    "build": "b2ae2962645c",
+    "version": "10.6.1.1"
+  },
+  "entry": [
+    {
+      "name": "sc_live_acl_lookup.csv",
+      "id": "https://127.0.0.1:18089/servicesNS/admin/search/data/lookup-table-files/sc_live_acl_lookup.csv",
+      "updated": "2026-11-09T15:00:11+00:00",
+      "links": {
+        "alternate": "/servicesNS/admin/search/data/lookup-table-files/sc_live_acl_lookup.csv",
+        "list": "/servicesNS/admin/search/data/lookup-table-files/sc_live_acl_lookup.csv",
+        "_reload": "/servicesNS/admin/search/data/lookup-table-files/sc_live_acl_lookup.csv/_reload",
+        "edit": "/servicesNS/admin/search/data/lookup-table-files/sc_live_acl_lookup.csv",
+        "remove": "/servicesNS/admin/search/data/lookup-table-files/sc_live_acl_lookup.csv",
+        "move": "/servicesNS/admin/search/data/lookup-table-files/sc_live_acl_lookup.csv/move"
+      },
+      "author": "admin",
+      "acl": {
+        "app": "search",
+        "can_change_perms": true,
+        "can_list": true,
+        "can_share_app": true,
+        "can_share_global": true,
+        "can_share_user": true,
+        "can_write": true,
+        "modifiable": true,
+        "owner": "admin",
+        "perms": null,
+        "removable": true,
+        "sharing": "user"
+      },
+      "fields": {
+        "required": [
+          "eai:data"
+        ],
+        "optional": [],
+        "wildcard": []
+      },
+      "content": {
+        "disabled": false,
+        "eai:acl": null,
+        "eai:appName": "search",
+        "eai:data": "/opt/splunk/etc/users/admin/search/lookups/sc_live_acl_lookup.csv",
+        "eai:userName": "admin",
+        "fields_array": [
+          "host",
+          "owner"
+        ],
+        "lastModifiedTime": 1794236411,
+        "size": 36
+      }
+    }
+  ],
+  "paging": {
+    "total": 1,
+    "perPage": 30,
+    "offset": 0
+  },
+  "messages": []
+}

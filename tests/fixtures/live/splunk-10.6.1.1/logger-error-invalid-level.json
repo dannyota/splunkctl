@@ -1,0 +1,8 @@
+{
+  "messages": [
+    {
+      "type": "ERROR",
+      "text": "Logging level not recognized.  Please specify one of: DEBUG, INFO, WARN, ERROR."
+    }
+  ]
+}

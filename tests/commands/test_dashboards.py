@@ -425,7 +425,13 @@ def test_export_all_needs_dir(mock_gc: MagicMock) -> None:
 @patch(_PATCH)
 def test_share_dashboard(mock_gc: MagicMock) -> None:
     client = mock_gc.return_value
-    d = _mock_dashboard()
+    d = MagicMock()
+    entry = json.loads(
+        (
+            Path(__file__).parents[1] / "fixtures/live/splunk-10.6.1.1/acl-views.json"
+        ).read_text()
+    )["entry"][0]
+    d.name, d.content, d.access = entry["name"], entry["content"], entry["acl"]
     client.dashboards.list.return_value = [d]
 
     result = CliRunner().invoke(

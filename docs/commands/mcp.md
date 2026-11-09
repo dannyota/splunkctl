@@ -7,7 +7,7 @@ Built-in MCP server for agent integration.
 
 ## mcp install
 
-Write .mcp.json for Claude Code registration.
+Register splunkctl in this project's MCP configuration.
 
 ```text
 splunkctl mcp install [OPTIONS]
@@ -20,6 +20,9 @@ splunkctl mcp install [OPTIONS]
 | `--transport` | choice: stdio, http | stdio | Transport for the generated config. 'http' writes a URL-based entry. |
 | `--host` | choice: 127.0.0.1, localhost, ::1 | 127.0.0.1 | Loopback host for HTTP config (ignored for stdio). |
 | `--port` | integer | 8765 | Port for HTTP config (ignored for stdio). |
+| `--client` | choice: claude, codex, cursor, gemini | claude |  |
+| `--preview` | flag | - | Show registration changes without writing. |
+| `--read-only` | flag | - | Register stdio with server mutations disabled. |
 
 ## mcp serve
 

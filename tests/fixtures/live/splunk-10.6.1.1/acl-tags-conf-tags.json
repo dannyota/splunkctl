@@ -1,0 +1,64 @@
+{
+  "links": {
+    "create": "/servicesNS/admin/search/configs/conf-tags/_new",
+    "_reload": "/servicesNS/admin/search/configs/conf-tags/_reload",
+    "_acl": "/servicesNS/admin/search/configs/conf-tags/_acl"
+  },
+  "origin": "https://127.0.0.1:18089/servicesNS/admin/search/configs/conf-tags",
+  "updated": "2026-11-09T15:00:42+00:00",
+  "generator": {
+    "build": "b2ae2962645c",
+    "version": "10.6.1.1"
+  },
+  "entry": [
+    {
+      "name": "sourcetype=sc_live_acl_st",
+      "id": "https://127.0.0.1:18089/servicesNS/admin/search/configs/conf-tags/sourcetype%3Dsc_live_acl_st",
+      "updated": "2026-11-09T15:00:27+00:00",
+      "links": {
+        "alternate": "/servicesNS/admin/search/configs/conf-tags/sourcetype%3Dsc_live_acl_st",
+        "list": "/servicesNS/admin/search/configs/conf-tags/sourcetype%3Dsc_live_acl_st",
+        "_reload": "/servicesNS/admin/search/configs/conf-tags/sourcetype%3Dsc_live_acl_st/_reload",
+        "edit": "/servicesNS/admin/search/configs/conf-tags/sourcetype%3Dsc_live_acl_st",
+        "remove": "/servicesNS/admin/search/configs/conf-tags/sourcetype%3Dsc_live_acl_st",
+        "move": "/servicesNS/admin/search/configs/conf-tags/sourcetype%3Dsc_live_acl_st/move",
+        "disable": "/servicesNS/admin/search/configs/conf-tags/sourcetype%3Dsc_live_acl_st/disable"
+      },
+      "author": "admin",
+      "acl": {
+        "app": "search",
+        "can_change_perms": true,
+        "can_list": true,
+        "can_share_app": true,
+        "can_share_global": true,
+        "can_share_user": true,
+        "can_write": true,
+        "modifiable": true,
+        "owner": "admin",
+        "perms": null,
+        "removable": true,
+        "sharing": "user"
+      },
+      "fields": {
+        "required": [],
+        "optional": [],
+        "wildcard": [
+          ".*"
+        ]
+      },
+      "content": {
+        "disabled": false,
+        "eai:acl": null,
+        "eai:appName": "search",
+        "eai:userName": "admin",
+        "sc_live_acl_tag": "enabled"
+      }
+    }
+  ],
+  "paging": {
+    "total": 1,
+    "perPage": 30,
+    "offset": 0
+  },
+  "messages": []
+}

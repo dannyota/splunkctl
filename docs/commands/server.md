@@ -90,6 +90,30 @@ nested feature names join with " / ". This command reports — it does
 not gate: red components still exit 0.
 ```
 
+## server introspection disk
+
+Show filesystem usage in MB.
+
+```text
+splunkctl server introspection disk [OPTIONS]
+```
+
+## server introspection indexer
+
+Show indexing status.
+
+```text
+splunkctl server introspection indexer [OPTIONS]
+```
+
+## server introspection queues
+
+Show ingestion queue occupancy.
+
+```text
+splunkctl server introspection queues [OPTIONS]
+```
+
 ## server kvstore
 
 Show KV store status.
@@ -111,6 +135,24 @@ splunkctl server license [OPTIONS]
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--usage` | flag | - | Today's indexed volume vs quota and soonest license expiry. |
+
+## server log-level get
+
+Show runtime logging levels for one component or every component.
+
+```text
+splunkctl server log-level get [OPTIONS] [COMPONENT]
+```
+
+## server log-level set
+
+Preview or set a runtime logging level. Restarting splunkd resets it.
+
+> Guarded mutation: dry-run by default; apply with `--yes`.
+
+```text
+splunkctl server log-level set [OPTIONS] COMPONENT {debug|info|warn|error}
+```
 
 ## server messages
 

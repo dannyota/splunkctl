@@ -1,0 +1,8 @@
+{
+  "messages": [
+    {
+      "type": "ERROR",
+      "text": "User with name=system does not exist"
+    }
+  ]
+}

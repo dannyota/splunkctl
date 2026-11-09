@@ -34,12 +34,14 @@
 
 - **Change safely**
   - [Use read-only access](guides/read-only.md)
+  - [Inspect object permissions](guides/acl.md)
   - [Call Splunk REST endpoints](guides/api.md)
   - [Manage configuration as code](guides/state.md)
   - [Edit any conf file](guides/conf.md)
 
 - **Give it to an agent**
   - [Set up the MCP server](guides/mcp.md)
+  - [Install MCP client registrations](guides/mcp-clients.md)
 
 - **Operate and audit**
   - [Log in through browser SAML](guides/auth.md)
@@ -50,6 +52,7 @@
   - [Manage apps](guides/apps.md)
   - [Manage users and roles](guides/users.md)
   - [Check server health and topology](guides/server.md)
+  - [Inspect ingestion and logging](guides/server-introspection.md)
   - [Manage KV store collections](guides/kvstore.md)
   - [Audit changes and attest RBAC](guides/audit.md)
   - [Administer SOAR users and roles](guides/soar-admin.md)
@@ -62,6 +65,7 @@
 <!-- commands:start -->
 - **Command reference**
   - [Overview](commands/README.md)
+  - [acl](commands/acl.md)
   - [alerts](commands/alerts.md)
   - [api](commands/api.md)
   - [apps](commands/apps.md)

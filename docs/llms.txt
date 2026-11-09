@@ -48,6 +48,7 @@
 ## Change safely
 
 - [Use read-only access](https://splunkctl.danny.vn/guides/read-only.md): Refuse server mutations across CLI and MCP while allowing classified searches and local file writes.
+- [Inspect object permissions](https://splunkctl.danny.vn/guides/acl.md): Inspect knowledge object permissions and preview or apply ownership, sharing and role changes.
 - [Call Splunk REST endpoints](https://splunkctl.danny.vn/guides/api.md): Read Splunk REST endpoints, discover fields, and preview or execute raw POST and DELETE requests.
 - [Manage configuration as code](https://splunkctl.danny.vn/guides/state.md): Pull live Splunk and SOAR configuration, diff it against version control, and push approved changes with a change report.
 - [Edit any conf file](https://splunkctl.danny.vn/guides/conf.md): Read and edit any Splunk configuration file and stanza over the REST confs API when no dedicated command group covers it.
@@ -55,6 +56,7 @@
 ## Give it to an agent
 
 - [Set up the MCP server](https://splunkctl.danny.vn/guides/mcp.md): Register splunkctl as an MCP server so Claude Code, Claude Desktop, Cursor, or any MCP client can run its commands with the same guard.
+- [Install MCP client registrations](https://splunkctl.danny.vn/guides/mcp-clients.md): Register splunkctl in project configurations for Claude Code, Codex, Cursor and Gemini CLI.
 
 ## Operate and audit
 
@@ -66,6 +68,7 @@
 - [Manage apps](https://splunkctl.danny.vn/guides/apps.md): Install, update, reload, and uninstall Splunk apps from local packages with a preview before every change.
 - [Manage users and roles](https://splunkctl.danny.vn/guides/users.md): Create, update, and delete Splunk users and roles with a preview before every change.
 - [Check server health and topology](https://splunkctl.danny.vn/guides/server.md): Read Splunk server health, license, KV store status, topology, deployment, authentication, tokens, and workload settings.
+- [Inspect ingestion and logging](https://splunkctl.danny.vn/guides/server-introspection.md): Inspect ingestion queues, indexing status and disk usage, and safely change runtime logging levels.
 - [Manage KV store collections](https://splunkctl.danny.vn/guides/kvstore.md): Create KV store collections and read, write, and delete their documents for allowlists and enrichment data.
 - [Audit changes and attest RBAC](https://splunkctl.danny.vn/guides/audit.md): Produce change-audit and role-based access control attestation reports from Splunk for regulators and reviewers.
 - [Administer SOAR users and roles](https://splunkctl.danny.vn/guides/soar-admin.md): Manage Splunk SOAR users, inspect role permissions, and query the platform audit trail.
@@ -78,7 +81,8 @@
 
 ## Command reference
 
-- [Overview](https://splunkctl.danny.vn/commands/README.md): Index of the 27 splunkctl command groups, generated from the CLI.
+- [Overview](https://splunkctl.danny.vn/commands/README.md): Index of the 28 splunkctl command groups, generated from the CLI.
+- [acl](https://splunkctl.danny.vn/commands/acl.md): Reference for `splunkctl acl`: Inspect and change knowledge object permissions.
 - [alerts](https://splunkctl.danny.vn/commands/alerts.md): Reference for `splunkctl alerts`: Manage fired alerts and alert actions.
 - [api](https://splunkctl.danny.vn/commands/api.md): Reference for `splunkctl api`: Call Splunk REST endpoints.
 - [apps](https://splunkctl.danny.vn/commands/apps.md): Reference for `splunkctl apps`: Manage Splunk apps.

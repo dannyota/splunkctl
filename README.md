@@ -23,6 +23,10 @@ splunkctl doctor
 - Respond with SOAR: work containers, artifacts, vault files, notes, and playbook runs. [Work SOAR incidents](https://splunkctl.danny.vn/#/guides/soar-incidents)
 - Review configuration drift: pull live state, diff it against version control, and push approved changes with a change report. [Manage configuration as code](https://splunkctl.danny.vn/#/guides/state)
 
+- Inspect object ACLs and preview ownership, sharing and role changes. [Permissions](https://splunkctl.danny.vn/#/guides/acl)
+- Diagnose ingestion queues, indexer status, disk space and runtime logging. [Server introspection](https://splunkctl.danny.vn/#/guides/server-introspection)
+- Register project MCP servers for Claude, Codex, Cursor and Gemini. [MCP clients](https://splunkctl.danny.vn/#/guides/mcp-clients)
+
 ## Safety
 
 Every command that changes a remote Splunk or SOAR instance is guarded. Without `--yes` it prints a preview and exits without changing anything; some previews read the current state first to show a diff. The preview names the target host, and the active profile for Splunk Enterprise, so a change aimed at production is visible before it happens:
@@ -37,7 +41,7 @@ Add `--yes` to apply. `splunkctl state push --report FILE` writes a change repor
 
 `--read-only` guarantees no application-data, configuration or authentication changes on any server. Search jobs and server audit/access logs are exceptions. Guarded previews still work; `--yes` mutations are refused. Local files may change. See [Read-only access](https://splunkctl.danny.vn/#/guides/read-only) and [Raw REST API](https://splunkctl.danny.vn/#/guides/api).
 
-Local configuration writes are not guarded: `splunkctl config init`, `splunkctl config use`, `splunkctl auth login`, and `splunkctl mcp install` write to your own machine immediately.
+Local configuration writes are not guarded: `splunkctl config init`, `splunkctl config use`, `splunkctl auth login`, and `splunkctl mcp install` write to your own machine immediately. Use `mcp install --preview` to inspect registration changes without writing.
 
 ## Agent access
 

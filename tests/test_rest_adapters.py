@@ -76,7 +76,6 @@ def test_dashboard_entity_mutations_use_resolved_namespace_and_encoded_path() ->
     assert d.content["eai:data"] == d.content.__getattr__("eai:data")
     assert d.access.app == d.access["app"] == "my app"
     d.update(**{"eai:data": "<form/>"})
-    d.acl_update(owner="bob", sharing="global")
     d.delete()
     path = c.service.get.call_args.args[0]
     assert path == "data/ui/views/a%2Fb%20%252F"
@@ -84,10 +83,6 @@ def test_dashboard_entity_mutations_use_resolved_namespace_and_encoded_path() ->
     assert UrlEncoded(path) == path
     c.service.post.assert_any_call(
         path, owner="alice", app="my%20app", **{"eai:data": "<form/>"}
-    )
-    c.service.post.assert_any_call(
-        "/servicesNS/alice/my%20app/" + str(path) + "/acl",
-        body={"owner": "bob", "sharing": "global"},
     )
     c.service.delete.assert_called_once_with(path, owner="alice", app="my%20app")
 
@@ -203,8 +198,6 @@ def test_malformed_hec_entry_does_not_retry_alias() -> None:
 
 
 def test_upstream_wire_encodes_namespaces_and_acl_form() -> None:
-    from urllib.parse import parse_qs
-
     from splunklib.client import Service
 
     c = client()
@@ -214,31 +207,11 @@ def test_upstream_wire_encodes_namespaces_and_acl_form() -> None:
     c._service = service
     d = c.dashboards["a/b %2F"]
     d.update(**{"eai:data": "<form/>"})
-    d.acl_update(owner="bob", sharing="global")
     d.delete()
     update = service.http.post.call_args_list[0]
     assert str(update.args[0]).endswith(
         "/servicesNS/alice/my%20app/data/ui/views/a%2Fb%20%252F"
     )
-    acl = service.http.post.call_args_list[1]
-    assert str(acl.args[0]).endswith(
-        "/servicesNS/alice/my%20app/data/ui/views/a%2Fb%20%252F/acl"
-    )
-    assert acl.kwargs["body"] == {"owner": "bob", "sharing": "global"}
-    # Exercise the SDK's actual form encoder too, without a network connection.
-    from splunklib.binding import HttpLib
-
-    transport = HttpLib(
-        MagicMock(
-            return_value={"status": 200, "reason": "OK", "headers": [], "body": b""}
-        )
-    )
-    transport.post(acl.args[0], body=acl.kwargs["body"])
-    message = transport.handler.call_args.args[1]
-    assert parse_qs(message["body"].decode()) == {
-        "owner": ["bob"],
-        "sharing": ["global"],
-    }
 
 
 @pytest.mark.parametrize(
@@ -360,11 +333,6 @@ def test_canonical_mutations_preserve_server_path(
     assert (
         str(service.http.post.call_args.args[0]) == str(service.authority) + alternate
     )
-    assert entity.acl_update(owner="bob", sharing="global") is entity
-    assert (
-        str(service.http.post.call_args.args[0])
-        == str(service.authority) + alternate + "/acl"
-    )
     entity.delete()
     assert (
         str(service.http.delete.call_args.args[0]) == str(service.authority) + alternate
@@ -378,7 +346,7 @@ def test_canonical_mutations_preserve_server_path(
         )
 
 
-@pytest.mark.parametrize("operation", ["acl_update", "enable", "disable"])
+@pytest.mark.parametrize("operation", ["enable", "disable"])
 def test_mutation_refreshes_content_acl_and_subsequent_routing(operation: str) -> None:
     c = client()
     original = {
@@ -395,23 +363,17 @@ def test_mutation_refreshes_content_acl_and_subsequent_routing(operation: str) -
     }
     c.service.get.side_effect = [response([original]), response([refreshed])]
     token = c.hec_tokens["demo"]
-    fields = {"owner": "bob", "sharing": "system"} if operation == "acl_update" else {}
-    assert getattr(token, operation)(**fields) is token
+    assert getattr(token, operation)() is token
     c.service.get.assert_called_with(
         "/servicesNS/alice/search/data/inputs/http/demo", output_mode="json"
     )
     assert token.content.disabled == "0"
     assert token.access.owner == "bob"
     assert token.access.sharing == "system"
-    if operation == "acl_update":
-        c.service.post.assert_called_once_with(
-            "/servicesNS/alice/search/data/inputs/http/demo/acl", body=fields
-        )
-    else:
-        c.service.post.assert_called_once_with(
-            "/servicesNS/alice/search/data/inputs/http/demo",
-            disabled="0" if operation == "enable" else "1",
-        )
+    c.service.post.assert_called_once_with(
+        "/servicesNS/alice/search/data/inputs/http/demo",
+        disabled="0" if operation == "enable" else "1",
+    )
     token.delete()
     c.service.delete.assert_called_once_with(
         "/servicesNS/nobody/system/data/inputs/http/demo"

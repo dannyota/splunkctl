@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from click.testing import CliRunner
@@ -408,23 +409,32 @@ def test_list_filter_narrows(mock_gc: MagicMock) -> None:
 @patch(_PATCH)
 def test_get_shows_acl(mock_gc: MagicMock) -> None:
     ss = MagicMock()
-    ss.name = "r1"
-    ss.content = {"search": "x", "alert_comparator": "greater than"}
-    ss.access = {"app": "secops", "owner": "alice", "sharing": "app"}
+    entry = json.loads(
+        (
+            Path(__file__).parents[1]
+            / "fixtures/live/splunk-10.6.1.1/acl-set-saved-search-getback.json"
+        ).read_text()
+    )["entry"][0]
+    ss.name, ss.content, ss.access = entry["name"], entry["content"], entry["acl"]
     mock_gc.return_value.service.saved_searches.__getitem__.return_value = ss
     result = CliRunner().invoke(cli, ["--json", "rules", "get", "r1"])
     assert result.exit_code == 0
     row = json.loads(result.output)[0]
-    assert row["app"] == "secops"
-    assert row["owner"] == "alice"
+    assert row["app"] == "search"
+    assert row["owner"] == "admin"
     assert row["sharing"] == "app"
-    assert row["alert_comparator"] == "greater than"
+    assert row["alert_comparator"] == entry["content"]["alert_comparator"]
 
 
 @patch(_PATCH)
 def test_share_posts_acl(mock_gc: MagicMock) -> None:
     ss = MagicMock()
-    ss.access = {"sharing": "user", "owner": "splunk"}
+    ss.access = json.loads(
+        (
+            Path(__file__).parents[1]
+            / "fixtures/live/splunk-10.6.1.1/acl-saved-searches.json"
+        ).read_text()
+    )["entry"][0]["acl"]
     mock_client = mock_gc.return_value
     mock_client.service.saved_searches.__getitem__.return_value = ss
     result = CliRunner().invoke(
