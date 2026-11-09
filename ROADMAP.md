@@ -18,6 +18,9 @@ shipped command surface is the generated
 Not planned, as of the 2026-11-09 backlog review. Each item notes why;
 reopen it only if that reason changes.
 
+Auth-token minting, once listed here, shipped in v0.11.0 as
+`server tokens create`.
+
 - **ES governance surfaces** (incident-review settings, threat-intel
   framework): the lab has no Enterprise Security license to verify against.
 - **Forwarder fleet / deployment-server writes**: reads and reload exist
@@ -27,10 +30,12 @@ reopen it only if that reason changes.
 - **JSON `schemaVersion`**: would change the `--json` output contract.
 - **SOAR app development**: owned by the official `soarapps` SDK.
   `soar apps install` and `uninstall` exist.
-- **SOAR clustering, automation broker, multi-tenant and webhooks**: not
-  available on the single-node Community edition lab.
-- **SOAR token minting, label creation, backup and restore**: no REST
-  route (UI-only, or `phenv` only).
+- **SOAR clustering, automation broker and multi-tenant**: not available
+  on the single-node Community edition lab.
+- **SOAR webhooks**: not chosen in the backlog review; not verified on
+  the lab.
+- **SOAR token minting**: REST cannot return a usable token plaintext.
+- **SOAR label creation, backup and restore**: UI-only, or `phenv` only.
 - **SOAR severity, status and CEF vocabulary writes**: platform admin
   settings; reads are enough for the CLI.
 
