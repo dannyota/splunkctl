@@ -5,7 +5,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 import click
-from splunklib.binding import UrlEncoded
+from splunklib.binding import HTTPError, UrlEncoded
 
 from splunkctl.client import rest_get_json
 from splunkctl.errors import WebSessionError
@@ -51,6 +51,24 @@ def resolve(
     svc: Any, object_type: str, name: str, *, app: str | None, owner: str | None
 ) -> dict[str, Any]:
     """Fetch an exact encoded name in the selected namespace."""
+    if object_type == "data-model" and owner is None:
+        context = rest_get_json(svc, "/services/authentication/current-context")
+        username = context["entry"][0]["content"]["username"]
+        for candidate in dict.fromkeys((username, "nobody")):
+            try:
+                return resolve(svc, object_type, name, app=app, owner=candidate)
+            except HTTPError as exc:
+                if exc.status != 404 and not (
+                    exc.status == 500
+                    and "Cannot get username when all users are selected" in str(exc)
+                ):
+                    raise
+            except WebSessionError as exc:
+                if exc.kind != "not_found":
+                    raise
+        raise WebSessionError(
+            "Object not found; pass --current-owner", kind="not_found"
+        )
     namespace = svc.namespace
     selected_owner = owner if owner is not None else namespace.get("owner") or "-"
     selected_app = app if app is not None else namespace.get("app") or "search"
@@ -125,9 +143,14 @@ def changes(
         "owner": owner if owner is not None else current["owner"],
         "sharing": effective,
     }
-    for key, value in (("read", read_roles), ("write", write_roles)):
-        if value is not None:
-            fields["perms." + key] = ",".join(value)
+    if read is not None or write is not None:
+        final_read = read_roles if read_roles is not None else current["read"] or []
+        final_write = write_roles if write_roles is not None else current["write"] or []
+        if not final_read and not final_write:
+            raise click.UsageError("Splunk cannot clear both permission lists")
+        for key, value in (("read", final_read), ("write", final_write)):
+            if value:
+                fields["perms." + key] = ",".join(value)
     if "/saved/searches/" in str(canonical(entry)):
         fields["app"] = current["app"]
     return fields
@@ -136,6 +159,12 @@ def changes(
 def unchanged(entry: dict[str, Any], fields: dict[str, Any]) -> bool:
     """Compare effective form fields to the current ACL."""
     current = row(entry)
+    if any(key.startswith("perms.") for key in fields):
+        if any(
+            set(roles(fields.get("perms." + key)) or []) != set(current[key] or [])
+            for key in ("read", "write")
+        ):
+            return False
     return all(
         (set(roles(str(value)) or []) == set(current[key[6:]] or []))
         if key.startswith("perms.")

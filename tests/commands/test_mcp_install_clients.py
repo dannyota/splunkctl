@@ -147,3 +147,127 @@ def test_malformed_toml_refuses_with_toml_entry(tmp_path: Path) -> None:
     assert result.exit_code != 0
     assert "[mcp_servers.splunkctl]" in result.stderr
     assert dest.read_text() == "[broken"
+
+
+@pytest.mark.parametrize(
+    "client,filename",
+    [
+        ("codex", ".codex/config.toml"),
+        ("cursor", ".cursor/mcp.json"),
+        ("gemini", ".gemini/settings.json"),
+        ("claude", ".mcp.json"),
+    ],
+)
+@pytest.mark.parametrize(
+    "link", ["parent", "parent_dangling", "destination", "dangling"]
+)
+def test_refuse_symlinks_before_read(tmp_path, client, filename, link):
+    if client == "claude" and link.startswith("parent"):
+        pytest.skip("Claude has no config subdirectory")
+    project = tmp_path / "project"
+    project.mkdir()
+    target = tmp_path / "outside"
+    target.mkdir()
+    sentinel = target / "config"
+    sentinel.write_text("private settings")
+    before = sentinel.stat().st_mtime_ns
+    dest = project / filename
+    if link.startswith("parent"):
+        dest.parent.symlink_to(
+            target if link == "parent" else tmp_path / "missing",
+            target_is_directory=True,
+        )
+    else:
+        dest.parent.mkdir(exist_ok=True)
+        dest.symlink_to(sentinel if link == "destination" else target / "missing")
+    with (
+        patch("splunkctl.commands.mcp_cmd.Path.cwd", return_value=project),
+        patch.object(
+            Path, "read_text", side_effect=AssertionError("read before refusal")
+        ),
+        patch(
+            "splunkctl.mcp.install.os.fdopen",
+            side_effect=AssertionError("read before refusal"),
+        ),
+    ):
+        result = CliRunner().invoke(cli, ["mcp", "install", "--client", client])
+    assert result.exit_code == 2, result.output
+    assert "symlink" in result.stderr.lower()
+    assert sentinel.read_text() == "private settings"
+    assert sentinel.stat().st_mtime_ns == before
+
+
+@pytest.mark.parametrize(
+    "raw", ['{"mcpServers": {}, "mcpServers": {}}', '{"x": {"a":1,"a":2}}']
+)
+def test_duplicate_json_keys_preserve_bytes_and_mtime(tmp_path, raw):
+    dest = tmp_path / ".mcp.json"
+    dest.write_text(raw)
+    before = dest.stat().st_mtime_ns
+    with patch("splunkctl.commands.mcp_cmd.Path.cwd", return_value=tmp_path):
+        result = CliRunner().invoke(cli, ["mcp", "install"])
+    assert result.exit_code == 2
+    assert "Duplicate" in result.stderr
+    assert dest.read_text() == raw
+    assert dest.stat().st_mtime_ns == before
+
+
+@pytest.mark.parametrize("global_flag", [True, False])
+@pytest.mark.parametrize("transport", ["stdio", "http"])
+def test_global_and_local_read_only(tmp_path, global_flag, transport):
+    args = (
+        (["--read-only"] if global_flag else [])
+        + ["mcp", "install"]
+        + ([] if global_flag else ["--read-only"])
+        + ["--transport", transport]
+    )
+    with patch("splunkctl.commands.mcp_cmd.Path.cwd", return_value=tmp_path):
+        result = CliRunner().invoke(cli, args)
+    if transport == "http":
+        assert result.exit_code == 2
+        assert (
+            "--read-only requires stdio; URL registration cannot enforce server policy."
+            in result.stderr
+        )
+        assert not (tmp_path / ".mcp.json").exists()
+    else:
+        assert result.exit_code == 0
+        assert (
+            json.loads((tmp_path / ".mcp.json").read_text())["mcpServers"]["splunkctl"][
+                "args"
+            ][-1]
+            == "--read-only"
+        )
+
+
+def test_atomic_replace_stays_in_verified_directory(tmp_path):
+    import os
+
+    project = tmp_path / "project"
+    config_dir = project / ".cursor"
+    config_dir.mkdir(parents=True)
+    dest = config_dir / "mcp.json"
+    dest.write_text('{"keep": true}')
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    sentinel = outside / "mcp.json"
+    sentinel.write_text('{"private": true}')
+    original = sentinel.read_bytes(), sentinel.stat().st_mtime_ns
+    moved = project / "verified"
+    replace = os.replace
+
+    def swap_then_replace(*args, **kwargs):
+        config_dir.rename(moved)
+        config_dir.symlink_to(outside, target_is_directory=True)
+        return replace(*args, **kwargs)
+
+    with (
+        patch("splunkctl.commands.mcp_cmd.Path.cwd", return_value=project),
+        patch("splunkctl.mcp.install.os.replace", side_effect=swap_then_replace),
+    ):
+        result = CliRunner().invoke(cli, ["mcp", "install", "--client", "cursor"])
+    assert result.exit_code == 0, result.output
+    assert (sentinel.read_bytes(), sentinel.stat().st_mtime_ns) == original
+    config = json.loads((moved / "mcp.json").read_text())
+    assert config["keep"] is True
+    assert config["mcpServers"]["splunkctl"]["args"][-1] == "serve"

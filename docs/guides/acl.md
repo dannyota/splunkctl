@@ -11,15 +11,15 @@ splunkctl acl set saved-search 'My search' --app search --sharing app --read '*'
 splunkctl acl get saved-search 'My search' --app search
 ```
 
-`--app` selects the namespace. On `get`, `--owner` selects the current owner. On `set`, `--current-owner` selects it and `--owner` changes ownership. Omitted selectors use the current namespace. Without configured selectors, lookup uses all owners (`-`) in the `search` app. An ambiguous lookup fails with `conflict`; select an owner and app explicitly.
+`--app` selects the namespace. On `get`, `--owner` selects the current owner. On `set`, `--current-owner` selects it and `--owner` changes ownership. Omitted selectors use the current namespace. Without configured selectors, lookup uses all owners (`-`) in the `search` app. Data models without an owner selector try the authenticated user, then `nobody`, because Splunk rejects the all-owner namespace. If neither resolves, pass `--current-owner` on `set` or `--owner` on `get`. An ambiguous lookup fails with `conflict`; select an owner and app explicitly.
 
 Supported types: `saved-search`, `macro`, `eventtype`, `tag`, `props`, `transform`, `lookup-definition`, `lookup-table`, `field-extraction`, `data-model`, `view` and `dashboard`.
 
 Names are exact stanza names. Include a macro's argument suffix, such as `'my_macro(2)'`. For `tag`, NAME is the tags.conf stanza `field=value`, such as `'sourcetype=my_source'`; permissions belong to the field/value pair. A field extraction is named `'<stanza> : EXTRACT-<name>'`. The CLI encodes each name as one URL segment.
 
-`--sharing` accepts `user`, `app` or `global`. `--read` and `--write` accept comma-separated roles. Quote `'*'` for everyone, pass `''` to clear a role list, and omit an option to preserve its value. Duplicate roles are removed. Unknown roles fail before any write.
+`--sharing` accepts `user`, `app` or `global`. `--read` and `--write` accept comma-separated roles. Quote `'*'` for everyone, pass `''` to clear a role list, and omit an option to preserve its value. Splunk cannot clear both lists; that request fails with a usage error. When either list changes, the CLI merges the unchanged list, omits cleared keys, and verifies both lists after writing. Duplicate roles are removed. Unknown roles fail before any write.
 
-Private objects (`sharing=user`) have null read and write permissions in JSON and blank cells in table or CSV output. Permission options are rejected when the effective sharing is `user`. To change permissions, also select `app` or `global` sharing.
+Objects that were never shared have null read and write permissions in JSON and blank cells in table or CSV output. Returning sharing to `user` preserves existing role lists. Permission options are rejected when the effective sharing is `user`. To change permissions, also select `app` or `global` sharing.
 
 Sharing can move an object to the `nobody` namespace. The CLI reads back from the response's current location. Existing `dashboards share` and `rules share` commands use the same ACL helper.
 

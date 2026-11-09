@@ -61,6 +61,8 @@ def set_acl(
     write: str | None,
 ) -> None:
     """Preview or apply object permission changes."""
+    if acl_ops.roles(read) == [] and acl_ops.roles(write) == []:
+        raise click.UsageError("Splunk cannot clear both permission lists")
     svc = get_client(ctx).service
     entry = acl_ops.resolve(svc, type, name, app=app, owner=current_owner)
     fields = acl_ops.changes(

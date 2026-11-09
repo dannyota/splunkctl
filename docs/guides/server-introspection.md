@@ -10,7 +10,7 @@ splunkctl --json server introspection indexer
 splunkctl --json server introspection disk
 ```
 
-Queue rows include current occupancy, maximum, unit, fill ratio and blocked status. A zero maximum produces a null ratio. Indexer rows include name, status, reason and average KB per second. Disk sizes are numbers in MB, with capacity, available, used and fill ratio. Missing fields, including filesystem type, become JSON nulls. Table and CSV cells for null values are blank.
+Queue rows include current occupancy, maximum, unit and fill ratio. A zero maximum produces a null ratio. Indexer rows include name, status, reason and average KB per second. Disk sizes are numbers in MB, with capacity, available, used and fill ratio. The `used` column is capacity minus free when free is present, matching df with reserved blocks. Otherwise it is capacity minus available. Computed MB values are rounded to three decimals; available remains a separate column. Missing fields, including filesystem type, become JSON nulls. Table and CSV cells for null values are blank.
 
 These commands use the [Splunk introspection endpoints](https://help.splunk.com/en/splunk-enterprise/rest-api-reference/10.0/introspection-endpoints/introspection-endpoint-descriptions) and `server/status/partitions-space`. Response mapping is covered by supplied Splunk 10.6.1.1 fixtures.
 

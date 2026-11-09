@@ -38,7 +38,7 @@ PYOWNER
                 api_assert "$T/acl-search-after.json" 'd[0]["sharing"] == "app" and d[0]["read"] == ["*"]'
                 api_capture "$T/acl-search-private.json" "$S" --json acl set saved-search "$acl_search" --app search --sharing user --yes
                 api_capture "$T/acl-search-back.json" "$S" --json acl get saved-search "$acl_search" --app search
-                api_assert "$T/acl-search-back.json" 'd[0]["sharing"] == "user" and d[0]["read"] is None'
+                api_assert "$T/acl-search-back.json" 'd[0]["sharing"] == "user"'
             fi
             defer shared_fixture_delete configs/conf-macros "$acl_macro"
             if api_capture "$T/acl-macro-create.json" "$S" --json api post "$acl_base/configs/conf-macros" \
@@ -53,7 +53,7 @@ PYOWNER
                 api_assert "$T/acl-macro-after.json" 'd[0]["sharing"] == "app" and d[0]["read"] == ["*"]'
                 api_capture "$T/acl-macro-private.json" "$S" --json acl set macro "$acl_macro" --app search --sharing user --yes
                 api_capture "$T/acl-macro-back.json" "$S" --json acl get macro "$acl_macro" --app search
-                api_assert "$T/acl-macro-back.json" 'd[0]["sharing"] == "user" and d[0]["read"] is None'
+                api_assert "$T/acl-macro-back.json" 'd[0]["sharing"] == "user"'
             fi
         else bad 'resolve authenticated ACL fixture owner'; fi
     fi
@@ -61,7 +61,7 @@ fi
 if selected server; then
     step "server introspection and logging"
     api_capture "$T/queues.json" "$S" --json server introspection queues
-    api_assert "$T/queues.json" 'bool(d) and all(set(("queue", "current", "maximum", "unit", "fill_ratio", "blocked")) <= r.keys() for r in d)'
+    api_assert "$T/queues.json" 'bool(d) and all(set(("queue", "current", "maximum", "unit", "fill_ratio")) <= r.keys() for r in d)'
     api_capture "$T/indexer.json" "$S" --json server introspection indexer
     api_assert "$T/indexer.json" 'bool(d) and all(set(("name", "status", "reason", "average_KBps")) <= r.keys() for r in d)'
     api_capture "$T/disk.json" "$S" --json server introspection disk

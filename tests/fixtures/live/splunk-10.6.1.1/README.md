@@ -53,7 +53,8 @@ admin in the search app (private, `sharing=user`) and deleted afterwards.
 
 ## Observed behavior
 
-- Private objects (`sharing=user`) return `acl.perms: null`, not an object.
+- Objects that were never shared return `acl.perms: null`. Restoring
+  `sharing=user` after app sharing keeps read `["*"]` and write `["admin"]`.
 - After `sharing=app`, the entry `id` and `links` move to
   `servicesNS/nobody/search/...`; the `origin` keeps the request's namespace.
 - POST `<entry>/acl` returns the entry with `content` reduced to `eai:acl`.
@@ -70,3 +71,33 @@ admin in the search app (private, `sharing=user`) and deleted afterwards.
 - `server/logger` changes are runtime only: no `etc/log-local.cfg` is
   written, and `TcpOutputProc` was back to `INFO` after
   `podman restart -t 120`.
+
+- L1: Any `perms.*` key in POST `<entry>/acl` replaces the whole perms
+  object. From read `["*"]`, write `["admin"]`, sending only
+  `perms.read=power` stored `{"read": ["power"]}` and exited 0.
+  Omitting both keys preserves permissions. Merge current and requested
+  lists, send both nonempty lists, and verify both on read-back.
+- L2: `perms.read=''` stores the literal role `''`. Clear one list by
+  omitting its key and sending the other: `sharing=app owner=X
+  perms.write=admin` stores `{"write": ["admin"]}`. Splunk cannot clear
+  both lists. Reject that request as usage before requests; never send an
+  empty-string role.
+- L3: Data-model lookups with owner `-`, including `servicesNS/-/-/`,
+  return HTTP 500 with `{"messages": [{"type": "ERROR", "text":
+  "Cannot get username when all users are selected"}]}`. Without an owner,
+  try the authenticated user then `nobody`; if neither resolves, report
+  not_found with `pass --current-owner`.
+- L4: Returning app sharing to user sharing keeps permissions. Smoke
+  assertions for `acl-search-back` and `acl-macro-back` check only sharing.
+- L5: Queue responses have no `blocked` field. Disk used MB is capacity
+  minus free when free exists, matching df with reserved blocks; otherwise
+  use capacity minus available. Keep available separate and round computed
+  MB to three decimals.
+- L6: Global `splunkctl --read-only mcp install` must register stdio
+  `mcp serve --read-only` and refuse HTTP with the same message as the
+  command-local flag.
+- L7: Codex CLI 0.167.0 listed splunkctl only after the directory was
+  trusted. Codex skips project `.codex/config.toml` for untrusted projects.
+
+L1 through L7 record the Linux lab verification of commit `4de5eea` and
+its required CLI behavior; L6 describes registration policy, not splunkd.

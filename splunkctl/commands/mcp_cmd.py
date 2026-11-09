@@ -96,6 +96,7 @@ def mcp_install(
 ) -> None:
     """Register splunkctl in this project's MCP configuration."""
     from splunkctl.mcp.install import install
+    from splunkctl.mcp.policy import enabled
 
     dest, changed, entry = install(
         Path.cwd(),
@@ -104,7 +105,7 @@ def mcp_install(
         host=host,
         port=port,
         preview=preview,
-        read_only=read_only,
+        read_only=enabled(read_only),
     )
     if preview:
         output.render(

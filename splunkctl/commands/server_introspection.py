@@ -46,7 +46,6 @@ def queues(ctx: click.Context) -> None:
                 "fill_ratio": current / maximum
                 if current is not None and maximum
                 else None,
-                "blocked": content.get("blocked"),
             }
         )
     output.render(ctx, rows)
@@ -80,7 +79,12 @@ def disk(ctx: click.Context) -> None:
         capacity = number(content.get("capacity"))
         available = number(content.get("available"))
         free = number(content.get("free"))
-        used = capacity - free if capacity is not None and free is not None else None
+        remaining = free if free is not None else available
+        used = (
+            round(capacity - remaining, 3)
+            if capacity is not None and remaining is not None
+            else None
+        )
         rows.append(
             {
                 "partition": content.get("mount_point"),

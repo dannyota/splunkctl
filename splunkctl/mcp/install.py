@@ -4,7 +4,7 @@ import json
 import os
 import stat
 import sys
-import tempfile
+import uuid
 from collections.abc import MutableMapping
 from pathlib import Path
 from typing import Any
@@ -51,25 +51,75 @@ def _mapping(
     return value  # type: ignore[no-any-return]
 
 
-def _replace(dest: Path, text: str) -> None:
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    mode = stat.S_IMODE(dest.stat().st_mode) if dest.exists() else 0o600
-    fd, temporary = tempfile.mkstemp(prefix=f".{dest.name}.", dir=dest.parent)
+def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"Duplicate JSON key: {key}")
+        result[key] = value
+    return result
+
+
+def _replace(dest: Path, text: str, directory_fd: int) -> None:
+    try:
+        mode = stat.S_IMODE(
+            os.stat(dest.name, dir_fd=directory_fd, follow_symlinks=False).st_mode
+        )
+    except FileNotFoundError:
+        mode = 0o600
+    temporary = f".{dest.name}.{uuid.uuid4().hex}"
+    fd = os.open(
+        temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, mode, dir_fd=directory_fd
+    )
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as stream:
             stream.write(text)
             stream.flush()
             os.fsync(stream.fileno())
             os.fchmod(stream.fileno(), mode)
-        os.replace(temporary, dest)
+        os.replace(
+            temporary, dest.name, src_dir_fd=directory_fd, dst_dir_fd=directory_fd
+        )
     finally:
-        if os.path.exists(temporary):
-            os.unlink(temporary)
+        try:
+            os.unlink(temporary, dir_fd=directory_fd)
+        except FileNotFoundError:
+            pass
 
 
-def install(
+def install(directory: Path, **kwargs: Any) -> tuple[Path, bool, dict[str, object]]:
+    """Hold the verified config directory open through reading and replacement."""
+    dest = directory / _FILES[kwargs["client"]]
+    directory_fd = None
+    try:
+        if dest.parent.is_symlink() or dest.is_symlink():
+            raise ValueError("symlinked configuration directory or destination")
+        if not kwargs["preview"]:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+        if dest.parent.exists():
+            directory_fd = os.open(
+                dest.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+            )
+            try:
+                info = os.stat(dest.name, dir_fd=directory_fd, follow_symlinks=False)
+            except FileNotFoundError:
+                pass
+            else:
+                if stat.S_ISLNK(info.st_mode):
+                    raise ValueError("symlinked configuration destination")
+        return _install(directory, directory_fd=directory_fd, **kwargs)
+    except (ValueError, OSError) as exc:
+        output.error(f"Cannot edit {dest}: {exc}", kind="usage")
+        raise SystemExit(2) from exc
+    finally:
+        if directory_fd is not None:
+            os.close(directory_fd)
+
+
+def _install(
     directory: Path,
     *,
+    directory_fd: int | None,
     client: str,
     transport: str,
     host: str,
@@ -96,13 +146,24 @@ def install(
         if read_only:
             args.append("--read-only")
         entry = {"command": sys.executable, "args": args}
-    exists = dest.exists()
-    raw = dest.read_text(encoding="utf-8") if exists else ""
+    raw = ""
+    exists = False
+    if directory_fd is not None:
+        try:
+            fd = os.open(dest.name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=directory_fd)
+        except FileNotFoundError:
+            pass
+        else:
+            exists = True
+            with os.fdopen(fd, encoding="utf-8") as stream:
+                raw = stream.read()
     try:
         config = (
             tomlkit.parse(raw)
             if client == "codex"
-            else json.loads(raw, parse_constant=_reject_constant)
+            else json.loads(
+                raw, parse_constant=_reject_constant, object_pairs_hook=_unique_object
+            )
             if exists
             else {}
         )
@@ -131,5 +192,7 @@ def install(
             if client == "codex"
             else json.dumps(config, indent=2) + "\n"
         )
-        _replace(dest, text)
+        if directory_fd is None:
+            raise ValueError("Configuration directory is unavailable")
+        _replace(dest, text, directory_fd)
     return dest, changed, entry

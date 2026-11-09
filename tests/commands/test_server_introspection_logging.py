@@ -51,7 +51,6 @@ def test_introspection(mock_client, command, fixture, endpoint, fmt):
             "maximum": 512000,
             "unit": "bytes",
             "fill_ratio": 0,
-            "blocked": None,
         }
     elif command == "indexer":
         assert rows[0]["status"] == "normal"
@@ -224,3 +223,23 @@ def test_logger_component_encoded_once_over_sdk():
     expected = "https://example.test:8089/services/server/logger/part%20%2F%2B%25"
     assert [url.split("?")[0] for url, _ in calls] == [expected] * 3
     assert [method for _, method in calls] == ["GET", "POST", "GET"]
+
+
+@pytest.mark.parametrize(
+    "free,expected", [("139345.051", 161945.761), (None, 176898.468)]
+)
+@patch(_TELEMETRY)
+def test_disk_used_free_or_available_rounded(mock_client, free, expected):
+    body = json.loads((_FIXTURES / "status-partitions-space.json").read_bytes())
+    content = body["entry"][0]["content"]
+    content.pop("free", None)
+    if free is not None:
+        content["free"] = free
+    mock_client.return_value.service.get.return_value.body.read.return_value = (
+        json.dumps(body).encode()
+    )
+    result = CliRunner().invoke(cli, ["--json", "server", "introspection", "disk"])
+    assert result.exit_code == 0
+    row = json.loads(result.stdout)[0]
+    assert row["used"] == expected
+    assert row["available"] == 124392.344
