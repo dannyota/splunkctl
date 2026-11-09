@@ -16,6 +16,7 @@ When to use: you are writing a shell script, CI step, or agent wrapper around sp
 
 **Code 1**: the command understood what you asked for but could not complete it. Common causes:
 
+- Read-only mutation refused: `permission`, `http_status: null`, message starting `read-only:`.
 - Write SPL refused without `--yes` (`confirmation_required` in JSON errors).
 - Authentication or authorization failure (wrong credentials, expired token, insufficient role): `auth` or `permission`.
 - Resource not found (no such index, saved search, dashboard, lookup, container, playbook): `not_found`.
@@ -23,7 +24,7 @@ When to use: you are writing a shell script, CI step, or agent wrapper around sp
 - Network or connectivity error (host unreachable, timeout, TLS handshake failure): `connection` or `timeout`.
 - Unreadable or foreign config file: `config`.
 
-With `--json`, the error is a single-line envelope on standard output: `{"error": {"kind": "...", "http_status": ..., "message": "..."}}`.
+With `--json`, the error is a single-line envelope on standard error: `{"error": {"kind": "...", "http_status": ..., "message": "..."}}`.
 
 **Code 2**: Click rejected the invocation before the command ran. The arguments or options did not match the command's schema. Fix the invocation and retry. This code is never produced by splunkctl's own logic; it comes from the argument parser. Commands that validate mutually exclusive options themselves (for example `kvstore insert --data` versus `--file`) also raise a usage error and exit 2.
 

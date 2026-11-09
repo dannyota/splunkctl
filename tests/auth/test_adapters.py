@@ -19,7 +19,7 @@ def test_siem_extract_missing_cookie_raises() -> None:
         adapters.SIEMAdapter().extract({"other": "x"})
 
 
-@patch("splunkctl.auth.adapters.requests.get")
+@patch("splunkctl.auth.adapters.PolicySession.get")
 def test_siem_validate_uses_management_api(mock_get: MagicMock) -> None:
     mock_get.return_value.status_code = 200
     status = adapters.SIEMAdapter().validate(
@@ -34,7 +34,7 @@ def test_siem_validate_uses_management_api(mock_get: MagicMock) -> None:
     assert kwargs["headers"] == {"Authorization": "Splunk k"}
 
 
-@patch("splunkctl.auth.adapters.requests.get")
+@patch("splunkctl.auth.adapters.PolicySession.get")
 def test_siem_validate_returns_expired_on_401(mock_get: MagicMock) -> None:
     mock_get.return_value.status_code = 401
     status = adapters.SIEMAdapter().validate(
@@ -46,7 +46,7 @@ def test_siem_validate_returns_expired_on_401(mock_get: MagicMock) -> None:
     assert status == "expired"
 
 
-@patch("splunkctl.auth.adapters.requests.get")
+@patch("splunkctl.auth.adapters.PolicySession.get")
 def test_siem_validate_returns_unreachable_on_connection_error(
     mock_get: MagicMock,
 ) -> None:
@@ -72,7 +72,7 @@ def test_soar_extract_missing_cookies_raises() -> None:
         adapters.SOARAdapter().extract({"sessionid": "sid"})
 
 
-@patch("splunkctl.auth.adapters.requests.get")
+@patch("splunkctl.auth.adapters.PolicySession.get")
 def test_soar_validate_hits_rest_version(mock_get: MagicMock) -> None:
     mock_get.return_value.status_code = 200
     vals = {"sessionid": "sid", "csrftoken": "csrf"}
@@ -113,8 +113,8 @@ def test_unverified_requests_suppress_raw_warning(
         )
         return MagicMock(status_code=200)
 
-    monkeypatch.setattr(adapters.requests, "get", request)
-    monkeypatch.setattr(adapters.requests, "post", request)
+    monkeypatch.setattr(adapters.PolicySession, "get", request)
+    monkeypatch.setattr(adapters.PolicySession, "post", request)
     values = {
         "session_key": "k",
         "cookie": "splunkd_8000",

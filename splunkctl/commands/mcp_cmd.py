@@ -37,7 +37,10 @@ def mcp_group() -> None:
     show_default=True,
     help="Port for HTTP transport (ignored for stdio).",
 )
-def mcp_serve(transport: str, host: str, port: int) -> None:
+@click.option(
+    "--read-only", is_flag=True, help="Refuse server mutations in every tool."
+)
+def mcp_serve(transport: str, host: str, port: int, read_only: bool) -> None:
     """Start the MCP server.
 
     Default is stdio (standard MCP transport). HTTP is restricted to the
@@ -46,7 +49,12 @@ def mcp_serve(transport: str, host: str, port: int) -> None:
     from splunkctl.mcp.server import run_server
 
     real_transport = "streamable-http" if transport == "http" else "stdio"
-    run_server(transport=real_transport, host=host, port=port)
+    from splunkctl.mcp.policy import enabled
+
+    if enabled(read_only):
+        run_server(transport=real_transport, host=host, port=port, read_only=True)
+    else:
+        run_server(transport=real_transport, host=host, port=port)
 
 
 @mcp_group.command("install")

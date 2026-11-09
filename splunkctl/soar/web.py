@@ -16,6 +16,9 @@ from typing import TYPE_CHECKING, Any
 import requests
 
 from splunkctl.errors import kind_for_status
+from splunkctl.request_context import readonly
+from splunkctl.request_policy import ReadOnlyError
+from splunkctl.transport import PolicySession
 
 if TYPE_CHECKING:
     from splunkctl.soar.client import SOARClient
@@ -30,13 +33,16 @@ def ensure_web_login(client: SOARClient) -> requests.Session:
     """
     from splunkctl.soar.client import SOARError
 
+    if readonly():
+        raise ReadOnlyError("read-only: SOAR web login is refused")
+    base = f"https://{client._host}:{client._port}"  # noqa: SLF001
     if client._web_session is not None:  # noqa: SLF001
         return client._web_session  # noqa: SLF001
 
     # Browser-mode clients already hold a Django session; reuse it instead of
     # attempting username/password login (which browser profiles don't have).
     if client._cookies:  # noqa: SLF001
-        sess = requests.Session()
+        sess = PolicySession(base, kind="soar", identity=client._session.identity)
         sess.verify = client._verify  # noqa: SLF001
         for name, value in client._cookies.items():  # noqa: SLF001
             sess.cookies.set(name, value)
@@ -51,7 +57,7 @@ def ensure_web_login(client: SOARClient) -> requests.Session:
             kind="auth",
         )
 
-    sess = requests.Session()
+    sess = PolicySession(base, kind="soar", identity=client._session.identity)
     sess.verify = client._verify  # noqa: SLF001
     base = f"https://{client._host}:{client._port}"  # noqa: SLF001
 

@@ -11,6 +11,7 @@ from splunkctl import __version__, output
 from splunkctl import config as cfg_mod
 from splunkctl import errors as err_mod
 from splunkctl.commands.alerts import alerts_group
+from splunkctl.commands.api import api_group
 from splunkctl.commands.apps import apps_group
 from splunkctl.commands.audit import audit_group
 from splunkctl.commands.auth import auth_group
@@ -39,6 +40,8 @@ from splunkctl.commands.soar import soar_group
 from splunkctl.commands.state import state_group
 from splunkctl.commands.users import users_group
 from splunkctl.guard import is_guarded
+from splunkctl.request_context import invocation, readonly
+from splunkctl.request_policy import ReadOnlyError
 
 
 def _strip_watch(args: list[str]) -> list[str]:
@@ -63,6 +66,7 @@ class _CLI(click.Group):
 
     _HOIST_FLAGS: frozenset[str] = frozenset(
         {
+            "--read-only",
             "--yes",
             "-y",
             "--json",
@@ -147,6 +151,33 @@ class _CLI(click.Group):
         return super().parse_args(ctx, prefix + rest)
 
     def invoke(self, ctx: click.Context) -> Any:
+        args = list(ctx._protected_args) + ctx.args
+        leaf = resolve_leaf_command(self, args)
+        command: click.Command = self
+        names: list[str] = []
+        for token in args:
+            if isinstance(command, click.Group) and token in command.commands:
+                names.append(token)
+                command = command.commands[token]
+            else:
+                break
+        with invocation(" ".join(names), bool(ctx.params.get("read_only"))):
+            try:
+                if readonly() and (
+                    (ctx.params.get("yes") and leaf is not None and is_guarded(leaf))
+                    or names[:2] in (["auth", "login"], ["auth", "logout"])
+                ):
+                    raise ReadOnlyError("read-only: server mutation refused")
+                return self._invoke(ctx)
+            except ReadOnlyError as exc:
+                # The root callback has not run during preflight.
+                ctx.ensure_object(dict)
+                ctx.obj["json"] = ctx.params.get("use_json", False)
+                ctx.obj["format"] = ctx.params.get("fmt")
+                output.error(str(exc), kind="permission", http_status=None)
+                sys.exit(1)
+
+    def _invoke(self, ctx: click.Context) -> Any:
         # Pre-flight checks for --watch (ctx.params is populated by now).
         interval: int = ctx.params.get("watch") or 0
         orig_args: list[str] = ctx.meta.get("_watch_orig_args", [])
@@ -209,6 +240,11 @@ Exit codes:
 )
 @click.option("--fields", default=None, help="Comma-separated fields to project.")
 @click.option("--out", "-o", type=click.Path(), default=None, help="Write to file.")
+@click.option(
+    "--read-only",
+    is_flag=True,
+    help="Refuse server mutations, even with --yes. Local files may change.",
+)
 @click.option("--yes", "-y", is_flag=True, help="Confirm mutation, skip dry-run.")
 @click.option(
     "--config",
@@ -239,6 +275,7 @@ def cli(
     fields: str | None,
     out: str | None,
     yes: bool,
+    read_only: bool,
     config: str | None,
     profile: str | None,
     debug: bool,
@@ -247,6 +284,7 @@ def cli(
 ) -> None:
     """CLI tool for Splunk Enterprise SIEM operations."""
     ctx.ensure_object(dict)
+    ctx.obj["read_only"] = readonly()
     ctx.obj["json"] = use_json
     ctx.obj["format"] = fmt
     ctx.obj["fields"] = fields
@@ -284,6 +322,7 @@ def completion_cmd(shell: str) -> None:
 
 
 cli.add_command(alerts_group)
+cli.add_command(api_group)
 cli.add_command(apps_group)
 cli.add_command(audit_group)
 cli.add_command(auth_group)

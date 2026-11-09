@@ -9,39 +9,9 @@ import click
 from splunkctl import guard, output
 from splunkctl.client import get_client
 from splunkctl.commands.common import fetch_page, list_options, read_results, spl_quote
+from splunkctl.search_forms import choose_search_form
+from splunkctl.search_forms import normalize_spl as _normalize_spl  # noqa: F401
 from splunkctl.spl_safety import check_spl
-
-_GENERATING = (
-    "abstract",
-    "bucket",
-    "datamodel",
-    "dbinspect",
-    "eventcount",
-    "inputcsv",
-    "inputlookup",
-    "loadjob",
-    "makeresults",
-    "mcollect",
-    "metadata",
-    "metasearch",
-    "mstats",
-    "pivot",
-    "rest",
-    "savedsearch",
-    "tstats",
-    "typeahead",
-)
-
-
-def _normalize_spl(spl: str) -> str:
-    """Auto-prepend ``search`` when the query needs it."""
-    stripped = spl.strip()
-    if stripped.startswith("|"):
-        return stripped
-    first_word = stripped.split()[0].lower() if stripped else ""
-    if first_word == "search" or first_word in _GENERATING:
-        return stripped
-    return f"search {stripped}"
 
 
 def _time_kwargs(
@@ -87,7 +57,7 @@ def run_search(
     svc = client.service
     if app:
         svc.namespace["app"] = app
-    query = _normalize_spl(spl)
+    query = choose_search_form(svc, spl)
 
     kwargs: dict[str, Any] = {
         "exec_mode": "normal",
@@ -142,7 +112,7 @@ def export_search(
     svc = client.service
     if app:
         svc.namespace["app"] = app
-    query = _normalize_spl(spl)
+    query = choose_search_form(svc, spl)
 
     kwargs: dict[str, Any] = {
         "output_mode": "json",
@@ -177,7 +147,7 @@ def oneshot_search(
     svc = client.service
     if app:
         svc.namespace["app"] = app
-    query = _normalize_spl(spl)
+    query = choose_search_form(svc, spl)
 
     kwargs: dict[str, Any] = {
         "output_mode": "json",
@@ -449,7 +419,7 @@ def metrics_catalog(
         spl = f"| mcatalog values(metric_name) WHERE index={quoted_index}"
         output.info(f"Fetching metric names from index {index!r}")
 
-    stream: Any = svc.jobs.oneshot(spl, output_mode="json")
+    stream: Any = svc.jobs.oneshot(choose_search_form(svc, spl), output_mode="json")
     rows = read_results(stream)
 
     # mcatalog returns MV fields as a single row with a list value;

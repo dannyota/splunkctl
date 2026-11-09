@@ -41,3 +41,4 @@ local machine and does not provide authentication.
 | `--transport` | choice: stdio, http | stdio | Transport type. 'http' runs streamable-HTTP. |
 | `--host` | choice: 127.0.0.1, localhost, ::1 | 127.0.0.1 | Loopback address for HTTP transport (ignored for stdio). |
 | `--port` | integer | 8765 | Port for HTTP transport (ignored for stdio). |
+| `--read-only` | flag | - | Refuse server mutations in every tool. |

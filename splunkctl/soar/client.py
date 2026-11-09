@@ -18,6 +18,7 @@ import requests
 import urllib3
 
 from splunkctl.errors import kind_for_status
+from splunkctl.transport import PolicySession
 
 # Default (connect, read) timeout in seconds.  Override via
 # SOAR_TIMEOUT env var (single int → both; "C,R" → connect, read).
@@ -145,7 +146,7 @@ class SOARClient:
         self._password = password
         self._verify = verify
         self._cookies = cookies
-        self._session = requests.Session()
+        self._session = PolicySession(f"https://{host}:{port}", kind="soar")
         self._session.verify = verify
 
         # Resolve timeout: kwarg > env var > default.

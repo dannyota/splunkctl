@@ -111,7 +111,7 @@ def _csrf_cookie() -> MagicMock:
     return cookie
 
 
-@patch("splunkctl.client.requests.Session")
+@patch("splunkctl.web_session.PolicySession")
 def test_login_bad_creds_raises_websession_error(
     mock_session_cls: MagicMock,
 ) -> None:
@@ -129,7 +129,7 @@ def test_login_bad_creds_raises_websession_error(
         ws._login()
 
 
-@patch("splunkctl.client.requests.Session")
+@patch("splunkctl.web_session.PolicySession")
 def test_login_http_error_status_raises_websession_error(
     mock_session_cls: MagicMock,
 ) -> None:
@@ -148,7 +148,7 @@ def test_login_http_error_status_raises_websession_error(
         ws._login()
 
 
-@patch("splunkctl.client.requests.Session")
+@patch("splunkctl.web_session.PolicySession")
 def test_login_non_json_response_raises_websession_error(
     mock_session_cls: MagicMock,
 ) -> None:
@@ -166,7 +166,7 @@ def test_login_non_json_response_raises_websession_error(
         ws._login()
 
 
-@patch("splunkctl.client.requests.Session")
+@patch("splunkctl.web_session.PolicySession")
 def test_missing_csrf_raises_websession_error(
     mock_session_cls: MagicMock,
 ) -> None:
@@ -194,7 +194,7 @@ def test_token_only_auth_raises_websession_error() -> None:
         _WebSession(svc, verify=False)
 
 
-@patch("splunkctl.client.requests.Session")
+@patch("splunkctl.web_session.PolicySession")
 def test_app_install_http_error_raises_websession_error(
     mock_session_cls: MagicMock, tmp_path: object
 ) -> None:

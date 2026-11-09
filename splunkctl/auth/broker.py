@@ -13,6 +13,9 @@ import time
 from typing import Any
 from urllib.parse import urlsplit
 
+from splunkctl.request_context import readonly
+from splunkctl.request_policy import ReadOnlyError
+
 
 class BrokerError(RuntimeError):
     """A browser-login failure with an ``errors.py``-compatible kind."""
@@ -64,6 +67,8 @@ def run_login(
 
     Raises :class:`BrokerError` on timeout, wrong final origin, or early close.
     """
+    if readonly():
+        raise ReadOnlyError("read-only: browser login is refused")
     if not browser_available():
         raise BrokerError(
             "Playwright or Chromium is not installed. " + install_hint(),

@@ -6,6 +6,8 @@ from typing import Any
 import click
 
 from splunkctl import config as cfg_mod
+from splunkctl.request_context import readonly
+from splunkctl.request_policy import ReadOnlyError
 
 
 def soar_banner(ctx: click.Context) -> str:
@@ -25,6 +27,7 @@ def soar_banner(ctx: click.Context) -> str:
 def soar_check(ctx: click.Context, action: str, *, details: str = "") -> bool:
     """SOAR mutation guard — same as :func:`check` but with the SOAR banner."""
     obj: dict[str, Any] = ctx.obj or {}
+    _check_readonly(obj)
     tag = soar_banner(ctx)
 
     if not obj.get("dry_run", True):
@@ -80,6 +83,7 @@ def check(ctx: click.Context, action: str, *, details: str = "") -> bool:
     never mistake which instance it's about to mutate (e.g. UAT vs prod).
     """
     obj: dict[str, Any] = ctx.obj or {}
+    _check_readonly(obj)
     tag = banner(ctx)
 
     if not obj.get("dry_run", True):
@@ -105,3 +109,8 @@ def is_guarded(cmd: click.Command) -> bool:
         return True
     cb = getattr(cmd, "callback", None)
     return bool(getattr(cb, "guarded", False)) if cb else False
+
+
+def _check_readonly(obj: dict[str, Any]) -> None:
+    if (readonly() or obj.get("read_only")) and not obj.get("dry_run", True):
+        raise ReadOnlyError("read-only: server mutation refused")

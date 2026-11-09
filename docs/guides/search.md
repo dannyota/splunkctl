@@ -78,6 +78,16 @@ splunkctl search run 'index=auth action=failure | stats count by src_ip | output
 
 Expected result: without `--yes` the first command is refused before dispatch, exits 1, and in JSON output mode (including the non-TTY default) emits a `confirmation_required` error envelope. The refusal covers `outputlookup`, `collect`, `mcollect`, `meventcollect`, `sendalert`, `delete`, `outputcsv`, `outputtext`, `sendemail`, `runshellscript`, and `script`, in `run`, `export`, and `oneshot` alike. With `--yes` the search runs.
 
+### Enforce read-only searches
+
+```bash
+splunkctl --read-only search run 'index=main | stats count' --earliest -1h
+```
+
+Read-only mode refuses writes even with `--yes`. It permits only explicitly classified built-in read commands. Dynamic commands (`map`, `savedsearch`, `dbxquery`, `dbxoutput`, `run`) and unknown commands are refused. Macros and subsearches require successful server parser expansion and classification. Errors name the offending command.
+
+Search jobs and server audit/access logs are exceptions to the guarantee against application-data, configuration and authentication changes. Only jobs created by the current invocation can be cancelled, finalized or deleted under this policy. See [Use read-only access](read-only.md).
+
 ### Manage long-running jobs
 
 > **Safety:** Target is the Splunk host in the active profile. Impact: `cancel` kills a running job and discards its results. Preview with `splunkctl search cancel 1719648000.12345`, apply by adding `--yes`, and verify with `splunkctl search jobs --filter 1719648000`.

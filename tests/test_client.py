@@ -88,7 +88,7 @@ def _csrf_cookie() -> MagicMock:
     return cookie
 
 
-@patch("splunkctl.client.requests.Session")
+@patch("splunkctl.web_session.PolicySession")
 def test_websession_login_extracts_csrf(mock_session_cls: MagicMock) -> None:
     from splunkctl.client import _WebSession
 
@@ -112,7 +112,7 @@ def test_websession_login_extracts_csrf(mock_session_cls: MagicMock) -> None:
     assert post_call.kwargs["data"]["cval"] == "42"
 
 
-@patch("splunkctl.client.requests.Session")
+@patch("splunkctl.web_session.PolicySession")
 def test_upload_lookup_posts_form_fields(
     mock_session_cls: MagicMock, tmp_path: Path
 ) -> None:
@@ -141,7 +141,7 @@ def test_upload_lookup_posts_form_fields(
     assert "spl-ctrl_lookupfile" in upload_call.kwargs["files"]
 
 
-@patch("splunkctl.client.requests.Session")
+@patch("splunkctl.web_session.PolicySession")
 def test_upload_lookup_error_raises(
     mock_session_cls: MagicMock, tmp_path: Path
 ) -> None:
@@ -164,7 +164,7 @@ def test_upload_lookup_error_raises(
         ws.upload_lookup("x.csv", csv, app="search")
 
 
-@patch("splunkctl.client.requests.Session")
+@patch("splunkctl.web_session.PolicySession")
 def test_install_app_posts_state(mock_session_cls: MagicMock, tmp_path: Path) -> None:
     from splunkctl.client import _WebSession
 

@@ -17,6 +17,7 @@ import urllib3
 from splunkctl.auth.session import Target
 from splunkctl.client import _warn_tls_off as _warn_siem_tls_off
 from splunkctl.soar.client import _warn_tls_off as _warn_soar_tls_off
+from splunkctl.transport import PolicySession
 
 type ValidationStatus = Literal["valid", "expired", "unreachable"]
 
@@ -75,7 +76,7 @@ class SIEMAdapter:
         """Validate the session key against the management API."""
         _configure_tls(self.target, verify)
         try:
-            resp = requests.get(
+            resp = PolicySession(api_base, kind=self.target).get(
                 f"{api_base.rstrip('/')}/services/server/info",
                 params={"output_mode": "json"},
                 headers={"Authorization": f"Splunk {values['session_key']}"},
@@ -95,7 +96,7 @@ class SIEMAdapter:
     ) -> None:
         """GET the Splunk Web logout route to end the session."""
         _configure_tls(self.target, verify)
-        requests.get(
+        PolicySession(web_url, kind="web").get(
             f"{web_url.rstrip('/')}/en-US/account/logout",
             cookies={values["cookie"]: values["session_key"]},
             verify=verify,
@@ -125,7 +126,7 @@ class SOARAdapter:
         """Validate the cookies against ``/rest/version``."""
         _configure_tls(self.target, verify)
         try:
-            resp = requests.get(
+            resp = PolicySession(api_base, kind=self.target).get(
                 f"{api_base.rstrip('/')}/rest/version",
                 cookies=values,
                 verify=verify,
@@ -144,7 +145,7 @@ class SOARAdapter:
     ) -> None:
         """POST the SOAR logout route to end the session."""
         _configure_tls(self.target, verify)
-        requests.post(
+        PolicySession(web_url, kind="soar").post(
             f"{web_url.rstrip('/')}/logout",
             cookies=values,
             headers={"X-CSRFToken": values["csrftoken"]},

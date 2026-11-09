@@ -12,6 +12,7 @@ import click
 from splunkctl import guard, output
 from splunkctl.client import get_client
 from splunkctl.commands.common import read_results, spl_quote
+from splunkctl.search_forms import choose_search_form
 
 _ES_APP = "SplunkEnterpriseSecuritySuite"
 
@@ -137,7 +138,7 @@ def list_notables(
     )
     output.info(f"Searching: {spl}")
     stream: Any = svc.jobs.oneshot(
-        spl,
+        choose_search_form(svc, spl),
         output_mode="json",
         count=limit,
         earliest_time=since,
@@ -157,7 +158,9 @@ def get_notable(ctx: click.Context, event_id: str) -> None:
         return
 
     spl = f"search index=notable event_id={spl_quote(event_id)} | sort - _time | head 1"
-    stream: Any = svc.jobs.oneshot(spl, output_mode="json", count=1)
+    stream: Any = svc.jobs.oneshot(
+        choose_search_form(svc, spl), output_mode="json", count=1
+    )
     rows = read_results(stream)
     if not rows:
         output.error(f"Notable '{event_id}' not found.", kind="not_found")

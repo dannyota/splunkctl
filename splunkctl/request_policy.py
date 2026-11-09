@@ -1,0 +1,208 @@
+"""Method-based server mutation policy, applied at final dispatch."""
+
+import re
+from collections.abc import Callable
+from typing import Any
+from urllib.parse import parse_qsl, unquote, urlsplit
+
+from splunkctl.request_context import current, readonly
+
+
+class ReadOnlyError(RuntimeError):
+    """A request or command violates server read-only protection."""
+
+    def __init__(self, message: str) -> None:
+        """Prefix policy failures for a stable error envelope."""
+        super().__init__(
+            message if message.startswith("read-only:") else f"read-only: {message}"
+        )
+
+
+def origin(url: str) -> tuple[str, str | None, int | None]:
+    """Normalize an origin, including its default port."""
+    parsed = urlsplit(url)
+    return (
+        parsed.scheme.lower(),
+        parsed.hostname,
+        parsed.port or (443 if parsed.scheme == "https" else 80),
+    )
+
+
+def canonical_path(url: str) -> str:
+    """Decode routing syntax conservatively before classification."""
+    path = urlsplit(url).path
+    for _ in range(8):
+        decoded = unquote(path)
+        if decoded == path:
+            break
+        path = decoded
+    if "%" in path or "\\" in path or any(ord(c) < 32 for c in path):
+        raise ReadOnlyError("ambiguous request path")
+    segments = path.split("/")
+    if any(s in {".", ".."} for s in segments):
+        raise ReadOnlyError("ambiguous request path")
+    return "/" + "/".join(s for s in segments if s)
+
+
+def parameters(url: str, body: Any = None) -> dict[str, list[str]]:
+    """Decode form and query parameters without losing duplicate keys."""
+    pairs = parse_qsl(urlsplit(url).query, keep_blank_values=True)
+    if isinstance(body, bytes):
+        body = body.decode("utf-8", errors="strict")
+    if isinstance(body, str):
+        pairs.extend(parse_qsl(body, keep_blank_values=True))
+    elif body:
+        raise ReadOnlyError("unclassified request body")
+    result: dict[str, list[str]] = {}
+    for key, value in pairs:
+        result.setdefault(key, []).append(value)
+    return result
+
+
+def endpoint(path: str) -> str:
+    """Remove the Splunk namespace prefix."""
+    parts = path.strip("/").split("/")
+    if parts[0] == "services":
+        return "/".join(parts[1:])
+    if parts[0] == "servicesNS" and len(parts) >= 4:
+        return "/".join(parts[3:])
+    return path.strip("/")
+
+
+def check_request(
+    method: str,
+    url: str,
+    configured_origin: str,
+    *,
+    kind: str = "siem",
+    body: Any = None,
+    parser: Callable[[str], Any] | None = None,
+) -> None:
+    """Refuse requests outside the invocation's explicit exceptions."""
+    if not readonly():
+        return
+    if origin(url) != origin(configured_origin) or urlsplit(url).username is not None:
+        raise ReadOnlyError("request leaves the configured origin")
+    method = method.upper()
+    path = canonical_path(url)
+    route = endpoint(path)
+    if "logout" in path.lower().split("/"):
+        raise ReadOnlyError("logout is refused")
+    if kind == "soar":
+        if method == "GET":
+            return
+        raise ReadOnlyError(f"{method} is refused for SOAR")
+    params = parameters(url, body)
+    if any(key.lower() == "check_risky_command" for key in params):
+        raise ReadOnlyError("check_risky_command is refused")
+    job_route = re.match(r"search/(?:v[12]/)?jobs/[^/]+/", route)
+    if job_route and any(key.lower() == "search" for key in params):
+        raise ReadOnlyError("job post-processing search is refused")
+    if route in {"search/parser", "search/v1/parser", "search/v2/parser"}:
+        if (
+            method not in {"GET", "HEAD", "POST"}
+            or params.get("parse_only") != ["true"]
+            or params.get("reload_macros") != ["false"]
+            or set(params) - {"q", "output_mode", "parse_only", "reload_macros"}
+        ):
+            raise ReadOnlyError(
+                "search/parser requires parse_only=true and reload_macros=false; "
+                "unclassified parameters are refused"
+            )
+        return
+    result = re.fullmatch(
+        r"search/(?:v[12]/)?jobs/([^/]+)/(results|results_preview|events)", route
+    )
+    if result:
+        # Splunk 10.0 Search endpoint descriptions, result and event GET/POST.
+        # segmentation is also added by SDK 2.1.1 and 3.0.1 to all three reads.
+        allowed = {"count", "offset", "output_mode", "field_list", "f", "segmentation"}
+        if result[2] == "events":
+            allowed |= {
+                "earliest_time",
+                "latest_time",
+                "max_lines",
+                "output_time_format",
+                "time_format",
+                "truncation_mode",
+            }
+        else:
+            allowed.add("add_summary_to_metadata")
+        ctx = current()
+        if (
+            method in {"GET", "HEAD", "POST"}
+            and ctx
+            and result[1] in ctx.owned_sids
+            and not set(params) - allowed
+        ):
+            return
+        raise ReadOnlyError("job result read requires an owned sid and read parameters")
+    if method in {"GET", "HEAD"}:
+        if route.endswith("/_reload"):
+            raise ReadOnlyError("GET reload is refused")
+        if path.lower().startswith("/debug/refresh"):
+            raise ReadOnlyError("GET refresh is refused")
+        # These routes dispatch searches even when called with GET.
+        if re.fullmatch(r"(?:search/)?(?:v2/)?jobs/export", route):
+            raise ReadOnlyError("GET search dispatch is refused")
+        return
+    if (
+        method == "POST"
+        and kind == "web"
+        and re.fullmatch(r"[^/]+/account/login", route)
+    ):
+        return
+    if kind == "siem" and method == "POST" and route == "auth/login":
+        return
+    if (
+        kind == "siem"
+        and method == "POST"
+        and route
+        in {
+            "search/jobs",
+            "search/jobs/export",
+            "search/v2/jobs",
+            "search/v2/jobs/export",
+        }
+    ):
+        from splunkctl.spl_safety import check_readonly_spl
+
+        if len(params.get("search", [])) != 1:
+            raise ReadOnlyError("search dispatch requires exactly one search")
+        # Splunk 10.0 REST reference, search/jobs POST and job result options:
+        # https://help.splunk.com/en/splunk-enterprise/rest-api-reference/10.0/search-endpoints/search-endpoint-descriptions
+        # Retain only search inputs and execution/result options: time bounds
+        # and format, required fields, search level, execution/output mode,
+        # result counts and segmentation. These do not configure persistence
+        # or server mutations. In particular, timeout is job retention, not
+        # an HTTP deadline, so it must remain refused.
+        allowed = {
+            "search",
+            "exec_mode",
+            "output_mode",
+            "count",
+            "max_count",
+            "rf",
+            "adhoc_search_level",
+            "segmentation",
+            "time_format",
+            "earliest_time",
+            "latest_time",
+        }
+        if set(params) - allowed:
+            raise ReadOnlyError("unclassified search dispatch parameter")
+        check_readonly_spl(params["search"][0], parser=parser)
+        return
+    match = re.fullmatch(r"search/(?:v2/)?jobs/([^/]+)(/control)?", route)
+    ctx = current()
+    if match and ctx and match[1] in ctx.owned_sids:
+        if method == "DELETE" and not match[2] and not params:
+            return
+        if (
+            method == "POST"
+            and match[2]
+            and set(params) <= {"action", "output_mode"}
+            and params.get("action") in [["cancel"], ["finalize"]]
+        ):
+            return
+    raise ReadOnlyError(f"{method} {route} is refused")

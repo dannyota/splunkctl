@@ -35,6 +35,8 @@ Pass --yes to apply.
 
 Add `--yes` to apply. `splunkctl state push --report FILE` writes a change report with the before and after state for each object, which you can attach to a change ticket.
 
+`--read-only` guarantees no application-data, configuration or authentication changes on any server. Search jobs and server audit/access logs are exceptions. Guarded previews still work; `--yes` mutations are refused. Local files may change. See [Read-only access](https://splunkctl.danny.vn/#/guides/read-only) and [Raw REST API](https://splunkctl.danny.vn/#/guides/api).
+
 Local configuration writes are not guarded: `splunkctl config init`, `splunkctl config use`, `splunkctl auth login`, and `splunkctl mcp install` write to your own machine immediately.
 
 ## Agent access
@@ -45,6 +47,8 @@ The MCP server exposes the command tree to Claude Code, Claude Desktop, Cursor, 
 splunkctl mcp install           # register the server in ./.mcp.json
 splunkctl commands --json       # machine-readable command tree
 ```
+
+`splunkctl mcp serve --read-only` (or `SPLUNKCTL_READ_ONLY=1`) hides mutation tools and enforces read-only policy in every CLI subprocess.
 
 Guarded tools keep the same contract as the CLI: a call previews until the agent passes `yes=true` explicitly.
 

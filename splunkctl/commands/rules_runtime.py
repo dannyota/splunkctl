@@ -3,7 +3,7 @@
 from typing import Any
 
 from splunkctl import output
-from splunkctl.commands.search import _normalize_spl
+from splunkctl.search_forms import choose_search_form
 
 
 def schedule_flag(cron: Any) -> str:
@@ -37,7 +37,12 @@ def start_test(client: Any, ss: Any, earliest: str | None, latest: str | None) -
                 kwargs[key] = value
         output.info(f"'{ss.name}' is disabled; running its SPL as an ad hoc search.")
         return client.service.jobs.create(
-            _normalize_spl(ss.content["search"]), **kwargs
+            choose_search_form(
+                client.service,
+                ss.content["search"],
+                **{k: kwargs[k] for k in ("app", "owner") if k in kwargs},
+            ),
+            **kwargs,
         )
 
     dispatch_kwargs = {"trigger_actions": "0"}
