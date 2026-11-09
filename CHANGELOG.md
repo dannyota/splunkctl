@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.18.0
+
+Read-only mode, raw REST access and request tagging, inspired by Splunk's
+own Go `splunk/splunkctl`. All three were verified on Splunk Enterprise
+10.6.1.1 and SOAR 8.8.0.282, along with the fixes below.
 
 ### Added
 
@@ -17,11 +21,13 @@
   requestID=<uuid>)`, so one invocation's requests can be grouped in
   `splunkd_access.log`.
 
-Live smoke coverage closed the remaining SIEM and SOAR gaps it can own, and
-found the fixes below on Splunk Enterprise 10.6.1.1 and SOAR 8.8.0.282.
-
 ### Fixed
 
+- A search that starts with a generating macro (one whose body begins
+  with `| makeresults`, for example) failed: splunkctl sent
+  `search `macro``, which Splunk accepts and then fails in the job. For
+  SPL that starts with a macro, splunkctl now asks `search/parser` which
+  form parses and dispatches that one.
 - `server tokens revoke` reported success without deleting anything:
   `DELETE authorization/tokens/<id>` returns 200 and leaves the token. It
   now looks up the token's user, deletes `authorization/tokens/<user>?id=<id>`,
@@ -52,6 +58,9 @@ found the fixes below on Splunk Enterprise 10.6.1.1 and SOAR 8.8.0.282.
 
 ### Tests
 
+- CI runs the SIEM live smoke against a throwaway `splunk/splunk:10.6.1.1`
+  container on every pull request that changes code or the smoke scripts
+  (`.github/workflows/live-siem.yml`), with a per-run masked password.
 - The SIEM live smoke covers `alerts get` with an owned scheduled alert
   and `server tokens create`/`revoke`. The SOAR smoke covers `soar approvals
   get`/`respond` with `LIVE_SOAR_APPROVALS=1`, and tolerates a fast licensed
@@ -360,81 +369,4 @@ Browser SAML single sign-on for SIEM and SOAR, plus a reusable Keycloak lab.
 - SIEM falls back to token/password auth when SAML is removed, rather than
   demanding a doomed browser login.
 
-## 0.12.0
-
-MCP 2 migration for local agent integrations.
-
-### Breaking
-
-- Require MCP Python SDK 2.x. Use splunkctl 0.11.2 for clients or
-  environments that still require MCP 1.x.
-- Tool-list changes use MCP 2 subscriptions instead of legacy
-  `notifications/tools/list_changed` delivery.
-- Streamable HTTP accepts loopback hosts only: `127.0.0.1`,
-  `localhost`, or `::1`.
-
-### Changed
-
-- Replace `FastMCP` with MCP 2's `MCPServer`, client, prompt, model,
-  transport, and snake-case APIs.
-- Keep progressive disclosure through the five meta-tools and
-  Click-derived typed tools.
-- Replace private SDK tool-manager mutation with a splunkctl-owned
-  dynamic registry built on the public `list_tools()` and
-  `call_tool()` extension points.
-- Package MCP guide resources in source and wheel distributions.
-- Move Streamable HTTP host and port configuration to MCP 2's
-  transport runner.
-
-## 0.11.2
-
-MCP compatibility and repository documentation update.
-
-### Fixed
-
-- Constrain the MCP Python SDK to the supported 1.x line so fresh
-  installs do not select the incompatible 2.x API.
-
-### Changed
-
-- Rewrite the README around installation, local MCP setup, core
-  workflows, and safety behavior.
-- Remove obsolete internal planning documents.
-
-## 0.11.1
-
-PyPI presentation and packaging polish — no functional changes.
-
-### Security
-
-- Dependabot cooldown (7 days) on pip and GitHub Actions updates —
-  new upstream releases soak before update PRs open.
-- Remaining semgrep findings resolved: two justified false positives
-  annotated in place (PEP 706 `filter="data"` tar extraction; SRI on
-  a non-subresource `canonical` link).
-
-### Fixed
-
-- README renders correctly on PyPI: the banner image and Catalog link
-  now use absolute URLs (relative paths break on PyPI), and docs links
-  point at the live domain (`splunkctl.danny.vn` — the old
-  `splunk.danny.vn` never resolved).
-- Stale MCP guide-resource count corrected (33 → 36) in README and
-  catalog; `state` docs now mention the SOAR types added in 0.11.0.
-- `py.typed` marker actually ships — the wheel is PEP 561 compliant.
-  The marker was declared in package-data but missing from the tree,
-  so `mypy` gave external consumers no types.
-- sdist no longer bundles tests/docs/samples (`MANIFEST.in` prunes).
-- Test suite isolated from the developer's real `~/.splunkctl` config
-  and `SPLUNK_*`/`SOAR_*` env vars — a live SOAR profile made four
-  doctor tests hit the network and fail when the lab was offline.
-
-### Added
-
-- README: PyPI/Python/CI/license badges; `--watch` global flag and
-  `completion` command documented.
-- PyPI sidebar links: `Documentation` and `Changelog` project URLs.
-- Development Status classifier raised to Beta.
-- Publish workflow runs `twine check --strict` before uploading.
-
-Older releases (0.11.0 and earlier): [changelog archive](docs/changelog-archive.md).
+Older releases (0.12.0 and earlier): [changelog archive](docs/changelog-archive.md).
