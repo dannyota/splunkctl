@@ -8,8 +8,22 @@ name: Live SIEM smoke
 on:
   push:
     branches: [master]
+    paths:
+      - "splunkctl/**"
+      - "scripts/live-smoke.sh"
+      - "scripts/live-smoke-lib.sh"
+      - "scripts/live-smoke.d/**"
+      - "pyproject.toml"
+      - ".github/workflows/live-siem.yml"
   pull_request:
     branches: [master]
+    paths:
+      - "splunkctl/**"
+      - "scripts/live-smoke.sh"
+      - "scripts/live-smoke-lib.sh"
+      - "scripts/live-smoke.d/**"
+      - "pyproject.toml"
+      - ".github/workflows/live-siem.yml"
   workflow_dispatch:
 
 permissions:

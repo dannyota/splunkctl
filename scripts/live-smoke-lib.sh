@@ -1,7 +1,19 @@
 # shellcheck shell=bash
 # Shared maintainer smoke mechanics. S, PY, T, N and fail are set by the runner.
 step() { printf '\n### %s\n' "$*"; }
-run() { printf '$ %s\n' "$*"; "$@"; rc=$?; printf '[exit=%s]\n' "$rc"; return "$rc"; }
+# Echo the command with password values redacted: CI logs are public.
+run() {
+    local a hide=0 shown=()
+    for a in "$@"; do
+        if [ "$hide" = 1 ]; then shown+=('***'); hide=0; continue; fi
+        case "$a" in
+            --password|--new-password) shown+=("$a"); hide=1;;
+            --password=*|--new-password=*) shown+=("${a%%=*}=***");;
+            *) shown+=("$a");;
+        esac
+    done
+    printf '$ %s\n' "${shown[*]}"; "$@"; rc=$?; printf '[exit=%s]\n' "$rc"; return "$rc"
+}
 bad() { echo "FAIL $*"; fail=$((fail+1)); }
 expect_ok() { run "$@" || bad 'expected exit 0'; }
 expect_fail() { if run "$@"; then bad 'expected non-zero exit'; fi; }
