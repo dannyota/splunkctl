@@ -51,6 +51,9 @@ bash scripts/gen-seo.sh --check
   image exits at startup: the host AppArmor `unix-chkpwd` profile blocks
   reading the image's mode-0000 `/etc/shadow`. Build a derived image with
   `RUN chmod 0400 /etc/shadow` (keep `--format docker` for the healthcheck).
+  CI runs this smoke on every pull request against a stock
+  `splunk/splunk` container (`.github/workflows/live-siem.yml`) with a
+  per-run masked password and token authentication enabled.
   `datamodels rebuild --yes` runs only when `CIM_TGZ` is set and the server
   reports acceleration enabled within 90 seconds; otherwise it reports
   SKIPPED. A populated acceleration summary is not awaited, so the

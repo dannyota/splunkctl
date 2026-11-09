@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Manual test ONLY for a throwaway Splunk Enterprise profile. Never run in CI.
+# Run ONLY against a throwaway Splunk Enterprise instance: the lab, a local
+# container, or the CI container in .github/workflows/live-siem.yml.
 # "$PY" must have splunkctl and PyYAML installed (also used for stanza cleanup).
 # LIVE_HEC_URL must match hec settings enableSSL: https by default, http if disabled.
 set -uo pipefail
