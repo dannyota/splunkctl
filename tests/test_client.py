@@ -102,9 +102,13 @@ def test_websession_login_extracts_csrf(mock_session_cls: MagicMock) -> None:
     ws = _WebSession(_mock_service(), verify=False)
     ws._login()
     assert ws._csrf_token == "tok123"
+    # loginType=splunk: local login still works when SAML is enabled
+    get_call = session.request.call_args_list[0]
+    assert get_call.args[1].endswith("/en-US/account/login?loginType=splunk")
     # login POST carried the cval extracted from the login page
     post_call = session.request.call_args_list[1]
     assert post_call.args[0] == "POST"
+    assert post_call.args[1].endswith("?loginType=splunk")
     assert post_call.kwargs["data"]["cval"] == "42"
 
 

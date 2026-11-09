@@ -21,6 +21,12 @@ found the fixes below on Splunk Enterprise 10.6.1.1 and SOAR 8.8.0.282.
   returns 404 for an approval. It now posts to `/rest/approval/<id>`, takes
   prompt answers with `--response`, and requires `--message` or
   `--response`, as SOAR does.
+- Commands that upload through Splunk Web (`lookups upload`, `lookups
+  update` and lookup files in `state push`) failed on a SAML-enabled
+  Splunk with "Could not obtain CSRF token": the login page serves SAML
+  and rejects the local login with HTTP 400. The login now uses
+  `?loginType=splunk`, Splunk's local-login form, and an HTTP error
+  status is reported as a login failure.
 
 ### Tests
 
