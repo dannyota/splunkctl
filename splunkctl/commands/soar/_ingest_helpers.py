@@ -13,6 +13,7 @@ import yaml
 from splunkctl import output
 from splunkctl.client import get_client
 from splunkctl.commands.common import read_results
+from splunkctl.search_forms import choose_search_form
 from splunkctl.soar.cimcef import row_to_cef
 from splunkctl.soar.client import SOARError
 from splunkctl.spl_safety import check_spl
@@ -65,7 +66,7 @@ def fetch_spl_results(
     svc = client.service
     if app:
         svc.namespace["app"] = app
-    query = normalize_spl(spl)
+    query = choose_search_form(svc, spl)
 
     kwargs: dict[str, Any] = {"exec_mode": "normal"}
     if earliest:

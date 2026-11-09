@@ -23,6 +23,7 @@ from splunkctl.commands.state_types import (
     _hash_drift,
     change_record,
 )
+from splunkctl.search_forms import choose_search_form
 
 # --------------------------------------------------------------------------
 # lookups
@@ -31,7 +32,9 @@ from splunkctl.commands.state_types import (
 
 def _download_csv(svc: Any, name: str, app: str) -> bytes:
     quoted = spl_quote_lookup_name(name)
-    stream = svc.jobs.oneshot(f"| inputlookup {quoted}", output_mode="csv", app=app)
+    stream = svc.jobs.oneshot(
+        choose_search_form(svc, f"| inputlookup {quoted}"), output_mode="csv", app=app
+    )
     result: bytes = stream.read()
     return result
 

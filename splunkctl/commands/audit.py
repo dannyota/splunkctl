@@ -20,6 +20,7 @@ from splunkctl import output
 from splunkctl.client import get_client
 from splunkctl.commands.audit_parse import parse_event
 from splunkctl.commands.common import read_results
+from splunkctl.search_forms import choose_search_form
 
 _AUDIT_SPL = "search index=_audit"
 
@@ -146,7 +147,7 @@ def changes(
 
     output.info(f"Searching: {_AUDIT_SPL}")
     stream: Any = svc.jobs.oneshot(
-        _AUDIT_SPL,
+        choose_search_form(svc, _AUDIT_SPL),
         output_mode="json",
         count=0,
         earliest_time=since,

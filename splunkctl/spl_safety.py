@@ -55,9 +55,9 @@ def check_spl(ctx: click.Context, spl: str) -> bool:
     from splunkctl.request_context import readonly
 
     if readonly():
-        from splunkctl.commands.search import _normalize_spl
+        from splunkctl.search_forms import normalize_spl
 
-        check_readonly_spl(_normalize_spl(spl), expand=False)
+        check_readonly_spl(normalize_spl(spl), expand=False)
         return True
     commands = find_write_commands(spl)
     if commands and ctx.obj.get("dry_run", True):

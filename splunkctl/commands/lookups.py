@@ -24,6 +24,7 @@ from splunkctl.commands.common import (
     list_options,
     spl_quote_lookup_name,
 )
+from splunkctl.search_forms import choose_search_form
 
 
 @click.group("lookups")
@@ -153,7 +154,7 @@ def download_lookup(
     try:
         quoted = spl_quote_lookup_name(name)
         stream = client.service.jobs.oneshot(
-            f"| inputlookup {quoted}",
+            choose_search_form(client.service, f"| inputlookup {quoted}"),
             output_mode="csv",
             app=app,
         )

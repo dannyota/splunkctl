@@ -3,7 +3,7 @@
 import io
 import json
 from unittest.mock import patch
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, parse_qsl, urlencode, urlsplit
 
 import pytest
 from click.testing import CliRunner
@@ -96,6 +96,7 @@ def test_real_sdk_job_reads(accessor, route, api_version):
 
 
 @pytest.mark.parametrize("readonly", [False, True])
+@pytest.mark.parametrize("source", ["body", "url"])
 @pytest.mark.parametrize("command", ["oneshot", "export", "run"])
 @pytest.mark.parametrize(
     "spl,winning,generating",
@@ -112,17 +113,19 @@ def test_real_sdk_job_reads(accessor, route, api_version):
     ],
 )
 def test_cli_macro_and_comment_normalization(
-    readonly, command, spl, winning, generating
+    readonly, source, command, spl, winning, generating
 ):
     seen = []
 
     def network(url, message, **kwargs):
         body = message.get("body", "")
-        params = parse_qs(body.decode() if isinstance(body, bytes) else body)
+        params = parse_qs(urlsplit(str(url)).query) | parse_qs(
+            body.decode() if isinstance(body, bytes) else body
+        )
         parser = str(url).endswith("/parser")
         query = params["q" if parser else "search"][0]
         seen.append((parser, query))
-        if generating and query.startswith("search "):
+        if parser and generating and query.startswith("search "):
             body = (
                 b'<response><messages><msg type="ERROR">'
                 b"Error in 'makeresults' command: This command must be the first "
@@ -155,10 +158,25 @@ def test_cli_macro_and_comment_normalization(
         )
         return {"status": 200, "reason": "OK", "headers": [], "body": io.BytesIO(body)}
 
+    transport = sdk_handler(network, "https://example.test:8089")
+
+    def sdk_network(url, message, **kwargs):
+        # Exercise URL searches through the same real SDK dispatch paths.
+        body = message.get("body", "")
+        pairs = parse_qsl(body.decode() if isinstance(body, bytes) else body)
+        if source == "url" and any(k == "search" for k, _ in pairs):
+            url = (
+                str(url) + "?" + urlencode([(k, v) for k, v in pairs if k == "search"])
+            )
+            message = dict(
+                message, body=urlencode([(k, v) for k, v in pairs if k != "search"])
+            )
+        return transport(url, message, **kwargs)
+
     service = Service(
         host="example.test",
         token="test",  # noqa: S106
-        handler=sdk_handler(network, "https://example.test:8089"),
+        handler=sdk_network,
     )
     service._splunk_version = (10, 6, 1)
     service._instance_type = "enterprise"
@@ -177,13 +195,10 @@ def test_cli_macro_and_comment_normalization(
         )
     assert result.exit_code == 0, result.output
     assert seen[-1] == (False, winning)
-    assert len([x for x in seen if not x[0]]) == (
-        2 if generating and not readonly else 1
-    )
+    assert len([x for x in seen if not x[0]]) == 1
+    macro = "`gen`" in spl or "`outer`" in spl
     assert len([x for x in seen if x[0]]) == (
-        (2 if generating else 1)
-        if readonly and ("`gen`" in spl or "`outer`" in spl)
-        else 0
+        (2 if generating else 1) + int(readonly) if macro else 0
     )
 
 
@@ -236,7 +251,11 @@ def test_search_error_retry_scope(readonly, spl, status, message):
     assert result.exit_code == 1
     assert len(seen) == (
         2
-        if spl == "`outer`" and status == 400 and message == "must be the first command"
+        if spl == "`outer`" and message == "must be the first command" and readonly
+        else 3
+        if spl == "`outer`" and message == "must be the first command"
+        else 2
+        if spl == "`outer`" and not readonly
         else 1
     )
     if readonly and spl == "`outer`":
