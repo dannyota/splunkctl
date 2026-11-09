@@ -1,0 +1,84 @@
+name: Live SIEM smoke
+
+# Runs scripts/live-smoke.sh against a throwaway Splunk Enterprise container.
+# The admin password is generated per run and masked; no repository secrets.
+# A step-started container is used instead of a service container because
+# service env is fixed before any step can generate the password.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-siem-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      SPLUNK_IMAGE: splunk/splunk:10.6.1.1
+      SPLUNK_HOST: 127.0.0.1
+      SPLUNK_PORT: "8089"
+      SPLUNK_USER: admin
+      SPLUNK_VERIFY: "false"
+      SPLUNK_WEB_URL: http://127.0.0.1:8000
+      # HEC is on by default in the image (port 8088, SSL); the smoke checks
+      # it and turns it on if needed.
+      LIVE_HEC_URL: https://127.0.0.1:8088
+      LIVE_PYTHON: python
+      SPLUNKCTL: splunkctl
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+      - run: pip install -e .
+      - name: Pull Splunk image
+        run: docker pull "$SPLUNK_IMAGE"
+      - name: Start Splunk
+        run: |
+          admin_pass="Sc1-$(openssl rand -hex 16)"
+          echo "::add-mask::${admin_pass}"
+          echo "SPLUNK_PASS=${admin_pass}" >> "$GITHUB_ENV"
+          SPLUNK_PASSWORD="${admin_pass}" docker run -d --name splunk \
+            -p 127.0.0.1:8000:8000 -p 127.0.0.1:8088:8088 -p 127.0.0.1:8089:8089 \
+            -e SPLUNK_START_ARGS=--accept-license \
+            -e SPLUNK_GENERAL_TERMS=--accept-sgt-current-at-splunk-com \
+            -e SPLUNK_PASSWORD \
+            "$SPLUNK_IMAGE"
+      - name: Wait for Splunk
+        run: |
+          deadline=$((SECONDS + 900))
+          while [ "$SECONDS" -lt "$deadline" ]; do
+            state=$(docker inspect --format '{{.State.Status}} {{.State.Health.Status}}' splunk)
+            case "$state" in
+              "running healthy") echo "healthy after ${SECONDS}s"; exit 0;;
+              running\ *) sleep 10;;
+              *) echo "container state: $state"; exit 1;;
+            esac
+          done
+          echo "Splunk not healthy within 900 seconds"
+          exit 1
+      # On by default in 10.6; set explicitly so the token step never skips.
+      - name: Enable token authentication
+        run: |
+          python - <<'PY'
+          from splunkctl.client import SplunkClient
+          SplunkClient().service.post("/services/admin/token-auth/tokens_auth", disabled="false")
+          PY
+      - name: Run the SIEM live smoke
+        run: bash scripts/live-smoke.sh
+      - name: Splunk container log
+        if: failure()
+        run: docker logs --tail 300 splunk
+      - name: Remove the container
+        if: always()
+        run: docker rm -f splunk
