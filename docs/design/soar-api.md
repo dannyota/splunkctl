@@ -309,6 +309,32 @@ Corrections to the original discovery doc, all verified during the build:
 - **Playbook list `_filter_scm`**: id-typed; a repo *name* 400s —
   resolve via `/rest/scm` first.
 
+## Live-verified on SOAR 8.8.0.282 (0.17.1)
+
+Found by the first full `scripts/live-smoke-soar.sh` run:
+
+- **Paging**: list endpoints return 10 rows unless `page_size` is set
+  (`0` means all); pages are 0-based. Resolve names with `_filter_name`.
+  Boolean filters take Python literals (`_filter_disabled=True`).
+- **Audit**: needs `page` (1-based; `page=0` is a 400). Without it, queries
+  over 24 hours return 413. The body is a bare array.
+- **Soft deletes**: deleting an asset or playbook sets `disabled: true`;
+  `GET <id>` still returns it, the default list hides it.
+- **Playbook import**: a forced import creates a new id (`version` + 1,
+  `previous_versions`); the old id is readable but POST to it is a 404.
+  Container labels must already exist, and a manual run needs a playbook
+  label that matches the container's.
+- **Custom functions**: `python_version: "3"` is stored as 3.9, which 8.8
+  will not edit or run; use `"3.13"`.
+- **Workbooks**: `GET workbook_template/<id>` has no phases. Read them from
+  `workbook_phase_template?_filter_template=<id>`; add one with
+  `POST workbook_phase_template {template_id, name, order}`. Posting
+  `phases` to the template replaces the whole set. Promote a container
+  with `template_id` (an unknown `template` key is ignored).
+- **Read shapes**: evidence `content_type` is a ContentType int (filter by
+  `_filter_content_type__model`); `container_attachment` has no hash (read
+  `vault_document`); a workbook task's `owner` reads back as a user id.
+
 ## Prior art & versions
 
 - No official SOAR ops CLI exists; `soarapps` (splunk-soar-sdk) is for

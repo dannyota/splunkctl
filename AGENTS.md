@@ -13,6 +13,20 @@ contributor guide, including every live smoke option, is
   instance-specific strings (hostnames, domains) in the git-ignored
   `.githooks/denylist.local`.
 
+## Code map
+
+- `splunkctl/main.py`: the click root (`splunkctl` and `splunkctl-py`).
+  `commands/` holds the SIEM groups and `commands/soar/` the SOAR groups.
+- `splunkctl/client.py` (Splunk SDK wrapper plus Web UI uploads) and
+  `splunkctl/soar/client.py` (SOAR REST; normalizes bare arrays and
+  `{results}` envelopes).
+- `splunkctl/guard.py` (mutation guard), `output.py` (rendering; info,
+  warnings and errors go to stderr), `config.py` (profiles plus the
+  `SPLUNK_*` and `SOAR_*` env overlay), `auth/` (SAML browser sessions).
+- `splunkctl/mcp/`: the MCP server runs the CLI as a subprocess with
+  `--json`, so stdout must stay pure data.
+- Design notes: `docs/design/architecture.md` and `docs/design/soar-api.md`.
+
 ## Verify before committing
 
 All of these must pass locally. CI runs them too, plus a wheel install with an
@@ -28,6 +42,9 @@ uv run splunkctl docs generate --check
 bash scripts/gen-seo.sh --check
 ```
 
+`pytest` already runs with `-q` (pyproject `addopts`); adding `-q` hides the
+pass/fail summary line.
+
 ## Rules
 
 - Commands that change a Splunk or SOAR instance are decorated with
@@ -38,6 +55,10 @@ bash scripts/gen-seo.sh --check
   real response: check a new endpoint's shape against the lab or the
   first-party REST reference before writing the mock. SOAR 8.8 broke several
   mocks that assumed fields the server does not return.
+- SOAR list endpoints return 10 rows by default. Resolve names with a server
+  filter (`_filter_name`, JSON-encoded) instead of scanning a page; boolean
+  filters take Python literals (`_filter_active=True`). Record
+  live-verified SOAR API quirks in `docs/design/soar-api.md`.
 - Python files stay at or under 500 lines and Markdown at or under 450, as
   `scripts/check-lengths.sh` enforces (it skips generated `docs/commands/`
   and local plans). Split by topic. Move old CHANGELOG sections to
@@ -51,8 +72,9 @@ bash scripts/gen-seo.sh --check
   conventional prefixes (`fix(soar): ...`) and no `Co-Authored-By` or
   "Generated with" trailers.
 - Never commit secrets or instance data: `.env`, lab passwords, tokens, real
-  hostnames. Design notes and plans go in `docs/plans/` or
-  `docs/superpowers/`, which are git-ignored.
+  hostnames. Never write a real or former password into the repo, not even
+  as a forbidden string in a test; match a pattern instead. Design notes and
+  plans go in `docs/plans/` or `docs/superpowers/`, which are git-ignored.
 
 ## Live smoke tests
 
@@ -66,10 +88,21 @@ bash scripts/gen-seo.sh --check
   (restored at exit), adds a monitor input (`LIVE_MONITOR_PATH`, default
   `/tmp`) and, with `CIM_TGZ`, installs `Splunk_SA_CIM`. Report any
   leftovers.
+- Every command leaf must be invoked by its smoke script or listed in that
+  script's `UNCOVERED.md`; `tests/test_live_smoke_script.py` enforces it.
+- In smoke helpers, capture stdout and stderr separately: `--json` errors
+  and the `verify: false` TLS warning go to stderr.
 - The SOAR smoke can consume licensed actions (Community edition allows 100
   per day). Read the licensed-action and active-playbook paragraph in
   CONTRIBUTING.md before setting `LIVE_SOAR_ACTIONS=1` or
   `LIVE_SOAR_ALLOW_ACTIVE_PLAYBOOKS=1`.
+
+## Release
+
+Follow "Cutting a release" in CONTRIBUTING.md. Bump `__version__` and
+`tests/test_version.py`, run `uv run splunkctl docs generate` (it writes the
+version into `docs/commands.json`), sign the `vX.Y.Z` tag, then publish a
+GitHub release, which uploads to PyPI.
 
 ## Lab
 
