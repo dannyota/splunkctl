@@ -43,6 +43,37 @@ def test_run_login_returns_cookies_on_origin(mock_sp: MagicMock) -> None:
     context.close.assert_called_once()
 
 
+@patch("splunkctl.auth.broker._sync_playwright")
+def test_run_login_catches_idp_round_trip_between_polls(mock_sp: MagicMock) -> None:
+    """A fast IdP returns before the first poll; the navigation event counts."""
+    page = MagicMock()
+    page.url = "http://siem:8000/en-US/app/launcher/home"  # every poll: product
+    page.is_closed.return_value = False
+    handlers = {}
+    page.on.side_effect = lambda event, handler: handlers.__setitem__(event, handler)
+
+    def goto(_url: str) -> None:
+        idp_frame = page.main_frame
+        idp_frame.url = "http://idp:8080/realms/x/protocol/saml"
+        handlers["framenavigated"](idp_frame)
+
+    page.goto.side_effect = goto
+    context = MagicMock()
+    context.cookies.return_value = [{"name": "splunkd_8000", "value": "KEY"}]
+    context.new_page.return_value = page
+    browser = mock_sp.return_value.__enter__.return_value.chromium.launch.return_value
+    browser.new_context.return_value = context
+
+    result = broker.run_login(
+        login_url="http://siem:8000/en-US/account/login",
+        expected_origin="http://siem:8000",
+        verify=True,
+        timeout=60,
+    )
+    assert result == {"splunkd_8000": "KEY"}
+    page.wait_for_timeout.assert_not_called()
+
+
 @patch("splunkctl.auth.broker.time.monotonic", side_effect=[0.0, 1000.0])
 @patch("splunkctl.auth.broker._sync_playwright")
 def test_run_login_wrong_origin_raises(

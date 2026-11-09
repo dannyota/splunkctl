@@ -27,6 +27,11 @@ found the fixes below on Splunk Enterprise 10.6.1.1 and SOAR 8.8.0.282.
   and rejects the local login with HTTP 400. The login now uses
   `?loginType=splunk`, Splunk's local-login form, and an HTTP error
   status is reported as a login failure.
+- `auth login` could wait out its whole timeout when the identity provider
+  returned to the product within half a second (silent SSO, or the lab's
+  auto-filled Keycloak form): the browser broker sampled the page URL every
+  500 ms and missed the round trip. It now records every main-frame
+  navigation.
 
 ### Tests
 
