@@ -2,6 +2,114 @@
 
 Older releases, moved out of [CHANGELOG.md](../CHANGELOG.md).
 
+## 0.11.0
+
+Whole-repo hardening + feature expansion, driven by a max-effort code
+review (75 agents, 25 verified findings) and two feature-gap scouts
+(SIEM + SOAR/MCP/DX). Live smoke-tested against Splunk 10.4.1 and
+SOAR 8.5.0.248: 23 pass, 0 failures.
+
+### Breaking
+
+- **TLS verification defaults to ON** — new profiles verify server
+  certificates by default. Self-signed lab instances need explicit
+  `verify: false` in the profile (`config init` now asks). A one-time
+  stderr warning fires when verification is disabled.
+
+### Security
+
+- **GitHub Actions pinned to commit SHAs** — all third-party actions
+  use immutable refs; workflow-level `permissions:` blocks enforce
+  least privilege (`contents: read` default; `id-token: write` only
+  for PyPI OIDC).
+- **SPL injection fixed** — lookup names in `| inputlookup` are now
+  quoted via a shared helper; names with SPL metacharacters are
+  rejected with a typed error.
+- **Password handling** — `users create/update` gains `--password-stdin`
+  and interactive prompt; passwords never appear in dry-run previews,
+  error envelopes, or MCP tool output.
+
+### Fixed
+
+- `hec send` no longer crashes with NameError on connection errors;
+  TLS verification reads from the profile (not a missing SDK attribute).
+- Web-session failures (lookup upload, app install with expired creds)
+  produce typed error envelopes instead of raw tracebacks.
+- SOAR client sets HTTP timeouts (10s connect, 60s read) — no more
+  indefinite hangs on unresponsive servers.
+- `soar ingest` run_automation triggers correctly when the last input
+  row is deduplicated.
+- Tag read-modify-write aborts on fetch failure instead of silently
+  wiping all tags.
+- Broad `except Exception` in dashboards, lookups, and SOAR views
+  narrowed to specific errors — auth failures no longer masquerade as
+  "not found" or "unavailable".
+- `soar functions list` paging aligned with other SOAR commands.
+- Vault upload warns based on base64-encoded size (not raw); download
+  `--out` handles directory paths.
+- `mcp install` handles `"mcpServers": null` in existing config.
+- Network reads moved after the guard in SOAR cases/artifacts/assets
+  so dry-run stays offline.
+- `_resolve_template` routes through the structured error envelope.
+
+### Added
+
+- **Doctor SOAR section** — connection, auth, health, and license
+  checks with graceful skip when no SOAR profile is configured.
+- **MCP output cap** — success output > 4 MiB spills to a temp file
+  with a JSON pointer and steering hint; error output is UTF-8-safe
+  truncated; subprocess timeout raised to 300s with clean messaging;
+  stale spill files swept on startup (24h).
+- **MCP prompts** — four `@mcp.prompt` workflows: `investigate-ioc`,
+  `triage-notable`, `audit-detection`, `export-state`.
+- **MCP streamable-HTTP transport** — `mcp serve --transport http`
+  for team/remote use; `mcp install` generates URL-based config.
+- **ES correlation-search admin** — `es correlations list/get/
+  enable/disable` with security_domain and severity fields.
+- **ES threat-intel management** — `es threat-intel list/upload/
+  delete` via `/services/data/threat_intel`.
+- **Scheduler health** — `rules schedule` view (cron, next_run,
+  window, enabled) and `--scheduled` filter on `rules list`.
+- **Auth-token management** — `server tokens list/create/revoke`
+  via `/services/authorization/tokens`.
+- **Deployment-server serverclasses** — `server serverclasses
+  list/get/reload` with feature detection for disabled deployment
+  server.
+- **SAML/LDAP auth config read** — `server auth show/ldap/saml/
+  role-mapping` for compliance visibility.
+- **Workload management read** — `server workloads pools/rules/
+  status` for resource allocation visibility (Splunk 8.1+).
+- **Metrics catalog** — `search metrics --index` wraps `| mcatalog`
+  for metric name and dimension discovery.
+- **SOAR workbook-template CRUD** — `soar workbook-templates
+  list/get/create/update/delete`.
+- **SOAR app install/uninstall** — tgz upload and deletion via
+  `/rest/app`.
+- **Watch mode** — `--watch N` re-runs read-only commands every N
+  seconds; rejects mutations; requires TTY.
+- **Shell completion** — `splunkctl completion bash/zsh/fish` prints
+  activation scripts.
+- **Exit-code contract** — documented and normalized: 0 = success,
+  1 = error, 2 = usage.
+- **SOAR config-as-code** — `state pull/diff/push` extended with
+  `soar-playbooks` (tgz round-trip), `soar-lists` (JSON round-trip),
+  and `soar-assets` (JSON with secret masking, fetch-merge-post).
+  Mixed SIEM+SOAR type requests work in one call.
+
+### Structure
+
+- Server-side paths removed from user output (remote-first).
+- Duplicated `read_results` helpers consolidated.
+- Phase/ticket-named test files renamed to feature names.
+- Near-cap files split: `soar/admin.py` → users + roles/audit;
+  oversized test files split by topic.
+- Private cross-module imports promoted to public API.
+
+### Stats
+
+- 1728 tests (was 1424), ruff + mypy-strict + file-length budget
+  all clean.
+
 ## 0.10.1
 
 ### Fixed
