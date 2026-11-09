@@ -77,9 +77,16 @@ def run_login(
         expected = _origin_of(expected_origin)
         left_origin = False
 
+        def _departed(url: str) -> bool:
+            # Only an http(s) page on another origin is the IdP; error pages
+            # (chrome-error://) and about:blank are not.
+            return urlsplit(url).scheme in ("http", "https") and (
+                _origin_of(url) != expected
+            )
+
         def _on_navigated(frame: Any) -> None:
             nonlocal left_origin
-            if frame == page.main_frame and _origin_of(frame.url) != expected:
+            if frame == page.main_frame and _departed(frame.url):
                 left_origin = True
 
         try:
@@ -93,7 +100,7 @@ def run_login(
             # the IdP after a JS auto-submit or server redirect. Wait for the
             # browser to leave the product origin first, then wait for it to
             # return once the user completes the identity-provider flow.
-            while not left_origin and _origin_of(page.url) == expected:
+            while not left_origin and not _departed(page.url):
                 if page.is_closed():
                     raise BrokerError(
                         "The browser was closed before login finished.", kind="auth"

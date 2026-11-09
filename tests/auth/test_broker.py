@@ -1,5 +1,7 @@
 """Tests for the Playwright browser broker (no real browser launched)."""
 
+from collections.abc import Callable
+from typing import Any
 from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
@@ -72,6 +74,99 @@ def test_run_login_catches_idp_round_trip_between_polls(mock_sp: MagicMock) -> N
     )
     assert result == {"splunkd_8000": "KEY"}
     page.wait_for_timeout.assert_not_called()
+
+
+_LOGIN = "http://siem:8000/en-US/account/login"
+_HOME = "http://siem:8000/en-US/app/launcher/home"
+_IDP = "http://idp:8080/realms/x/protocol/saml"
+
+
+def _live_page() -> tuple[MagicMock, Callable[..., None]]:
+    """A page whose url follows navigate(); framenavigated handlers are kept."""
+    page = MagicMock()
+    page.is_closed.return_value = False
+    state = {"url": "about:blank"}
+    type(page).url = PropertyMock(side_effect=lambda: state["url"])
+    handlers: dict[str, Callable[[MagicMock], None]] = {}
+    page.on.side_effect = lambda event, handler: handlers.__setitem__(event, handler)
+
+    def navigate(url: str, frame: MagicMock | None = None) -> None:
+        if frame is None:  # main frame: page.url and main_frame.url agree
+            state["url"] = url
+            frame = page.main_frame
+        frame.url = url
+        handlers["framenavigated"](frame)
+
+    return page, navigate
+
+
+def _login_with(mock_sp: MagicMock, page: MagicMock) -> dict[str, str]:
+    context = MagicMock()
+    context.cookies.return_value = [{"name": "splunkd_8000", "value": "KEY"}]
+    context.new_page.return_value = page
+    browser = mock_sp.return_value.__enter__.return_value.chromium.launch.return_value
+    browser.new_context.return_value = context
+    return broker.run_login(
+        login_url=_LOGIN, expected_origin="http://siem:8000", verify=True, timeout=60
+    )
+
+
+@patch("splunkctl.auth.broker._sync_playwright")
+def test_run_login_round_trip_inside_first_poll(mock_sp: MagicMock) -> None:
+    """goto lands on the product; the whole IdP visit happens in one poll."""
+    page, navigate = _live_page()
+    page.goto.side_effect = navigate
+
+    def poll(_ms: int) -> None:
+        navigate(_IDP)
+        navigate(_HOME)
+
+    page.wait_for_timeout.side_effect = poll
+    assert _login_with(mock_sp, page) == {"splunkd_8000": "KEY"}
+    page.wait_for_timeout.assert_called_once()
+
+
+@pytest.mark.parametrize("blank", ["chrome-error://chromewebdata/", "about:blank"])
+@patch("splunkctl.auth.broker._sync_playwright")
+def test_run_login_waits_for_idp_after_non_http_page(
+    mock_sp: MagicMock, blank: str
+) -> None:
+    """Error or blank page, then the product login: still wait for the IdP."""
+    page, navigate = _live_page()
+
+    def goto(url: str) -> None:
+        navigate(blank)
+        navigate(url)
+
+    page.goto.side_effect = goto
+    steps = iter([lambda: None, lambda: navigate(_IDP), lambda: navigate(_HOME)])
+    page.wait_for_timeout.side_effect = lambda _ms: next(steps)()
+    assert _login_with(mock_sp, page) == {"splunkd_8000": "KEY"}
+    assert page.wait_for_timeout.call_count == 3
+
+
+@pytest.mark.parametrize(
+    "departure",
+    [
+        pytest.param({"url": _IDP, "frame": MagicMock()}, id="subframe-off-origin"),
+        pytest.param({"url": "chrome-error://chromewebdata/"}, id="non-http"),
+    ],
+)
+@patch("splunkctl.auth.broker.time.monotonic", side_effect=[0.0, 1000.0])
+@patch("splunkctl.auth.broker._sync_playwright")
+def test_run_login_navigation_that_is_not_a_departure(
+    mock_sp: MagicMock, mock_monotonic: MagicMock, departure: dict[str, Any]
+) -> None:
+    page, navigate = _live_page()
+
+    def goto(url: str) -> None:
+        navigate(url)
+        navigate(**departure)
+
+    page.goto.side_effect = goto
+    with pytest.raises(broker.BrokerError) as exc:
+        _login_with(mock_sp, page)
+    assert "identity provider" in exc.value.message
 
 
 @patch("splunkctl.auth.broker.time.monotonic", side_effect=[0.0, 1000.0])
