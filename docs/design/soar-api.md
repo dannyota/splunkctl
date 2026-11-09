@@ -314,7 +314,8 @@ Corrections to the original discovery doc, all verified during the build:
 Found by the first full `scripts/live-smoke-soar.sh` run:
 
 - **Paging**: list endpoints return 10 rows unless `page_size` is set
-  (`0` means all); pages are 0-based. Resolve names with `_filter_name`.
+  (`0` means all). List endpoints use 0-based pages; `search` and `audit`
+  use 1-based pages. Resolve names with `_filter_name`.
   Boolean filters take Python literals (`_filter_disabled=True`).
 - **Audit**: needs `page` (1-based; `page=0` is a 400). Without it, queries
   over 24 hours return 413. The body is a bare array.
