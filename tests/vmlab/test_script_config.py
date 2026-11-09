@@ -81,6 +81,27 @@ def test_preflight_help_lists_role_selection() -> None:
     assert "--only siem|soar|both" in result.stdout
 
 
+def test_preflight_does_not_create_vm_base_dir(tmp_path: Path) -> None:
+    base = tmp_path / "missing" / "vmware"
+    stubs = tmp_path / "bin"
+    stubs.mkdir()
+    # Unreachable lab IPs make BSD nc wait for the connect timeout.
+    write_executable(stubs / "nc", "#!/usr/bin/env bash\nexit 1\n")
+    result = run_bash(
+        f"{VMLAB / 'check-lab.sh'} --only siem",
+        env={
+            "VM_BASE_DIR": str(base),
+            "INSTALLERS_DIR": str(tmp_path),
+            "PATH": f"{stubs}:{os.environ['PATH']}",
+        },
+    )
+
+    # Preflight fails here (no VMware, no installers); it must still be
+    # read-only and report free space from the nearest existing parent.
+    assert not (tmp_path / "missing").exists()
+    assert f"free space under {tmp_path}:" in result.stdout + result.stderr
+
+
 def test_install_sse_help_names_the_siem_address_option() -> None:
     result = subprocess.run(  # noqa: S603
         [str(VMLAB / "install-sse.sh"), "--help"],

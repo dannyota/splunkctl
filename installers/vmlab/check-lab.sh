@@ -69,9 +69,11 @@ else
   failed=1
 fi
 
-mkdir -p "$VM_BASE_DIR"
-available_kb="$(df -Pk "$VM_BASE_DIR" | awk 'NR == 2 {print $4}')"
-log "free space under $VM_BASE_DIR: $((available_kb / 1024 / 1024)) GiB"
+# Read-only: measure the nearest existing parent instead of creating the dir.
+space_dir="$VM_BASE_DIR"
+while [[ ! -d "$space_dir" ]]; do space_dir="$(dirname "$space_dir")"; done
+available_kb="$(df -Pk "$space_dir" | awk 'NR == 2 {print $4}')"
+log "free space under $space_dir: $((available_kb / 1024 / 1024)) GiB"
 
 check_vm() {
   local name="$1" ip="$2" vmx
