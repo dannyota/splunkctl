@@ -1,6 +1,7 @@
 """Shared ACL resolution, rendering and canonical-path updates."""
 
 import json
+from collections.abc import Iterator
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -47,14 +48,26 @@ def canonical(entry: dict[str, Any]) -> UrlEncoded:
     return UrlEncoded(urlsplit(str(target)).path, skip_encode=True)
 
 
+def _datamodel_owners(svc: Any) -> Iterator[str]:
+    """Try the configured namespace before looking up the authenticated user."""
+    configured = svc.namespace.get("owner")
+    if configured and configured != "-":
+        yield configured
+    context = rest_get_json(svc, "/services/authentication/current-context")
+    yield context["entry"][0]["content"]["username"]
+    yield "nobody"
+
+
 def resolve(
     svc: Any, object_type: str, name: str, *, app: str | None, owner: str | None
 ) -> dict[str, Any]:
     """Fetch an exact encoded name in the selected namespace."""
     if object_type == "data-model" and owner is None:
-        context = rest_get_json(svc, "/services/authentication/current-context")
-        username = context["entry"][0]["content"]["username"]
-        for candidate in dict.fromkeys((username, "nobody")):
+        seen = set()
+        for candidate in _datamodel_owners(svc):
+            if candidate in seen:
+                continue
+            seen.add(candidate)
             try:
                 return resolve(svc, object_type, name, app=app, owner=candidate)
             except HTTPError as exc:

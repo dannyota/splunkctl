@@ -432,3 +432,27 @@ def test_private_restore_keeps_permissions(service):
     row = json.loads(result.stdout)[0]
     assert row["sharing"] == "user"
     assert row["read"] == ["*"] and row["write"] == ["admin"]
+
+
+def test_shared_ownership_only_change_omits_perms_and_preserves_readback(service):
+    original = fixture("acl-set-saved-search-getback")
+    updated = fixture("acl-set-saved-search-getback")
+    updated["entry"][0]["acl"]["owner"] = "alice"
+    service.get.side_effect = [wire(original), wire(updated)]
+    service.post.return_value = wire(updated)
+    result = CliRunner().invoke(
+        cli,
+        ["--json", "--yes", "acl", "set", "saved-search", "x", "--owner", "alice"],
+    )
+    assert result.exit_code == 0, result.output
+    assert service.post.call_args.kwargs["body"] == {
+        "owner": "alice",
+        "sharing": "app",
+        "app": "search",
+    }
+    row = json.loads(result.stdout)[0]
+    assert row["owner"] == "alice"
+    assert row["sharing"] == "app"
+    assert row["read"] == ["*"]
+    assert row["write"] == ["admin"]
+    assert service.get.call_count == 2
